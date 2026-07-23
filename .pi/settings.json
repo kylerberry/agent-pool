@@ -1,0 +1,6 @@
+{
+  "packages": [
+    "npm:pi-subagents@0.35.1",
+    "npm:pi-web-access@0.13.0"
+  ]
+}
