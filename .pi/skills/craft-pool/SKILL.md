@@ -22,7 +22,7 @@ This is a standalone skill. It intentionally duplicates general CRAFTS phase mec
 ## Core framing
 
 - A **DAG node = one unit of work** — the atomic thing the orchestrator dispatches, grades, retries, and tracks as one audit-trail entry.
-- **CRAFTS is intra-node.** The DAG expresses dependencies *between* units; CRAFTS is *how one unit gets built*. The orchestrator and queue never see CRAFTS phases — only the unit and its result.
+- **CRAFTS is intra-node.** The DAG expresses dependencies *between* units; CRAFTS is *how one unit gets built*. The orchestrator does not control phase flow, but it persists each validated phase artifact and consumes the final unit result; the queue remains phase-unaware.
 - **The node's primary agent is the CRAFTS conductor.** The worker session running this skill spawns *every* phase — including C — as a sequential subagent, owns each phase's task payload, and gates between them. C is a **planning subagent, peer to the rest**; it plans, it does not orchestrate.
 - Two sibling routing decisions: the primary routes the **process** (full vs. lite) based on C's *reported* complexity; the orchestrator's model router routes the **model** (which model per task). Phases report; the conductor routes.
 
@@ -32,25 +32,27 @@ These bindings are enforced in this context and are the reason this is a separat
 
 1. **Criteria always come from upstream.** Acceptance criteria are always an input to the node, authored by the orchestrator's decomposition step. C **never** authors criteria here — it treats them as ground truth and builds the test suite against them. This gives an interpretation authored outside and above C, which is what makes the Assess phase's independence real.
 
-2. **Enforced criteria-to-A plumbing.** The Assess phase (`craft-evaluator`) receives the node's original upstream acceptance criteria as part of its task payload, passed explicitly through the channel the orchestrator controls — not left to however the coding harness propagates context to spawned subagents. A model-diverse but context-coupled reviewer catches build defects, not interpretation defects; passing original criteria de-correlates the interpretations. A's mandate explicitly includes auditing C's test suite against the original criteria, not only reviewing the build against the tests. This is structural, not aspirational: because the primary agent spawns A directly (rather than A being spawned by C), the primary owns A's payload by construction and passes the original criteria in unmediated by C's interpretation.
+2. **Enforced criteria-to-A plumbing.** The Assess phase (`craft-evaluator`) receives the node's original upstream acceptance criteria as part of its task payload, passed explicitly by the node's fresh Pi conductor session — not left to implicit child-context propagation. A model-diverse but context-coupled reviewer catches build defects, not interpretation defects; passing original criteria de-correlates the interpretations. A's mandate explicitly includes auditing C's test suite against the original criteria, not only reviewing the build against the tests. This is structural, not aspirational: because the primary agent spawns A directly (rather than A being spawned by C), the primary owns A's payload by construction and passes the original criteria in unmediated by C's interpretation.
 
-3. **Enforced model diversity.** Exact-model selection is guaranteed available in the pool, so there is no tier-alias fallback. `craft-builder` (R/F) and `craft-evaluator` (A) MUST run on different, equal-capability models. A node whose runtime cannot honor this fails closed and escalates — it does not silently proceed on same-model review.
+3. **Enforced model diversity.** Exact-model selection is guaranteed available in the pool, so there is no tier-alias fallback. `craft-builder` (R/F) and `craft-evaluator` (A) MUST run on different models; the evaluator should be a tier above the builder when available and must never be lower capability. A node whose runtime cannot honor this fails closed and escalates — it does not silently proceed on same-model review.
 
-4. **Audit-trail emission.** Every phase emits structured records to the orchestrator's audit trail (SQLite): phase entered/exited, subagent + model used, verification evidence, findings, cost. This feeds tier-1 (deterministic gate), tier-2 (model-judged review), and the composite the orchestrator reads. The produced test suite is persisted as an artifact (tier-1 grading + eval-harness answer key).
+4. **Audit-trail emission.** Every phase emits JSON validated against `docs/raw/specs/schemas/crafts-phase-artifact.schema.json` and persisted to the orchestrator's audit trail. Invalid or prose-only output fails the phase. This feeds tier 1, tier 2, and the composite; the produced test suite remains a persisted artifact.
 
 ## Grading model
 
 - **Tier 1 (deterministic gate):** red-state evidence (ADR-025) / tests / lint / typecheck / static analysis / coverage delta. Binary. Produced at R, re-verified after F.
 - **Tier 2 (model-judged review):** `craft-evaluator` emits **criteria fit** (a hard floor gate — code that solves the wrong problem fails regardless of quality) plus a **maintainability** score. `usability` was dropped (inconsistently applicable, weakly LLM-judgeable); `regression_risk` is deferred until the code graph can feed blast-radius evidence.
-- **Composite:** tier-1 pass AND tier-2 above threshold. This is the value the orchestrator reads to decide pass / retry / escalate, and the value the eval routing table records.
+- **Composite:** tier-1 pass AND tier-2 passage. Before empirical thresholds exist, criteria fit is a binary evidence gate and any blocking maintainability finding fails; numeric scores are calibration data. After calibration, ADR-009's empirical task-class threshold applies.
 
 ## Phase-diverse model rule
 
-When exact per-spawn model selection is used, the R/F builder and the A evaluator run on different but equal-capability models — e.g. if `craft-builder` runs on one frontier/coding-capable model, spawn `craft-evaluator` on a different peer model. Per guarantee 3, there is no medium-tier fallback in this context; inability to enforce diversity is a fail-closed escalation, not a logged proceed.
+When exact per-spawn model selection is used, R/F and A run on different models; the evaluator should be higher capability when available and must never be lower capability than the builder. Per guarantee 3, there is no medium-tier fallback in this context; inability to enforce diversity is a fail-closed escalation, not a logged proceed.
 
 ## Full Flow: C → R → A → F → T → S
 
 CRAFTS is a sequential phase-gate workflow. Do not run phases in parallel per unit; finish the current phase before the next. **The primary agent spawns each phase's subagent itself** — including C — passing that phase's payload directly. Spawn exactly one phase subagent at a time, wait for its report, then proceed, fix blockers, or escalate. Do not run CRAFTS subagents in parallel, and do not let one phase subagent spawn another.
+
+**Schema enforcement.** Launch each phase with `docs/raw/specs/schemas/crafts-phase-artifact.schema.json` adapted as the Pi `outputSchema`; the child must call `structured_output`. Validate before persistence or handoff. Prose-only completion fails the phase.
 
 **Context discipline (pass artifacts, not transcripts).** Each phase passes its structured *output* forward — C passes its plan, R passes the diff and verification evidence, A passes its findings — never its full working transcript. The next phase receives the compact artifact, not everything the prior phase read to produce it. Context stays within budget as a natural consequence of the phase-gate structure rather than a bolted-on summarizer; the phase boundaries *are* the compaction boundaries. If a single phase's own working context grows large, summarize within that phase before handing its artifact forward. (This composes with audit-trail emission: the artifact handed forward is also the record emitted per phase.)
 
@@ -111,7 +113,7 @@ Use `craft-planner` when available. Pass the unit request, relevant issue slice,
 
 Write failing tests first, implement the minimum to pass, then refactor.
 
-Use `craft-builder` when available. Choose a builder model that has an equal-capability, different-model peer available for the later `craft-evaluator` spawn.
+Use `craft-builder` when available. Choose a builder model that has a different evaluator model available at equal or higher capability.
 
 - **Red:** write the failing test from the plan and **run it against the pre-change tree to demonstrate it fails**. Capture that red-run output as tier-1 evidence (ADR-025) — a suite that cannot produce a red state is rejected mechanically. If you can't write the failing test, return to Conceptualize.
 - **Green:** minimum implementation to pass. No more.
@@ -122,7 +124,7 @@ Use `craft-builder` when available. Choose a builder model that has an equal-cap
 
 Review the diff AND the test suite against the original criteria.
 
-Use `craft-evaluator` when available, on a different but equal-capability model from the builder. Pass the task goal, the **original upstream acceptance criteria**, the plan, changed files, verification evidence, and the builder model used.
+Use `craft-evaluator` when available, on a different model that is preferably higher capability and never lower capability than the builder. Pass the task goal, the **original upstream acceptance criteria**, the plan, changed files, verification evidence, and the builder model used.
 
 - **Check the test suite against the original criteria — not just the code against the tests.** A suite that passes but misencodes the criteria is a blocking finding.
 - Check for duplicated logic, missed edge cases, unclear naming, type safety.

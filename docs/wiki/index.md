@@ -19,12 +19,13 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/architecture/supervisor-orchestrator|Supervisor Orchestrator]]
 - [[wiki/architecture/orchestrator-adr-map|Orchestrator ADR Map]]
 - [[wiki/architecture/domain-driven-documentation|Domain-Driven Documentation]]
+- [[wiki/architecture/initial-domain-map|Initial Domain Map (proposed)]]
 - [[wiki/log|Activity Log]]
 
 ## Source pages
 
 - [[wiki/sources/2026-04-13_domain-driven-documentation-convention|Domain-Driven Documentation Convention]] — `docs/raw/context/domain-driven-documentation-convention.md`
-- [[wiki/sources/2026-07-22_agent-pool-spec|Warm Agent Pool — Specification]] — `docs/raw/specs/agent-pool-spec.md`
+- [[wiki/sources/2026-04-13_initial-domain-map|Initial Domain Map]] — `docs/raw/context/initial-domain-map.md`
 - [[wiki/sources/2026-07-22_orchestrator-spec|Supervisor Orchestrator — Consolidated Specification]] — `docs/raw/specs/orchestrator-spec.md`
 - [[wiki/sources/2026-07-22_adr-001-deterministic-controller-vs-agentic-orchestrator|ADR-001: Deterministic Controller vs. Agentic Orchestrator]] — `docs/raw/adr/orchestrator/ADR-001-deterministic-controller-vs-agentic-orchestrator.md`
 - [[wiki/sources/2026-07-22_adr-002-fuzzy-in-structured-out-spec-boundary|ADR-002: Fuzzy-In / Structured-Out Spec Boundary]] — `docs/raw/adr/orchestrator/ADR-002-fuzzy-in-structured-out-spec-boundary.md`
@@ -52,3 +53,13 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/sources/2026-07-22_adr-024-amend-dag-resolution-action|ADR-024: Amend-DAG — Fifth Escalation Resolution Action]] — `docs/raw/adr/orchestrator/ADR-024-amend-dag-resolution-action.md`
 - [[wiki/sources/2026-07-22_adr-025-red-state-tier1-evidence|ADR-025: Red-State Evidence — The Test Suite Must Prove It Can Fail]] — `docs/raw/adr/orchestrator/ADR-025-red-state-tier1-evidence.md`
 - [[wiki/sources/2026-07-22_adr-026-failure-context-artifacts|ADR-026: Failure Context Survives Compaction; Transcript Index as Escape Hatch]] — `docs/raw/adr/orchestrator/ADR-026-failure-context-artifacts.md`
+- [[wiki/sources/2026-04-13_adr-027-spec-intake-api|ADR-027: Spec Intake API]]
+- [[wiki/sources/2026-04-13_adr-028-direct-task-path|ADR-028: Direct Task Path]]
+- [[wiki/sources/2026-04-13_adr-029-agent-tool-surface-and-phase-scoping|ADR-029: Phase-Scoped Agent Tools]]
+- [[wiki/sources/2026-04-13_adr-030-eval-tool-parity|ADR-030: Eval Tool Parity]]
+- [[wiki/sources/2026-04-13_adr-031-practical-delivery-idempotency|ADR-031: Practical Delivery Idempotency]]
+- [[wiki/sources/2026-04-13_adr-032-practical-worker-isolation-baseline|ADR-032: Practical Worker Isolation]]
+- [[wiki/sources/2026-04-13_adr-033-practical-single-host-operations-baseline|ADR-033: Practical Operations Baseline]]
+- [[wiki/sources/2026-04-13_adr-034-domain-discovery-before-implementation|ADR-034: Domain Discovery Gate]]
+- [[wiki/sources/2026-04-13_crafts-phase-artifact-contract|CRAFTS Phase Artifact Contract]]
+- [[wiki/sources/2026-04-13_v1-roadmap|v1 Roadmap]]

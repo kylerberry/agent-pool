@@ -12,4 +12,4 @@ SQLite, single file, owned by the orchestrator process. Justified by ADR-001's o
 
 ## Consequences
 
-Minimal infra, trivial backup (file copy), no separate DB service to run or operate. Doesn't scale to multi-tenant concurrent writers or centralized cross-client querying — if that's ever needed, swap to Postgres as a compliance-variant deployment choice (same pattern as agent-pool-spec's existing HIPAA/SOC2 AWS variant), not a redesign of the orchestrator itself.
+Minimal infrastructure and no separate database service to operate. It does not scale to multi-tenant concurrent writers or centralized cross-client querying; if needed later, swap to Postgres as a deployment variant rather than redesigning the orchestrator. Backups must use the WAL-safe process defined by ADR-033, not an unsafe live file copy.

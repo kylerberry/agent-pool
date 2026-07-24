@@ -5,20 +5,20 @@ tags: [agent-pool, github, execution]
 created: 2026-07-22
 updated: 2026-07-22
 sources:
-  - docs/raw/specs/agent-pool-spec.md
+  - docs/raw/specs/orchestrator-spec.md
 ---
 
 # Warm Agent Pool
 
-The warm agent pool is the execution substrate: always-on coding agents accept webhook tasks, run autonomous coding or coding-adjacent work through Pi, and deliver GitHub artifacts such as PRs, issues, or comments.
+The warm agent pool is the DAG-unaware execution substrate: Pi workers accept atomic node jobs, run CRAFTS, commit and report graded results, and leave GitHub PR delivery to the supervisor.
 
 ## Key constraints
 
 - Self-hosted low-cost infrastructure target.
-- Manual webhook intake for v1.
-- GitHub is the output surface.
-- Agents can select/fail over between coding backends while preserving task progress.
-- Follow-up PR review work should retain original session context.
+- API intake supports specs, direct tasks, and hand-authored DAGs.
+- GitHub PRs are the reviewed output surface.
+- The orchestrator pins role models; workers may use an intra-attempt backend fallback while preserving workspace progress.
+- Each attempt runs in an isolated workspace with idempotent result handling.
 
 ## Relationship to orchestrator
 

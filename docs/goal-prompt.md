@@ -9,7 +9,6 @@ Build a self-hosted personal daily-driver and portfolio system for Kyler Berry. 
 The canonical objective, user, problem statement, and design priorities are in:
 
 - [Supervisor Orchestrator — Consolidated Specification](raw/specs/orchestrator-spec.md)
-- [Warm Agent Pool — Specification](raw/specs/agent-pool-spec.md)
 
 v1 is for Kyler alone. It is not an external multi-tenant SaaS product.
 
@@ -28,8 +27,8 @@ Implement every behavior defined by the canonical specifications and ADRs, inclu
 Read and implement from these direct sources rather than relying on summaries:
 
 - [Supervisor Orchestrator — Consolidated Specification](raw/specs/orchestrator-spec.md)
-- [ADR-001 through ADR-030](raw/adr/orchestrator/)
-- [Warm Agent Pool — Specification](raw/specs/agent-pool-spec.md), except where superseded by the orchestrator specification or a linked ADR.
+- [ADR-001 through ADR-034](raw/adr/orchestrator/)
+- [CRAFTS Phase Artifact Contract](raw/specs/crafts-phase-artifact-contract.md)
 
 ## 3. Non-functional requirements
 
@@ -49,17 +48,18 @@ v1 is CLI/API/webhook operated. No browser UI, browser-support matrix, accessibi
 
 ### Performance
 
-Meet only the capacity, concurrency, cost, and execution constraints defined in the canonical pool and orchestrator sources. Do not invent latency or throughput targets without approval.
+Meet only the capacity, concurrency, cost, and execution constraints defined in the canonical orchestrator specification. Do not invent latency or throughput targets without approval.
 
 ## 4. Architecture constraints
 
 - Follow the deterministic-controller boundary in [ADR-001](raw/adr/orchestrator/ADR-001-deterministic-controller-vs-agentic-orchestrator.md): models operate only at named checkpoints; code owns control flow, policy enforcement, and state transitions.
-- Honor every architecture, persistence, orchestration, grading, routing, retrieval, retry, and audit decision in [ADR-001 through ADR-030](raw/adr/orchestrator/).
-- Use the framework, language, infrastructure, API, storage, and integration constraints specified in the two canonical specifications; do not introduce substitutes without an approved ADR.
+- Honor every architecture, persistence, orchestration, grading, routing, retrieval, retry, and audit decision in [ADR-001 through ADR-034](raw/adr/orchestrator/).
+- Use the framework, language, infrastructure, API, storage, and integration constraints specified in the canonical orchestrator specification; do not introduce substitutes without an approved ADR.
 - Organize application code as bounded domains under `src/domains/<domain>/`. Each domain owns local business rules and a canonical `AGENTS.md`; its sibling `CLAUDE.md` contains only `@AGENTS.md`. See [Domain-Driven Documentation Convention](raw/context/domain-driven-documentation-convention.md).
 - Read `AGENTS.md`, `docs/AGENTS.md`, `docs/wiki/index.md`, relevant wiki pages, and then exact raw sources before non-trivial work.
-- Use `craft-pool` for remote DAG-node execution, `pi-subagents` for project agent/chain coordination, and `graphify` for codebase relationship queries when applicable.
-- Follow `.pi/crafts.yml` as repository workflow policy. Its model routing, security triggers, artifact fields, and failure rules must be implemented or enforced by the supervisor rather than treated as advisory prose.
+- Launch each DAG node as a fresh Pi session with `craft-pool`, `pi-subagents`, the original unit payload, and explicit model/tool grants. The session conducts CRAFTS by spawning project phase agents sequentially.
+- Before implementation, complete ADR-034's human-approved domain-discovery gate and create each initial domain's instruction files.
+- Pin and preflight the runtime capabilities in `.pi/runtime-versions.json`. Enforce the five exact models in `.pi/settings.json` and the bootstrap role mapping in `.pi/model-routing.bootstrap.json`; do not select Anthropic or any unlisted model.
 - The CRAFTS S — Sharpen phase maintains durable domain `AGENTS.md` guidance and affected wiki pages. Canonical requirements/decisions are recorded in `docs/raw/` first; omit transient implementation noise.
 
 ## 5. Acceptance criteria
@@ -68,14 +68,15 @@ The implementation is complete only when all of the following are objectively de
 
 1. Every applicable requirement in [the orchestrator specification](raw/specs/orchestrator-spec.md) is traced to implementation, automated verification, or an explicitly documented deferred item approved by Kyler.
 2. Every ADR has either an implementation trace or a documented statement that it is a future-phase decision; no implementation contradicts an ADR without a newly approved ADR.
-3. A free-form spec can be decomposed into a mechanically validated flat DAG, persisted, human-approved, and dispatched only as ready node-level jobs.
-4. The controller enforces configured retry, failure-class, budget, escalation, and branch-freezing semantics, with durable SQLite audit evidence.
-5. A node proves red-before-green tier-1 evidence, persists the test-suite path/hash, passes required deterministic checks, receives an independent tier-2 assessment, and records the composite result.
-6. The CRAFTS execution path preserves upstream acceptance criteria, enforces builder/evaluator model diversity or fails closed, and emits phase artifacts including failure context.
-7. At least one end-to-end fixture demonstrates dispatch through GitHub-artifact delivery, including audit records, grading evidence, and a reviewable output.
-8. Tests cover success paths, failure/retry/escalation paths, dependency freezing, re-verification/integration failure, budget exhaustion, and human resolution actions required for v1.
-9. Automated linting, type checking, unit/integration tests, and any specified static/security checks pass in a reproducible environment.
-10. Domain boundaries are respected, each implemented domain has local `AGENTS.md` and pointer-only `CLAUDE.md`, and S-phase updates retain durable knowledge in the wiki/raw source structure.
+3. The initial bounded-domain map is human-approved and every implemented domain has its required `AGENTS.md` and pointer-only `CLAUDE.md` before feature code is added.
+4. A free-form spec can be decomposed into a mechanically validated flat DAG, persisted, human-approved, and dispatched only as ready node-level jobs.
+5. The controller enforces configured retry, failure-class, budget, escalation, branch-freezing, idempotency, and startup-reconciliation semantics, with durable SQLite audit evidence.
+6. A node proves red-before-green tier-1 evidence, persists attested suite/environment/commit data, passes required deterministic checks, receives an independent tier-2 assessment, and records the composite result.
+7. The CRAFTS execution path preserves upstream acceptance criteria, enforces builder/evaluator model diversity or fails closed, and emits schema-valid phase artifacts including failure context.
+8. At least one end-to-end fixture demonstrates dispatch through GitHub-artifact delivery, including audit records, grading evidence, and a reviewable output.
+9. Tests cover success paths, duplicate delivery, crash reconciliation, failure/retry/escalation paths, dependency freezing, re-verification/integration failure, budget exhaustion, and human resolution actions required for v1.
+10. Automated linting, type checking, unit/integration tests, and specified static/security checks pass in the pinned reproducible worker environment.
+11. Domain boundaries are respected, each implemented domain has local `AGENTS.md` and pointer-only `CLAUDE.md`, and S-phase updates retain durable knowledge in the wiki/raw source structure.
 
 ## Delivery behavior
 

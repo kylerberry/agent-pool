@@ -4,7 +4,8 @@ description: Run the C phase of craft-pool: plan an assigned DAG node against up
 defaultContext: fresh
 inheritProjectContext: true
 inheritSkills: false
-tools: read, grep, find, ls
+skills: graphify
+tools: read, grep, find, ls, bash
 acceptanceRole: read-only
 systemPromptMode: replace
 ---
@@ -26,13 +27,4 @@ Run the C — Conceptualize phase of CRAFTS. You turn the user's request, issue 
 
 # Output
 
-Return a concise phase report with:
-
-- Scope boundary
-- Upstream acceptance-criteria alignment
-- AFK/HITL status
-- File list
-- Test strategy
-- Risks and mitigations
-- Ordered Render plan
-- Any blocking questions
+Return schema-valid JSON matching the C payload in `docs/raw/specs/crafts-phase-artifact-contract.md`. Prose-only completion is invalid.

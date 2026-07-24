@@ -54,5 +54,5 @@ Respect ADRs before changing architecture, runtime, persistence, orchestration s
 Current anchors:
 - `docs/wiki/index.md`
 - `docs/raw/specs/orchestrator-spec.md`
-- `docs/raw/specs/agent-pool-spec.md`
+- `docs/raw/specs/crafts-phase-artifact-contract.md`
 - `docs/raw/adr/orchestrator/`

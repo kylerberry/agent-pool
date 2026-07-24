@@ -4,7 +4,7 @@
 
 ## Context
 
-The agent pool's test suite arbitrates merge admissibility (per the agent-pool spec's optimistic-concurrency model), but tests only catch regressions in covered behavior — not code quality, usability, or bugs outside test scope. Using tests as the sole success signal would let both the pipeline and the eval harness reward code that narrowly passes while being otherwise poor.
+The agent pool's test suite arbitrates merge admissibility through optimistic concurrency and integration re-verification, but tests only catch regressions in covered behavior—not code quality or bugs outside test scope. Using tests as the sole success signal would let both the pipeline and the eval harness reward code that narrowly passes while being otherwise poor.
 
 ## Decision
 

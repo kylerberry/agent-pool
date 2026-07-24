@@ -1,0 +1,16 @@
+{
+  "node": "24.18.0",
+  "piCodingAgent": "0.81.1",
+  "graphify": "0.9.25",
+  "allowedModels": [
+    "openai-codex/gpt-5.6-luna",
+    "openai-codex/gpt-5.6-terra",
+    "openai-codex/gpt-5.6-sol",
+    "moonshot/kimi-k2.7-code",
+    "moonshot/kimi-k3"
+  ],
+  "packages": {
+    "pi-subagents": "0.35.1",
+    "pi-web-access": "0.13.0"
+  }
+}

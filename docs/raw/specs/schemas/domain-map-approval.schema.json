@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "domain-map-approval.schema.json",
+  "title": "ADR-034 Domain Map Approval Record",
+  "description": "Durable, mechanically checkable approval record for the ADR-034 human-approved bounded-domain map. The record binds the approved map file to its SHA-256 so the /goal skill can detect tampering or drift before feature-slice dispatch.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["map_path", "map_sha256", "approved_by", "approved_at"],
+  "properties": {
+    "map_path": {
+      "type": "string",
+      "const": "docs/raw/context/initial-domain-map.md",
+      "description": "Repository-relative path to the approved domain map file."
+    },
+    "map_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 hex digest of the approved map file contents."
+    },
+    "approved_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the human approver (e.g., kyler)."
+    },
+    "approved_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of approval."
+    }
+  }
+}

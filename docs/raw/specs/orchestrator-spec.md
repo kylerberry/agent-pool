@@ -2,8 +2,8 @@
 
 **Version:** 0.1-draft
 **Author:** Kyler Berry
-**Status:** Design complete (30 ADRs, incl. adversarial-review hardening pass); pre-implementation
-**Supersedes in part:** `agent-pool-spec.md` v0.2-draft (unbuilt; incorporated as the execution substrate with revisions noted in §3.3)
+**Status:** Design complete (34 ADRs, including production-harness readiness decisions); pre-implementation
+**Canonical scope:** This document is the current specification for both the supervisor and its warm-pool execution substrate. Earlier pool drafts are historical only.
 
 ---
 
@@ -65,7 +65,7 @@ The orchestrator is **plain code, not an agent**. Control flow — DAG state, re
 
 Rationale: replayability, auditability, and structural (not prompt-based) guardrails. An agentic orchestrator's non-reproducible control flow is disqualifying for an audit-driven system. New control paths require code changes — accepted cost.
 
-**LangGraph and orchestration frameworks were considered and rejected**: 30 ADRs of opinionated design would fight a framework's assumptions rather than express through them; the frameworks' value (shared team vocabulary, effort-saving on common patterns) doesn't apply to a solo, bespoke, trust-first build.
+**LangGraph and orchestration frameworks were considered and rejected**: the accepted ADR set would fight a framework's assumptions rather than express through them; the frameworks' value (shared team vocabulary, effort-saving on common patterns) doesn't apply to a solo, bespoke, trust-first build.
 
 ### 3.2 Spec Boundary (ADR-002, ADR-003)
 
@@ -73,15 +73,17 @@ Rationale: replayability, auditability, and structural (not prompt-based) guardr
 
 Decomposition is the pipeline's one non-deterministic step (model call + retrieval index state). It is quarantined: output persisted, human-approved before dispatch (Gate 1), re-runs resume from the approved DAG — never from a fresh decomposition.
 
-### 3.3 Execution Substrate (pool spec, revised)
+### 3.3 Execution Substrate
 
-The warm pool from `agent-pool-spec.md` is the execution layer, with these revisions now that both are one greenfield build:
+The warm pool is the DAG-unaware execution layer of this greenfield system:
 
 - **Workers are DAG-unaware** (ADR-010). A job = one node's payload; workers never see structure.
-- **Worker output contract is branch-push only.** A worker finishes a node by committing, pushing the node's branch, and reporting results (tier-1 evidence, tier-2 score, cost, models used, suite path/hash). Workers do not open PRs, issues, or comments — the original spec's `output_type` enum is dropped; the orchestrator is the only component that touches the GitHub PR API (per ADR-015).
+- **Worker output contract is commit-and-report only.** A worker finishes a node by committing in its isolated workspace and reporting the commit plus tier-1 evidence, tier-2 result, cost, models, and suite path/hash. A trusted host-side delivery adapter pushes branches and performs GitHub API effects; repository commands never receive delivery credentials (ADR-032). Workers do not open PRs, issues, or comments.
 - **No agent model override.** The original spec allowed the agent to deviate from the requested model by its own judgment. Removed: the model is pinned by the orchestrator's routing table per role; inability to honor it (including builder/evaluator diversity, §5.3) fails closed and escalates.
 - **Merge arbitration is defined here, not inherited.** The original pool assumed a human decomposer guaranteeing non-conflicting units. The orchestrator replaces that human guarantee with test-suite arbitration (§7): CI/tests as merge-time arbiter, first-to-integrate wins, second re-derives against the new head.
-- Retained from the pool spec: Hetzner-class single host, Docker Compose isolation, Fastify + BullMQ dispatcher, Redis (AOF) for queue + session records, workspace-per-task wiped after each round, backend fallback chain with workspace-as-checkpoint handoff, compressed session summaries for continuations, `.env` secrets.
+- **v1 substrate baseline:** Hetzner-class single host, Docker Compose, Fastify + BullMQ dispatcher, Redis (AOF) for queue + session records, workspace-per-attempt cleanup, backend fallback with workspace-as-checkpoint handoff, and compressed session summaries for continuations.
+- **Practical delivery safety (ADR-031):** stable attempt IDs, deterministic job IDs, unique result acceptance, versioned compare-and-set transitions, leases/heartbeats, and startup reconciliation are required in v1. Transactional outbox/inbox and stronger distributed fencing are fast-follow hardening.
+- **Practical worker isolation (ADR-032):** each attempt receives an ephemeral non-root, resource-limited workspace; repository commands receive no GitHub or unrelated provider secrets; trusted host-side delivery performs GitHub effects. Stronger sandbox and egress controls are fast-follow hardening.
 
 **Ownership split:** the pool owns *intra-attempt* resilience (backend fallback chain, max 3 backends per attempt). The orchestrator owns *cross-attempt* policy (retry ceiling, budget, escalation). One node attempt may burn through the fallback chain internally; that is still one attempt against the ceiling.
 
@@ -130,15 +132,16 @@ Validation before Gate 1: duplicate ids, self/missing dependencies, cycle detect
 ### 4.2 Node Lifecycle
 
 ```
-pending -> ready -> in_progress -> passed        (terminal)
+pending -> ready -> in_progress -> passed        (provisional)
                         |-> failed -> ready      (retry, under ceiling)
                         |          -> escalated  (ceiling hit; human required)
 pending/ready -> blocked                          (upstream node escalated/cancelled/blocked)
-escalated -> [human action] -> passed | cancelled (terminal)
+escalated -> [human action] -> passed | cancelled
+passed -> failed                                  (integration re-verification only)
 ```
 
 - `failed` = one attempt's outcome. `escalated` = waiting on a human. `blocked` = healthy node stalled by its branch's upstream failure (ADR-011) — kept distinct so triage can tell "waiting on a decision" from "still running."
-- Terminal states: `passed`, `cancelled` only. Human abandonment folds into `cancelled`; override/force-pass is a **flag on `passed`**, not a distinct state, always with a logged reason (ADR-016).
+- `cancelled` is terminal. `passed` is provisional until connected-component integration re-verification succeeds and the component is sealed for PR assembly. Before sealing, an integration failure may reopen `passed -> failed`; the controller blocks affected descendants, re-verifies them after repair, and records versioned CAS transitions. Human abandonment folds into `cancelled`; override/force-pass is a flag on `passed`, always with a logged reason. Explicit `attempt_passed`/`integrating`/`verified` node states remain roadmap hardening.
 
 ### 4.3 Dispatch (ADR-010)
 
@@ -156,12 +159,14 @@ Escalations surface as audit-trail queries (CLI / minimal dashboard) — no push
 
 ## 5. Intra-Node Execution — CRAFTS (craft-pool skill)
 
-A node's job runs the CRAFTS phase-gate workflow internally (C→R→A→F→T→S full; R→S lite). The **node's primary agent is the conductor**: it spawns every phase — including C — as a sequential subagent and owns each phase's payload. C is a planning subagent, peer to the rest; it *reports* complexity, and the primary routes full-vs-lite from that report. The orchestrator never sees phases — only the unit result. Pool-context bindings (see `craft-agent-pool-variant.md`):
+A node's job launches a **fresh Pi agent session** with the project `craft-pool` skill, `pi-subagents`, the original unit payload, and the permitted model/tool configuration. That session is the conductor; a separate persisted conductor agent definition is optional. It spawns every phase—including C—as a sequential Pi subagent and owns each phase's payload. C is a planning subagent, peer to the rest; it *reports* complexity, and the fresh session routes full-vs-lite from that report. The controller sees phase audit artifacts and the final unit result, but phase control remains inside the node session.
+
+The launch must preflight that `craft-pool`, required phase agents, Graphify, required tools, provider-qualified models, and builder/evaluator model diversity are available. Missing capabilities fail closed before paid work begins. Pool-context bindings:
 
 1. **Criteria provenance** — acceptance criteria always arrive from decomposition; C never authors them, and builds the test suite against them as ground truth.
 2. **Criteria-to-A plumbing** — the Assess phase receives the node's *original* criteria through the controlled payload (not harness-propagated context), and audits the test suite against them, not just the code against the tests. Structural by construction: the primary agent spawns A directly, so A's payload is never mediated by C's interpretation.
-3. **Model diversity** — builder (R/F) and evaluator (A) run on different, equal-capability models; fail-closed if unenforceable.
-4. **Audit emission** — every phase emits structured records (phase, subagent, model, evidence, findings, cost) to the audit trail.
+3. **Model diversity** — builder (R/F) and evaluator (A) run on different models; A should be higher capability when available and must never be lower capability; fail closed if unenforceable.
+4. **Audit emission** — every phase emits a schema-validated artifact using `docs/raw/specs/crafts-phase-artifact-contract.md`; invalid or prose-only output fails the phase. Validated artifacts are persisted to the audit trail.
 5. **Context discipline** — each phase passes its structured output artifact forward, never its working transcript; phase boundaries are the compaction boundaries.
 6. **Tool surface is pull, not push (ADR-029)** — phases receive their parent's payload plus on-demand tools installed in the container (`graphify` code graph, grep/LSP) and repo-resident knowledge (LLM wiki, skills). Grants are **scoped per phase**: R/F write, A read-only (an evaluator must not be able to edit what it judges), S writes docs only.
 7. **Failure context survives compaction (ADR-026)** — a failing phase's artifact must carry what was attempted, why it failed, and discoveries made; retries receive prior failure artifacts in their payload and never start blind. Raw transcripts stay on disk, indexed in the audit trail by node + attempt as a human escape hatch — never injected into prompts.
@@ -174,11 +179,11 @@ A node's job runs the CRAFTS phase-gate workflow internally (C→R→A→F→T�
 | Tier 2 | Model-judged review (A phase) | criteria fit (hard floor gate) + maintainability score |
 | Composite | tier-1 pass AND tier-2 above threshold | the value the controller reads; recorded for routing |
 
-**The oracle must prove it can say no (ADR-025):** because C authors the tier-1 suite, a tautological always-pass suite would be an unchecked arbiter. The R phase's TDD loop is therefore enforced as a grading contract — red on the pre-change tree, green on the post-change tree, both runs recorded against the suite's content hash. Suites that cannot fail are rejected mechanically at tier 1; A's suite-audit (does it encode the criteria) sits above that deterministic floor.
+**The oracle must prove it can say no (ADR-025):** because C defines the tier-1 test strategy and R materializes the suite, a tautological always-pass suite would be an unchecked arbiter. The R phase's TDD loop is therefore enforced as a grading contract—red on the pre-change tree, green on the post-change tree—with command, pre/post commit SHA, suite path/hash, worker image/environment, and raw-output artifact references recorded. Suites that cannot fail are rejected mechanically at tier 1; A's suite audit sits above that deterministic floor.
 
 Tier-2 scope was deliberately narrowed: `criteria_fit` acts as a gate (beautiful code solving the wrong problem must fail); `code_quality` = maintainability with a defined sub-rubric (needed only when A ships as a live gate — see §10 deferrals); `usability` dropped (inconsistently applicable, weakly LLM-judgeable); `regression_risk` deferred until the code graph can feed blast-radius evidence (ungrounded scoring is vibes).
 
-Composite thresholds are **empirical** (ADR-009): derived per task class from Phase-1 eval score distributions, not hardcoded in advance.
+Composite thresholds are **empirical** (ADR-009): derived per task class from Phase-1 eval score distributions, not hardcoded in advance. Before those distributions exist, the artifact contract's bootstrap gate applies: criteria fit passes only when every original criterion has direct evidence and no mismatch; maintainability scores are recorded for calibration, while any blocking maintainability finding fails closed.
 
 ## 7. Test Suites, Merge Arbitration, Re-Verification (ADR-017)
 
@@ -196,7 +201,9 @@ Composite thresholds are **empirical** (ADR-009): derived per task class from Ph
 
 ### 9.1 Role-Indexed Routing (ADR-020)
 
-Every model-call role is its own routing decision with its own eval task class: decomposition, planning (C), building (R/F), assessing (A), tightening (T), sharpening (S — likely no dedicated eval). Different rows, different winners; no single benchmark generalized across roles.
+Every model-call role is its own routing decision with its own eval task class: decomposition, planning (C), building (R/F), assessing (A), tightening (T), sharpening (S—likely no dedicated eval). Different rows, different winners; no single benchmark generalizes across roles.
+
+Until eval-derived winners exist, `.pi/model-routing.bootstrap.json` is authoritative: Kimi K3 decomposes; Terra plans/conducts/diagnoses; Kimi K2.7 Code builds; Sol assesses and tightens; Luna sharpens. Sol is reserved from normal building so a different equal-or-higher evaluator remains available. Every launch passes an exact provider/model ID and fails closed if it is unavailable.
 
 ### 9.2 Harness Scope — Builder First (ADR-021, ADR-005, ADR-006, ADR-008)
 
@@ -222,24 +229,27 @@ Decomposer vs. C on the same knowledge: **breadth vs. depth** — the decomposer
 
 ## 11. Storage & Audit (ADR-014)
 
-**SQLite**, single file, orchestrator-owned — justified by ADR-001 itself (one deterministic controller process = one writer). Holds: DAG + node state, per-attempt records (models, evidence, findings, cost), suite hashes, escalations + resolution actions (override reasons mandatory), routing-table results. Redis stays the pool's (queue + session records). Multi-tenant scale-out = swap to Postgres as a deployment variant — not a redesign.
+**SQLite**, single file, orchestrator-owned—justified by ADR-001 itself (one deterministic controller process = one writer). Holds DAG/node state, state versions, unique attempt/result records, models, evidence, findings, cost, suite hashes, escalations/resolutions, and routing results. Redis owns queue/session records. ADR-031 defines the practical cross-store idempotency and reconciliation contract. Multi-tenant scale-out remains a future deployment variant.
 
 ## 12. Implementation Stack
 
-TypeScript end to end (shares runtime/types/job schema with the BullMQ/Redis substrate). No orchestration framework (§3.1). Thin per-provider adapters (§9.2). Single Hetzner-class host, Docker Compose, ~$10/month infra posture inherited from the pool spec.
+TypeScript end to end (shares runtime/types/job schema with BullMQ/Redis). No orchestration framework (§3.1). Thin per-provider adapters (§9.2). Single Hetzner-class host, Docker Compose, ~$10/month infrastructure posture.
+
+The worker image pins Node, Pi, Graphify, Pi extension packages, and application dependencies. `.pi/runtime-versions.json` is the repository baseline; the image digest and dependency lockfiles are recorded with every attempt. Startup performs a capability preflight. `.pi/settings.json` enforces five exact models: GPT-5.6 Luna, Terra, and Sol through `openai-codex`, plus Moonshot Kimi K2.7 Code and Kimi K3. Anthropic and all unlisted models are excluded. `.pi/model-routing.bootstrap.json` defines the initial role mappings; eval-derived routing replaces these defaults when evidence exists.
+
+ADR-033 defines the practical operations baseline: health/readiness checks, correlated structured logs, queue/disk/provider/cost visibility, WAL-safe encrypted off-host backups, tested restore guidance, migrations, and retention. Formal SLOs and a dedicated observability platform are fast-follow.
 
 ## 13. Deferred / Open Items
 
 | Item | Status |
 |---|---|
-| Tier-2 maintainability sub-rubric + scoring mechanism (reason-then-score, anchored scales) | Needed when A ships as a live runtime gate; off the eval critical path |
 | `regression_risk` tier-2 dimension | Blocked on code-graph blast-radius feed |
 | Non-builder eval rows (decomposition, C, A, T) | Deferred with named grader approaches |
 | Mutation testing (hardening beyond red-state evidence, ADR-025) | Deferred; tautology class already killed deterministically |
 | Graceful mid-node budget abort (phase-gate stop checks) | Deferred; overage accepted as bounded (§4.4) |
-| HITL surface (CLI vs. minimal dashboard) | Implementation-level; decide while building |
+| HITL surface | CLI/API clients for v1; a dashboard is out of scope |
 | Decomposition schema-invalid retry/repair loop | Implementation-level |
-| Repo onboarding / index build for graph + wiki | Implementation-level |
+| Repo onboarding / Graphify index build | Required implementation slice: pin Graphify in the worker image; build per workspace and refresh after re-derivation |
 | GitHub Action for comment→continuation | Operational TODO (§8) |
 | Swarm-pattern build | Separate future project — see `swarm-pattern-open-questions.md` and its handoff |
 
@@ -277,3 +287,7 @@ TypeScript end to end (shares runtime/types/job schema with the BullMQ/Redis sub
 | 028 | Direct task path; hand-authored DAGs; proportionate ceremony |
 | 029 | Agent tool surface: pull not push; per-phase capability scoping |
 | 030 | Eval tool parity: "bare" = no CRAFTS, not no tools |
+| 031 | Practical v1 delivery idempotency; stronger atomicity deferred |
+| 032 | Practical v1 worker isolation baseline |
+| 033 | Practical v1 single-host operations baseline |
+| 034 | Domain discovery before implementation |

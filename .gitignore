@@ -1,0 +1,7 @@
+node_modules
+dist
+crafts*.yml
+.obsidian
+.pi-subagents/
+graphify-out/
+.DS_Store

@@ -6,7 +6,6 @@ created: 2026-07-22
 updated: 2026-07-22
 sources:
   - docs/raw/specs/orchestrator-spec.md
-  - docs/raw/specs/agent-pool-spec.md
   - docs/raw/adr/orchestrator/
 ---
 

@@ -39,7 +39,15 @@ This page indexes the initial supervisor-orchestrator ADR set and groups the dec
 - `ADR-023-failure-class-retry-counters.md` — ADR-023: Failure-Class Retry Counters — Logic vs. Integration: Attempt failures are **classified** and counted separately: - **`logic` failure** — the node's own defect: tier-1 red on its own suite, tier-2 below threshold, build error. Counts against the ADR-012 retry ceiling (default 3). - **`integration` failure** — a p
 - `ADR-024-amend-dag-resolution-action.md` — ADR-024: Amend-DAG — Fifth Escalation Resolution Action: Add a fifth, human-initiated resolution action: **amend-DAG** (partial re-decomposition). Mechanics: 1. Human cancels the affected subtree (existing cancel-branch semantics). 2. The decomposer re-runs against **only the unmet remainder** of the spec intent, re
 - `ADR-025-red-state-tier1-evidence.md` — ADR-025: Red-State Evidence — The Test Suite Must Prove It Can Fail: **Red-state evidence is a tier-1 requirement.** The R phase's TDD loop is enforced, not advisory: before implementation, the suite (or each new test) must be executed against the pre-change tree and **demonstrated failing**, with the red-run output captured as
-- `ADR-026-failure-context-artifacts.md` — ADR-026: Failure Context Survives Compaction; Transcript Index as Escape Hatch: Two mechanisms, primary and escape hatch: 1. **Failure-context artifact section (primary).** A failing phase's emitted artifact MUST include: what was attempted, why it failed, and discoveries made (edge cases, surprising behavior, ruled-out dead ends). Retry 
+- `ADR-026-failure-context-artifacts.md` — Failure-context artifacts survive compaction; transcripts remain an indexed escape hatch.
+- `ADR-027-spec-intake-api.md` — Spec intake is an asynchronous API with a separate decomposition queue.
+- `ADR-028-direct-task-path.md` — Known-shape work can bypass decomposition and Gate 1.
+- `ADR-029-agent-tool-surface-and-phase-scoping.md` — Agents pull context through phase-scoped tools; reviewers cannot write.
+- `ADR-030-eval-tool-parity.md` — Builder evals use the same tools as production.
+- `ADR-031-practical-delivery-idempotency.md` — v1 uses stable IDs, CAS transitions, deterministic jobs, and reconciliation; stronger atomicity is deferred.
+- `ADR-032-practical-worker-isolation-baseline.md` — v1 isolates each attempt and keeps secrets out of repository commands.
+- `ADR-033-practical-single-host-operations-baseline.md` — v1 has basic health, recovery, migration, retention, and off-host backup controls.
+- `ADR-034-domain-discovery-before-implementation.md` — a human-approved domain map precedes feature implementation.
 
 ## Main themes
 
