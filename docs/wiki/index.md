@@ -3,7 +3,7 @@ title: Wiki Index
 type: index
 tags: [index]
 created: 2026-07-22
-updated: 2026-07-22
+updated: 2026-07-25
 sources:
   - docs/raw/
 ---
@@ -19,13 +19,17 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/architecture/supervisor-orchestrator|Supervisor Orchestrator]]
 - [[wiki/architecture/orchestrator-adr-map|Orchestrator ADR Map]]
 - [[wiki/architecture/domain-driven-documentation|Domain-Driven Documentation]]
-- [[wiki/architecture/initial-domain-map|Initial Domain Map (proposed)]]
+- [[wiki/architecture/initial-domain-map|Initial Domain Map (approved)]]
+- [[wiki/architecture/repository-builder-vs-pool-worker|Repository Builder vs Pool Worker]]
+- [[wiki/output/agents-building-agents-handoff|Agents Building Agents Handoff]]
 - [[wiki/log|Activity Log]]
 
 ## Source pages
 
 - [[wiki/sources/2026-04-13_domain-driven-documentation-convention|Domain-Driven Documentation Convention]] — `docs/raw/context/domain-driven-documentation-convention.md`
 - [[wiki/sources/2026-04-13_initial-domain-map|Initial Domain Map]] — `docs/raw/context/initial-domain-map.md`
+- [[wiki/sources/2026-04-13_repository-builder-vs-pool-worker|Repository Builder and Pool Worker Role Boundary]] — `docs/raw/context/repository-builder-vs-pool-worker.md`
+- [[wiki/sources/2026-04-13_pool-worker-execution-context-schema|Pool Worker Execution Context Schema]] — `docs/raw/specs/schemas/pool-worker-execution-context.schema.json`
 - [[wiki/sources/2026-07-22_orchestrator-spec|Supervisor Orchestrator — Consolidated Specification]] — `docs/raw/specs/orchestrator-spec.md`
 - [[wiki/sources/2026-07-22_adr-001-deterministic-controller-vs-agentic-orchestrator|ADR-001: Deterministic Controller vs. Agentic Orchestrator]] — `docs/raw/adr/orchestrator/ADR-001-deterministic-controller-vs-agentic-orchestrator.md`
 - [[wiki/sources/2026-07-22_adr-002-fuzzy-in-structured-out-spec-boundary|ADR-002: Fuzzy-In / Structured-Out Spec Boundary]] — `docs/raw/adr/orchestrator/ADR-002-fuzzy-in-structured-out-spec-boundary.md`
@@ -63,3 +67,4 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/sources/2026-04-13_adr-034-domain-discovery-before-implementation|ADR-034: Domain Discovery Gate]]
 - [[wiki/sources/2026-04-13_crafts-phase-artifact-contract|CRAFTS Phase Artifact Contract]]
 - [[wiki/sources/2026-04-13_v1-roadmap|v1 Roadmap]]
+- [[wiki/sources/2026-07-25_approved-v1-build-dag|Approved Repository Builder v1 Build DAG]] — `docs/raw/plans/proposed-build-dag.json`

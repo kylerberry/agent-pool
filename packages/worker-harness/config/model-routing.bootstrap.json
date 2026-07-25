@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "status": "bootstrap-until-eval-derived",
+  "capability_rank": {
+    "openai-codex/gpt-5.6-luna": 1,
+    "moonshot/kimi-k2.7-code": 2,
+    "openai-codex/gpt-5.6-terra": 3,
+    "moonshot/kimi-k3": 4,
+    "openai-codex/gpt-5.6-sol": 5
+  },
+  "roles": {
+    "node_conductor": { "primary": "openai-codex/gpt-5.6-terra", "fallback": ["moonshot/kimi-k3"] },
+    "planning": { "primary": "openai-codex/gpt-5.6-terra", "fallback": ["moonshot/kimi-k3"] },
+    "building": { "primary": "moonshot/kimi-k2.7-code", "fallback": ["openai-codex/gpt-5.6-terra"] },
+    "assessing": { "primary": "openai-codex/gpt-5.6-sol", "fallback": ["moonshot/kimi-k3"] },
+    "tightening": { "primary": "openai-codex/gpt-5.6-sol", "fallback": ["openai-codex/gpt-5.6-terra"] },
+    "sharpening": { "primary": "openai-codex/gpt-5.6-luna", "fallback": ["openai-codex/gpt-5.6-terra"] },
+    "failure_diagnosis": { "primary": "openai-codex/gpt-5.6-terra", "fallback": ["openai-codex/gpt-5.6-sol"] }
+  },
+  "rules": {
+    "builderEvaluatorMustDiffer": true,
+    "evaluatorMustNotBeLowerCapability": true,
+    "reserveSolFromNormalBuilding": true,
+    "failClosedOnUnavailableExplicitModel": true
+  }
+}

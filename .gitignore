@@ -3,5 +3,6 @@ dist
 crafts*.yml
 .obsidian
 .pi-subagents/
+.agent-pool/
 graphify-out/
 .DS_Store

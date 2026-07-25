@@ -6,13 +6,15 @@ description: >-
   TODO(human) seams during Render.
 ---
 
-# CRAFTS HITL Workflow Skill
+# CRAFTS HITL Workflow Skill — Repository Builder
 
 ## When to use
 
+This is a Repository Builder skill for local work in this repository. It is not the Pool Worker `craft-pool` workflow.
+
 Invoke this skill for issue slices explicitly labeled **HITL implementation** or **HITL design/review**, or any task where the PRD reserves a critical decision for human judgment.
 
-This is the same CRAFTS phase-gate workflow as `/craft`, but the **R — Render** phase includes mandatory human-in-the-loop gating. The agent scaffolds to the seam, pauses for human input, then resumes and completes the remaining phases.
+This inherits the local `/craft` contracts for original acceptance-criteria plumbing, fresh `local-craft-*` children, schema-valid phase artifacts, model diversity, and child-owned implementation. Its only behavioral override is the mandatory human seam inside **R — Render**. The agent scaffolds to the seam, pauses for human input, then resumes and completes the remaining phases.
 
 If the task is unambiguously autonomous, use `/craft` instead.
 
@@ -22,18 +24,18 @@ CRAFTS is a sequential phase-gate workflow. Do not plan or execute phases in par
 
 In HITL mode, the Render phase contains a mandatory pause. The human owns the critical decision-bearing logic; the agent owns everything before and after it.
 
-Each phase should be delegated to its matching global subagent when the AgentSpawn tool is available. Spawn exactly one phase subagent at a time, wait for its report, then either proceed to the next phase, fix blockers, or ask the user for clarification. Do not run CRAFTS subagents in parallel.
+Each phase should be delegated through Pi's `subagent` tool to its matching local project agent. Spawn exactly one phase subagent at a time, wait for its report, then either proceed to the next phase, fix blockers, or ask the user for clarification. Do not run CRAFTS subagents in parallel.
 
-When exact per-spawn model selection is available, the R/F builder and A evaluator must run on different but equal-capability models. For example, if `craft-builder` runs on one frontier/coding-capable model, spawn `craft-evaluator` on a different peer model rather than the same model family. If the runtime only supports tier aliases, keep both at `medium` and explicitly note that exact model diversity could not be enforced in the phase report.
+When exact per-spawn model selection is available, the R/F builder and A evaluator must run on different models, with the evaluator at equal or higher capability. For example, if `local-craft-builder` runs on one frontier/coding-capable model, spawn `local-craft-evaluator` on a different peer model rather than the same model family. If exact model diversity and capability ordering cannot be enforced, fail closed.
 
 | Phase | Subagent | Purpose |
 | --- | --- | --- |
-| C — Conceptualize | `craft-planner` | Planning, TDD strategy, scope, risks, and gates |
-| R — Render | `craft-builder` | Test-driven implementation and build guidance |
-| A — Assess | `craft-evaluator` | Simplification, correctness, type safety, and verification review |
-| F — Fix | `craft-builder` | Minimal fixes for blocking findings |
-| T — Tighten | `craft-security` | Security and trust-boundary review |
-| S — Sharpen | `craft-sharpener` | Durable documentation, product alignment, and retained learnings |
+| C — Conceptualize | `local-craft-planner` | Planning, TDD strategy, scope, risks, and gates |
+| R — Render | `local-craft-builder` | Test-driven implementation and build guidance |
+| A — Assess | `local-craft-evaluator` | Simplification, correctness, type safety, and verification review |
+| F — Fix | `local-craft-builder` | Minimal fixes for blocking findings |
+| T — Tighten | `local-craft-security` | Security and trust-boundary review |
+| S — Sharpen | `local-craft-sharpener` | Durable documentation, product alignment, and retained learnings |
 
 ## Full Flow: C → R → A → F → T → S
 
@@ -41,19 +43,20 @@ When exact per-spawn model selection is available, the R/F builder and A evaluat
 
 Define scope, test cases, implementation plan, and risks before coding.
 
-Use AgentSpawn with `subagent_type: "craft-planner"` for this phase when available. Pass the user request, relevant issue slice, repository constraints, and any known HITL seams. Use its report as the gate artifact before moving to Render.
+Use the Pi `subagent` tool with `agent: "local-craft-planner"` for this phase when available. Pass the user request, relevant issue slice, repository constraints, and any known HITL seams. Use its report as the gate artifact before moving to Render.
 
 - Read the relevant issue slice or user request thoroughly.
 - Identify whether the work is AFK (agent can complete solo) or HITL (requires human at a critical seam).
 - If multi-step, create or update a todo list before coding.
-- Produce: scope boundary, acceptance criteria, file list, test strategy, and risk assessment.
+- Treat provided acceptance criteria as ground truth; author them only when none were supplied.
+- Produce: scope boundary, acceptance-criteria alignment, file list, test strategy, and risk assessment.
 - Stop here if the plan is unclear — do not proceed to Render with ambiguous requirements.
 
 ### R — Render (Test-Drive with HITL Gate)
 
 Write failing tests first, then implement up to the critical seam, pause for human input, then complete implementation and refactor.
 
-Use AgentSpawn with `subagent_type: "craft-builder"` for this phase when available. Pass the C phase report and ask for test-first implementation guidance. When exact model selection is available, choose a model that has an equal-capability but different-model peer available for the later `craft-evaluator` spawn. Execute the implementation sequentially in the parent context after reviewing the subagent report.
+Use the Pi `subagent` tool with `agent: "local-craft-builder"` for this phase when available. Pass the C artifact and original acceptance criteria. The fresh local builder child edits the assigned workspace and returns the R artifact; the conductor only validates and gates. When exact model selection is available, choose a model with a different evaluator available at equal or higher capability. Do not implement in the parent conductor context.
 
 #### Red
 Write the failing test from the plan. If you can't write it, return to Conceptualize.
@@ -89,7 +92,7 @@ Clean up without breaking green. Repeat for each test case.
 
 Review the diff for quality, reuse, efficiency, and type correctness.
 
-Use AgentSpawn with `subagent_type: "craft-evaluator"` for this phase when available. Pass the task goal, CRAFTS plan, changed files, verification evidence, and the model used for `craft-builder`. When exact model selection is available, use a different but equal-capability model from the builder; if only tier aliases are available, keep `medium` and record the limitation. Treat blocking findings as inputs to Fix.
+Use the Pi `subagent` tool with `agent: "local-craft-evaluator"` for this phase when available. Pass the task goal, original acceptance criteria, CRAFTS plan, changed files, verification evidence, and the model used for `local-craft-builder`. Require the schema-valid A artifact. When exact model selection is available, use a different evaluator model at equal or higher capability than the builder; fail closed if exact selection cannot enforce this. Treat blocking findings as inputs to Fix.
 
 - Check for duplicated logic, missed edge cases, unclear naming.
 - Verify type safety if applicable.
@@ -100,7 +103,7 @@ Use AgentSpawn with `subagent_type: "craft-evaluator"` for this phase when avail
 
 Address blocking issues from Assess. Re-run quality checks.
 
-Use AgentSpawn with `subagent_type: "craft-builder"` for this phase when available. Pass only the blocking findings and relevant context so fixes remain minimal and scoped.
+Use the Pi `subagent` tool with `agent: "local-craft-builder"` for this phase when available. Pass only the blocking findings and relevant context so fixes remain minimal and scoped.
 
 - High and medium severity first.
 - Disagree with a finding? Document why instead of blindly fixing.
@@ -109,7 +112,7 @@ Use AgentSpawn with `subagent_type: "craft-builder"` for this phase when availab
 
 Run the security-hardening review for the diff and fix findings.
 
-Use AgentSpawn with `subagent_type: "craft-security"` for this phase when available. Pass the task goal, changed files, verification output, and any trust boundaries identified during Conceptualize or Render.
+Use the Pi `subagent` tool with `agent: "local-craft-security"` for this phase when available. Pass the task goal, changed files, verification output, and any trust boundaries identified during Conceptualize or Render.
 
 - Scan for injection risks, unsafe defaults, exposed secrets.
 - Verify boundary enforcement where applicable.
@@ -119,11 +122,10 @@ Use AgentSpawn with `subagent_type: "craft-security"` for this phase when availa
 
 Capture durable lessons, gotchas, process updates, and any documentation changes so repo docs stay evergreen and aligned to code.
 
-Use AgentSpawn with `subagent_type: "craft-sharpener"` for this phase when available. Pass the final diff summary, verification results, issue status, and any conventions or gotchas discovered during the task.
+Use the Pi `subagent` tool with `agent: "local-craft-sharpener"` for this phase. Pass the final diff summary, verification results, issue status, and any conventions or gotchas discovered during the task. The child remains read-only and returns a schema-valid documentation-change artifact; the conductor applies only path-validated documentation changes.
 
 - Document the HITL seam and the rationale for the human-owned decision.
-- Update the relevant domain docs (README, ADR, CLAUDE.md, PRD, ISSUES) with patterns established, gotchas discovered, conventions set during this task.
-- Commit and push if applicable.
+- Update relevant domain instructions and wiki/raw documentation without recording transient noise.
 
 ## Lite Flow: R → S
 

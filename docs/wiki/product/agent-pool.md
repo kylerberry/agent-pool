@@ -10,7 +10,7 @@ sources:
 
 # Warm Agent Pool
 
-The warm agent pool is the DAG-unaware execution substrate: Pi workers accept atomic node jobs, run CRAFTS, commit and report graded results, and leave GitHub PR delivery to the supervisor.
+The warm agent pool is the DAG-unaware execution substrate: fresh Pool Worker Pi sessions accept atomic node jobs, load `packages/worker-harness/`, run CRAFTS, commit and report graded results, and leave GitHub PR delivery to the supervisor. These runtime workers are distinct from Repository Builder sessions developing this codebase.
 
 ## Key constraints
 

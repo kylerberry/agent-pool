@@ -1,5 +1,13 @@
 # Repository Agent Instructions
 
+## Current Actor: Repository Builder
+
+Unless a trusted `.agent-pool/execution-context.json` marker explicitly identifies this session as a Pool Worker and the worker-harness preflight passes, you are a **Repository Builder** implementing the agent-pool product. The repository's subject matter does not make you a member of the pool.
+
+Repository Builders use local `.pi/` resources, `/goal`, `craft`, and `local-craft-*` agents. Do not invoke `craft-pool` or behave as though the supervisor, queue, or pool already exists. Runtime-only Pool Worker resources live under `packages/worker-harness/` and are loaded explicitly by the future supervisor.
+
+See `docs/raw/context/repository-builder-vs-pool-worker.md`.
+
 ## Project Purpose
 
 This repository designs and implements an agent-pool / supervisor-orchestrator system: a warm pool of coding agents plus a deterministic controller that can decompose free-form work into gated, auditable units, dispatch those units to agents, grade outcomes, and deliver reviewable GitHub artifacts.
@@ -35,7 +43,7 @@ Do not duplicate canonical instructions into `CLAUDE.md`; update the sibling `AG
 
 ## Project Workflows
 
-- Use `craft-pool` for work executed as a remote DAG node.
+- Repository Builders use local `craft`; Pool Workers use the explicitly loaded `packages/worker-harness` `craft-pool` skill.
 - Use `graphify` for codebase architecture and relationship queries.
 - Use `pi-subagents` when defining or coordinating project agents and chains.
 

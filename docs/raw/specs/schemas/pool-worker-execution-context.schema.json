@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pool-worker-execution-context.schema.json",
+  "title": "Pool Worker Execution Context",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "actor",
+    "node_id",
+    "attempt_id",
+    "issued_by",
+    "issued_at",
+    "target_repo",
+    "target_branch"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "actor": { "const": "pool-worker" },
+    "node_id": { "type": "string", "minLength": 1 },
+    "attempt_id": { "type": "string", "minLength": 1 },
+    "issued_by": { "const": "agent-pool-supervisor" },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
+    "target_repo": { "type": "string", "minLength": 1 },
+    "target_branch": { "type": "string", "minLength": 1 }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "agent-pool-worker-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "keywords": ["pi-package"],
+  "pi": {
+    "skills": ["./skills"],
+    "subagents": {
+      "agents": ["./agents"]
+    }
+  },
+  "scripts": {
+    "preflight": "node ./scripts/preflight.mjs",
+    "test": "node --test ./test/*.test.mjs"
+  }
+}

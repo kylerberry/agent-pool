@@ -1,3 +1,8 @@
+---
+audience: repository-builder
+subject: development-harness
+---
+
 # Goal: Build the Agent Pool and Supervisor Orchestrator
 
 Build this repository into the v1 self-hosted agent-pool and supervisor-orchestrator system described by its canonical specifications and ADRs. Work autonomously within the constraints below. Treat the linked raw sources as authoritative; do not restate, weaken, or silently reinterpret their decisions.
@@ -18,7 +23,7 @@ Implement every behavior defined by the canonical specifications and ADRs, inclu
 
 - free-form spec intake, structured decomposition, mechanical DAG validation, persistence, and human approval before dispatch;
 - node-level queue dispatch to the warm pool, dependency-aware readiness, failure containment, retry/budget handling, and human escalation actions;
-- CRAFTS intra-node execution using the project `craft-pool` skill and phase agents;
+- CRAFTS intra-node execution using the explicitly loaded `packages/worker-harness` `craft-pool` skill and runtime phase agents;
 - deterministic tier-1 evidence gates, independent tier-2 assessment, red/green test evidence, test-suite hashing/re-verification, and audit records;
 - provider-agnostic model access, role-indexed routing, and the builder-first eval harness;
 - connected-component PR assembly, GitHub delivery, and revision-loop behavior;
@@ -57,9 +62,9 @@ Meet only the capacity, concurrency, cost, and execution constraints defined in 
 - Use the framework, language, infrastructure, API, storage, and integration constraints specified in the canonical orchestrator specification; do not introduce substitutes without an approved ADR.
 - Organize application code as bounded domains under `src/domains/<domain>/`. Each domain owns local business rules and a canonical `AGENTS.md`; its sibling `CLAUDE.md` contains only `@AGENTS.md`. See [Domain-Driven Documentation Convention](raw/context/domain-driven-documentation-convention.md).
 - Read `AGENTS.md`, `docs/AGENTS.md`, `docs/wiki/index.md`, relevant wiki pages, and then exact raw sources before non-trivial work.
-- Launch each DAG node as a fresh Pi session with `craft-pool`, `pi-subagents`, the original unit payload, and explicit model/tool grants. The session conducts CRAFTS by spawning project phase agents sequentially.
+- Launch each DAG node as a fresh Pool Worker Pi session with the explicitly loaded `packages/worker-harness`, `pi-subagents`, the original unit payload, a trusted execution-context marker, and explicit model/tool grants. The session conducts CRAFTS by spawning project phase agents sequentially.
 - Before implementation, complete ADR-034's human-approved domain-discovery gate and create each initial domain's instruction files.
-- Pin and preflight the runtime capabilities in `.pi/runtime-versions.json`. Enforce the five exact models in `.pi/settings.json` and the bootstrap role mapping in `.pi/model-routing.bootstrap.json`; do not select Anthropic or any unlisted model.
+- Pin and preflight Pool Worker capabilities from `packages/worker-harness/config/runtime-versions.json`. Enforce its five exact models and bootstrap routing; do not select Anthropic or any unlisted model. Local `.pi/` routing applies only to Repository Builders.
 - The CRAFTS S — Sharpen phase maintains durable domain `AGENTS.md` guidance and affected wiki pages. Canonical requirements/decisions are recorded in `docs/raw/` first; omit transient implementation noise.
 
 ## 5. Acceptance criteria

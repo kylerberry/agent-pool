@@ -12,7 +12,7 @@ description: >-
 
 ## Local-only scope
 
-This skill runs CRAFTS **locally inside this repository's Pi environment**, not inside the future remote `craft-pool` supervisor runtime. The remote runtime uses its own `craft-pool` skill (see `.pi/skills/craft-pool/SKILL.md`) with orchestrator-owned decomposition, audit-trail emission, and pool-grade model diversity. The local skill is for the implementation slices Kyler approves and runs here.
+This skill runs CRAFTS **locally inside this repository's Pi environment**, not inside the future remote `craft-pool` supervisor runtime. The remote runtime uses its explicitly loaded `craft-pool` skill from `packages/worker-harness/skills/craft-pool/SKILL.md` with orchestrator-owned decomposition, audit-trail emission, and pool-grade model diversity. The local skill is for the implementation slices Kyler approves and runs here.
 
 Local phase agents are named `local-craft-*` and are configured in `.pi/settings.json` (`subagents.agentOverrides`) and `.pi/agents/local-craft-*.md`. They are intentionally separate from the remote `craft-*` phase agents so changes to the local workflow never silently redefine remote `craft-pool` routing.
 

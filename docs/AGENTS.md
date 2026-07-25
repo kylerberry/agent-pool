@@ -4,6 +4,20 @@
 
 `docs/` is this codebase's Obsidian-style vault and durable project memory. It stores raw source artifacts, synthesized wiki pages, ADRs, PRDs, specs, issues, implementation notes, and operating knowledge for future agents and humans.
 
+## Actor And Subject Classification
+
+This repository distinguishes the actor reading a document from the system the document describes:
+
+- `audience: repository-builder` — local Pi sessions building the product.
+- `audience: pool-worker` — runtime Pi sessions executing one node.
+- `audience: both` — intentionally shared.
+- `subject: development-harness` — how Repository Builders work.
+- `subject: product-runtime` — the system being built or executed.
+
+Product-runtime subject matter does not turn a Repository Builder into a Pool Worker. Actor identity comes from the trusted execution-context marker and worker preflight. See `docs/raw/context/repository-builder-vs-pool-worker.md`.
+
+Directory defaults and explicit metadata rules are defined there; add frontmatter when actor ambiguity is plausible.
+
 ## Core Principle
 
 Use **wiki-first, raw-when-needed** lookup.

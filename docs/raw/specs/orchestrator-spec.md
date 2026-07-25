@@ -49,7 +49,13 @@ free-form spec (markdown)  -- POST /specs (API; webhook/cron/CLI/agent)
 [ HUMAN GATE 2: PR review ]  -- approve / comment (comment -> governed revision loop)
 ```
 
-Two humans gates bracket the pipeline; everything between them is machine-gated and audit-logged.
+Two human gates bracket the pipeline; everything between them is machine-gated and audit-logged.
+
+### 2.1 Actor Boundary: Builder vs. Worker
+
+A **Repository Builder** is a local Pi session implementing this product. It uses `.pi/`, `/goal`, `craft`, and `local-craft-*`; it is not a member of the pool. A **Pool Worker** is a fresh runtime Pi session executing one node attempt through the explicitly loaded `packages/worker-harness` package.
+
+Pool Worker identity is machine-readable, not inferred from prompts or repository subject matter. The trusted supervisor sets `AGENT_POOL_ACTOR=pool-worker` plus expected node, attempt, repository, and branch values, writes launcher-owned `.agent-pool/execution-context.json` conforming to `pool-worker-execution-context.schema.json`, and runs the worker-harness preflight before any paid model call. Preflight binds marker identity and target to launcher expectations and enforces a five-minute freshness window; missing, replayed, or invalid context fails closed. See `docs/raw/context/repository-builder-vs-pool-worker.md`.
 
 ## 3. Architecture Layers
 
@@ -159,11 +165,11 @@ Escalations surface as audit-trail queries (CLI / minimal dashboard) — no push
 
 ## 5. Intra-Node Execution — CRAFTS (craft-pool skill)
 
-A node's job launches a **fresh Pi agent session** with the project `craft-pool` skill, `pi-subagents`, the original unit payload, and the permitted model/tool configuration. That session is the conductor; a separate persisted conductor agent definition is optional. It spawns every phase—including C—as a sequential Pi subagent and owns each phase's payload. C is a planning subagent, peer to the rest; it *reports* complexity, and the fresh session routes full-vs-lite from that report. The controller sees phase audit artifacts and the final unit result, but phase control remains inside the node session.
+A node's job launches a **fresh Pool Worker Pi session** with the explicitly loaded `packages/worker-harness` package, its `craft-pool` skill, `pi-subagents`, the original unit payload, a trusted per-attempt execution-context marker, and the permitted model/tool configuration. That session is the conductor; a separate persisted conductor agent definition is optional. It spawns every phase—including C—as a sequential Pi subagent and owns each phase's payload. C is a planning subagent, peer to the rest; it *reports* complexity, and the fresh session routes full-vs-lite from that report. The controller sees phase audit artifacts and the final unit result, but phase control remains inside the node session.
 
 The launch must preflight that `craft-pool`, required phase agents, Graphify, required tools, provider-qualified models, and builder/evaluator model diversity are available. Missing capabilities fail closed before paid work begins. Pool-context bindings:
 
-1. **Criteria provenance** — acceptance criteria always arrive from decomposition; C never authors them, and builds the test suite against them as ground truth.
+1. **Criteria provenance** — acceptance criteria always arrive unchanged from the approved upstream unit payload, originating from either decomposition or caller-authored direct-task intake. The payload carries criteria origin and source identifiers. C never authors them and builds the test suite against them as ground truth.
 2. **Criteria-to-A plumbing** — the Assess phase receives the node's *original* criteria through the controlled payload (not harness-propagated context), and audits the test suite against them, not just the code against the tests. Structural by construction: the primary agent spawns A directly, so A's payload is never mediated by C's interpretation.
 3. **Model diversity** — builder (R/F) and evaluator (A) run on different models; A should be higher capability when available and must never be lower capability; fail closed if unenforceable.
 4. **Audit emission** — every phase emits a schema-validated artifact using `docs/raw/specs/crafts-phase-artifact-contract.md`; invalid or prose-only output fails the phase. Validated artifacts are persisted to the audit trail.
@@ -203,7 +209,7 @@ Composite thresholds are **empirical** (ADR-009): derived per task class from Ph
 
 Every model-call role is its own routing decision with its own eval task class: decomposition, planning (C), building (R/F), assessing (A), tightening (T), sharpening (S—likely no dedicated eval). Different rows, different winners; no single benchmark generalizes across roles.
 
-Until eval-derived winners exist, `.pi/model-routing.bootstrap.json` is authoritative: Kimi K3 decomposes; Terra plans/conducts/diagnoses; Kimi K2.7 Code builds; Sol assesses and tightens; Luna sharpens. Sol is reserved from normal building so a different equal-or-higher evaluator remains available. Every launch passes an exact provider/model ID and fails closed if it is unavailable.
+Until eval-derived winners exist, routing is split by actor boundary: `packages/orchestrator-harness/config/model-routing.bootstrap.json` owns the control-plane decomposition row (Kimi K3), while `packages/worker-harness/config/model-routing.bootstrap.json` owns only node-conductor and CRAFTS roles (Terra plans/conducts/diagnoses; Kimi K2.7 Code builds; Sol assesses and tightens; Luna sharpens). Sol is reserved from normal building so a different equal-or-higher evaluator remains available. Every launch passes an exact provider/model ID and fails closed if it is unavailable.
 
 ### 9.2 Harness Scope — Builder First (ADR-021, ADR-005, ADR-006, ADR-008)
 
@@ -235,7 +241,7 @@ Decomposer vs. C on the same knowledge: **breadth vs. depth** — the decomposer
 
 TypeScript end to end (shares runtime/types/job schema with BullMQ/Redis). No orchestration framework (§3.1). Thin per-provider adapters (§9.2). Single Hetzner-class host, Docker Compose, ~$10/month infrastructure posture.
 
-The worker image pins Node, Pi, Graphify, Pi extension packages, and application dependencies. `.pi/runtime-versions.json` is the repository baseline; the image digest and dependency lockfiles are recorded with every attempt. Startup performs a capability preflight. `.pi/settings.json` enforces five exact models: GPT-5.6 Luna, Terra, and Sol through `openai-codex`, plus Moonshot Kimi K2.7 Code and Kimi K3. Anthropic and all unlisted models are excluded. `.pi/model-routing.bootstrap.json` defines the initial role mappings; eval-derived routing replaces these defaults when evidence exists.
+The worker image pins Node, Pi, Graphify, Pi extension packages, and application dependencies. `packages/worker-harness/config/runtime-versions.json` is the Pool Worker baseline; the image digest and dependency lockfiles are recorded with every attempt. Startup performs a capability preflight. `packages/worker-harness/config/settings.json` enforces five exact models: GPT-5.6 Luna, Terra, and Sol through `openai-codex`, plus Moonshot Kimi K2.7 Code and Kimi K3. Anthropic and all unlisted models are excluded. `packages/worker-harness/config/model-routing.bootstrap.json` defines only Pool Worker role mappings; `packages/orchestrator-harness/config/model-routing.bootstrap.json` defines control-plane decomposition routing. Eval-derived routing replaces both bootstrap policies when evidence exists.
 
 ADR-033 defines the practical operations baseline: health/readiness checks, correlated structured logs, queue/disk/provider/cost visibility, WAL-safe encrypted off-host backups, tested restore guidance, migrations, and retention. Formal SLOs and a dedicated observability platform are fast-follow.
 

@@ -10,7 +10,7 @@ acceptanceRole: read-only
 systemPromptMode: replace
 ---
 
-You are the **craft-planner** agent.
+You are the **craft-planner** Pool Worker phase agent. Run only after the fresh conductor validates the pool-worker execution context.
 
 # Role
 
@@ -27,4 +27,4 @@ Run the C — Conceptualize phase of CRAFTS. You turn the user's request, issue 
 
 # Output
 
-Return schema-valid JSON matching the C payload in `docs/raw/specs/crafts-phase-artifact-contract.md`. Prose-only completion is invalid.
+Return schema-valid JSON for phase C using the conductor-supplied `contracts/crafts-phase-artifact.schema.json` output schema. Prose-only completion is invalid.

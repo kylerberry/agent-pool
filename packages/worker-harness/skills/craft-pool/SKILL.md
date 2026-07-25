@@ -3,7 +3,7 @@ name: craft-pool
 description: >-
   Agent-pool CRAFTS workflow. Use when CRAFTS runs as the intra-node execution
   method inside the orchestrator's supervisor pipeline: acceptance criteria
-  arrive from upstream decomposition, review independence and model diversity
+  arrive from an approved upstream unit payload, review independence and model diversity
   are enforced, and every phase emits audit-trail records. Full flow
   (C→R→A→F→T→S) for business logic, multi-file work, and domain-boundary
   changes; lite flow (R→S) for config, scaffolding, and simple single-file
@@ -15,9 +15,20 @@ description: >-
 
 ## When to use
 
-This skill runs CRAFTS as the internal execution method of a **DAG node** inside the orchestrator's supervisor pipeline. It assumes an orchestrator exists above it that decomposed the work and authored acceptance criteria. Use the **full flow** for business logic, multi-file work, and anything crossing domain boundaries; use the **lite flow** for config, scaffolding, and simple single-file fixes. Start lite, escalate to full if the task grows.
+This skill runs CRAFTS as the internal execution method of a **DAG node** inside the orchestrator's supervisor pipeline. It assumes an orchestrator exists above it that supplied an approved node payload originating from decomposition or direct-task intake. Use the **full flow** for business logic, multi-file work, and anything crossing domain boundaries; use the **lite flow** for config, scaffolding, and simple single-file fixes. Start lite, escalate to full if the task grows.
 
 This is a standalone skill. It intentionally duplicates general CRAFTS phase mechanics rather than depending on another skill, so it loads and runs as one complete unit.
+
+## Mandatory actor preflight
+
+Before reading the unit, spawning a phase, or making any paid model call:
+
+1. Require `AGENT_POOL_ACTOR=pool-worker` plus launcher-supplied node, attempt, repository, and branch expectations.
+2. Require the per-attempt `.agent-pool/execution-context.json` marker (or `AGENT_POOL_EXECUTION_CONTEXT`).
+3. Run `node ../../scripts/preflight.mjs`; preflight must bind marker identity/target to launcher expectations and reject stale markers from this skill directory, with `AGENT_POOL_WORKSPACE` set to the target workspace.
+4. Continue only on exit code 0.
+
+Missing or invalid context means this session is not a Pool Worker. Fail closed and report to the supervisor; never fall back to Repository Builder behavior. The marker is a role invariant, not an authentication or sandbox boundary.
 
 ## Core framing
 
@@ -30,13 +41,13 @@ This is a standalone skill. It intentionally duplicates general CRAFTS phase mec
 
 These bindings are enforced in this context and are the reason this is a separate skill:
 
-1. **Criteria always come from upstream.** Acceptance criteria are always an input to the node, authored by the orchestrator's decomposition step. C **never** authors criteria here — it treats them as ground truth and builds the test suite against them. This gives an interpretation authored outside and above C, which is what makes the Assess phase's independence real.
+1. **Criteria always come from upstream.** Acceptance criteria are always an immutable input to the node, originating from either an approved decomposition or caller-authored direct-task submission. The payload carries its criteria origin and source identifiers. C **never** authors criteria here — it treats them as ground truth and builds the test suite against them. This gives an interpretation authored outside and above C, which is what makes the Assess phase's independence real.
 
 2. **Enforced criteria-to-A plumbing.** The Assess phase (`craft-evaluator`) receives the node's original upstream acceptance criteria as part of its task payload, passed explicitly by the node's fresh Pi conductor session — not left to implicit child-context propagation. A model-diverse but context-coupled reviewer catches build defects, not interpretation defects; passing original criteria de-correlates the interpretations. A's mandate explicitly includes auditing C's test suite against the original criteria, not only reviewing the build against the tests. This is structural, not aspirational: because the primary agent spawns A directly (rather than A being spawned by C), the primary owns A's payload by construction and passes the original criteria in unmediated by C's interpretation.
 
 3. **Enforced model diversity.** Exact-model selection is guaranteed available in the pool, so there is no tier-alias fallback. `craft-builder` (R/F) and `craft-evaluator` (A) MUST run on different models; the evaluator should be a tier above the builder when available and must never be lower capability. A node whose runtime cannot honor this fails closed and escalates — it does not silently proceed on same-model review.
 
-4. **Audit-trail emission.** Every phase emits JSON validated against `docs/raw/specs/schemas/crafts-phase-artifact.schema.json` and persisted to the orchestrator's audit trail. Invalid or prose-only output fails the phase. This feeds tier 1, tier 2, and the composite; the produced test suite remains a persisted artifact.
+4. **Audit-trail emission.** Every phase emits JSON validated against the bundled `../../contracts/crafts-phase-artifact.schema.json` and persisted to the orchestrator's audit trail. Invalid or prose-only output fails the phase. This feeds tier 1, tier 2, and the composite; the produced test suite remains a persisted artifact.
 
 ## Grading model
 
@@ -52,7 +63,7 @@ When exact per-spawn model selection is used, R/F and A run on different models;
 
 CRAFTS is a sequential phase-gate workflow. Do not run phases in parallel per unit; finish the current phase before the next. **The primary agent spawns each phase's subagent itself** — including C — passing that phase's payload directly. Spawn exactly one phase subagent at a time, wait for its report, then proceed, fix blockers, or escalate. Do not run CRAFTS subagents in parallel, and do not let one phase subagent spawn another.
 
-**Schema enforcement.** Launch each phase with `docs/raw/specs/schemas/crafts-phase-artifact.schema.json` adapted as the Pi `outputSchema`; the child must call `structured_output`. Validate before persistence or handoff. Prose-only completion fails the phase.
+**Schema enforcement.** Launch each phase with bundled `../../contracts/crafts-phase-artifact.schema.json` adapted as the Pi `outputSchema`; the child must call `structured_output`. Validate before persistence or handoff. Prose-only completion fails the phase.
 
 **Context discipline (pass artifacts, not transcripts).** Each phase passes its structured *output* forward — C passes its plan, R passes the diff and verification evidence, A passes its findings — never its full working transcript. The next phase receives the compact artifact, not everything the prior phase read to produce it. Context stays within budget as a natural consequence of the phase-gate structure rather than a bolted-on summarizer; the phase boundaries *are* the compaction boundaries. If a single phase's own working context grows large, summarize within that phase before handing its artifact forward. (This composes with audit-trail emission: the artifact handed forward is also the record emitted per phase.)
 

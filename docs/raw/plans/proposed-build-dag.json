@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "kind": "repository-builder-v1-build-dag",
+  "source": "docs/goal-prompt.md",
+  "nodes": [
+    {
+      "id": "domain-scaffolding",
+      "intent": "Establish approved bounded-domain instruction boundaries before feature code",
+      "change_spec": "Create canonical AGENTS.md and pointer-only CLAUDE.md files for Work Intake, Orchestration, Agent Execution, Verification, Integration and Delivery, Model Routing and Evaluation, and Codebase Knowledge from the approved domain map.",
+      "acceptance_criteria": [
+        "Each approved domain exists under src/domains/<domain>/ with an actionable AGENTS.md.",
+        "Each sibling CLAUDE.md contains exactly @AGENTS.md.",
+        "Every domain instruction defines terms, owned state, invariants, public interfaces, dependencies, trust boundaries, verification guidance, relevant sources, and footguns.",
+        "The domain-map approval record validates and its SHA-256 matches the approved map."
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "work-contracts-direct-intake",
+      "intent": "Deliver immutable work contracts and the direct-task intake path",
+      "change_spec": "Implement Work Intake contracts and POST /tasks for one unit or a mechanically validated hand-authored flat DAG, including caller-scoped idempotency and explicit acceptance-criteria provenance.",
+      "acceptance_criteria": [
+        "One direct unit and a flat array of units with depends_on edges are accepted through the same application boundary.",
+        "Duplicate IDs, missing or self dependencies, cycles, unknown fields, and absent acceptance criteria are rejected deterministically.",
+        "Direct-task criteria are stored unchanged with origin=direct_task and source identifiers.",
+        "Idempotency replays return the original result while the same key with a different payload is rejected.",
+        "Gate 2 remains mandatory and no decomposition model call occurs on this path."
+      ],
+      "depends_on": ["domain-scaffolding"]
+    },
+    {
+      "id": "model-routing-foundation",
+      "intent": "Provide provider-normalized, role-indexed, fail-closed model routing",
+      "change_spec": "Implement the Model Routing and Evaluation domain foundation with the exact approved model scope, capability ordering, role-indexed bootstrap decisions, provider adapters, and durable routing evidence.",
+      "acceptance_criteria": [
+        "Only the five approved provider-qualified models can be selected.",
+        "Unavailable explicit models fail closed rather than silently substituting.",
+        "Builder and evaluator models differ and evaluator capability is never lower.",
+        "Routing decisions record role, selected model, rationale, policy version, and fallback behavior.",
+        "Orchestrator-side decomposition routing is not loaded from the DAG-unaware Pool Worker package."
+      ],
+      "depends_on": ["domain-scaffolding"]
+    },
+    {
+      "id": "codebase-knowledge-foundation",
+      "intent": "Provide fresh code-graph and durable wiki retrieval contracts",
+      "change_spec": "Implement Codebase Knowledge workspace indexing, Graphify refresh, wiki/index discovery, and retrieval contracts for breadth-oriented decomposition and phase-specific codebase access.",
+      "acceptance_criteria": [
+        "Graphify is pinned and preflighted in the execution environment.",
+        "A workspace graph can be built and refreshed against an identified repository head.",
+        "Decomposition can request breadth-oriented dependency context and receive index revision metadata.",
+        "Grep/LSP remain direct precise lookup tools and no vector store is introduced.",
+        "Wiki discovery follows index links and retains raw-source traceability."
+      ],
+      "depends_on": ["domain-scaffolding"]
+    },
+    {
+      "id": "orchestrator-decomposition-harness",
+      "intent": "Create the separate orchestrator-side Pi decomposition harness",
+      "change_spec": "Build an explicitly loaded control-plane Pi package with a spec-decomposer agent and decomposition skill. It consumes decomposition jobs, uses code-graph breadth retrieval, and emits only the ADR-018 flat DAG fields for deterministic validation.",
+      "acceptance_criteria": [
+        "The harness is physically separate from packages/worker-harness and never loads craft-pool.",
+        "Its decomposer emits only id, intent, change_spec, acceptance_criteria, and depends_on for each node.",
+        "Kimi K3 is the bootstrap decomposition model with only approved fail-closed fallback policy.",
+        "The invocation records prompt, model, tool, package, and code-graph revision provenance.",
+        "Schema-invalid output is rejected or repaired only within an explicit bounded policy; the model cannot validate, persist, approve, or dispatch its own DAG."
+      ],
+      "depends_on": ["model-routing-foundation", "codebase-knowledge-foundation"]
+    },
+    {
+      "id": "async-spec-intake-gate-one",
+      "intent": "Deliver asynchronous free-form spec intake and human-approved DAG persistence",
+      "change_spec": "Implement POST /specs, GET status/DAG, approve, and amend application flows backed by the separate decomposition queue, deterministic DAG validation, persistence, and Gate 1.",
+      "acceptance_criteria": [
+        "POST /specs accepts raw markdown plus target repository/branch and returns 202 with a stable spec ID.",
+        "Decomposition runs on a separate orchestrator queue and persists its proposed DAG before approval.",
+        "Duplicate IDs, missing or self dependencies, cycles, and invalid node payloads fail before Gate 1.",
+        "Approval is required before any decomposed node dispatch; retries resume from the approved DAG.",
+        "Amend-DAG preserves passed work, validates the replacement topology, and requires renewed approval.",
+        "Caller-scoped idempotency replays safely and conflicting payloads reject."
+      ],
+      "depends_on": ["work-contracts-direct-intake", "orchestrator-decomposition-harness"]
+    },
+    {
+      "id": "controller-ready-frontier",
+      "intent": "Deliver durable DAG lifecycle and deterministic ready-node dispatch",
+      "change_spec": "Implement the SQLite-backed Orchestration core: work/node state, topological ready-frontier calculation, CAS transitions, stable attempt IDs, deterministic node jobs, leases, and duplicate-result handling.",
+      "acceptance_criteria": [
+        "Only nodes whose dependencies have passed enter the ready frontier.",
+        "One deterministic attempt job is emitted per ready node and duplicate delivery is idempotent.",
+        "Pool Worker payloads contain one immutable unit and no DAG topology.",
+        "State transitions use expected-version checks and invalid transitions are rejected.",
+        "Leases and startup reconciliation recover interrupted dispatch/result windows without silently losing work."
+      ],
+      "depends_on": ["work-contracts-direct-intake"]
+    },
+    {
+      "id": "controller-failure-policy",
+      "intent": "Deliver bounded retries, budgets, branch containment, and governed resolutions",
+      "change_spec": "Implement failure classification, separate retry counters, node/DAG budgets, dependent-branch freezing, escalation records, reconciliation, and the five ADR-defined human resolution actions.",
+      "acceptance_criteria": [
+        "Logic and integration failures have separate fixed counters with downward-only overrides.",
+        "A failed or escalated node blocks only its dependent branch while unrelated ready work continues.",
+        "Per-node exhaustion escalates the node; aggregate DAG exhaustion stops new dispatch and lets bounded in-flight work finish.",
+        "Retry, manual fix, cancel branch, override/force-pass, and amend-DAG are authorized, validated, and durably audited.",
+        "Crash-recovery tests demonstrate reconciliation for leased and partially delivered work."
+      ],
+      "depends_on": ["controller-ready-frontier"]
+    },
+    {
+      "id": "isolated-pool-worker-execution",
+      "intent": "Execute one DAG-unaware node attempt in a fresh isolated Pi session",
+      "change_spec": "Integrate the explicit packages/worker-harness package with fresh attempt workspaces, execution-context preflight, phase-scoped capabilities, pinned models/tools, backend fallback, and secret isolation.",
+      "acceptance_criteria": [
+        "Every attempt receives a fresh launcher-owned context bound to node, attempt, repository, branch, and freshness expectations.",
+        "Worker startup validates package files, exact models, Graphify, routing diversity, and schemas before paid work.",
+        "Repository commands cannot access provider or GitHub credentials.",
+        "The worker receives no DAG topology and executes exactly one attempt contract.",
+        "Backend fallback remains the same attempt and records all consumed cost and evidence."
+      ],
+      "depends_on": ["model-routing-foundation", "codebase-knowledge-foundation"]
+    },
+    {
+      "id": "crafts-grading-flow",
+      "intent": "Deliver schema-valid CRAFTS execution and independent tiered grading",
+      "change_spec": "Implement CRAFTS phase sequencing, immutable criteria plumbing, phase artifact persistence, red-before-green evidence, deterministic Tier 1, independent Tier 2, and retry context transport.",
+      "acceptance_criteria": [
+        "Every phase emits a schema-valid artifact and invalid or prose-only output fails closed.",
+        "Original criteria and origin from either decomposition or direct-task submission reach C and A unchanged; C never re-authors them.",
+        "Red-state evidence, green evidence, suite path/hash, commit, image, and tool outputs are attested and persisted.",
+        "A is read-only, runs on a different equal-or-higher model, and audits tests and code against the original criteria.",
+        "Failure artifacts survive compaction and are supplied to retries while transcripts remain indexed escape hatches."
+      ],
+      "depends_on": ["isolated-pool-worker-execution"]
+    },
+    {
+      "id": "integration-reverification",
+      "intent": "Arbitrate concurrent changes through suite versioning and merged-head re-verification",
+      "change_spec": "Implement suite storage and hashes, optimistic integration, test-file conflict re-derivation, final merged Tier-1 execution, provisional-pass reopening, and integration-failure reporting.",
+      "acceptance_criteria": [
+        "Test suites live in the repository and every relevant version is content-hashed.",
+        "Conflicting test edits cause the later unit to re-derive against the new head rather than overwrite.",
+        "The merged connected component reruns all accumulated Tier-1 suites before sealing.",
+        "A re-verification failure can reopen a provisional pass and increments only the integration-failure counter.",
+        "Integration evidence is linked to node, attempt, suite hash, and head SHA."
+      ],
+      "depends_on": ["controller-ready-frontier", "crafts-grading-flow"]
+    },
+    {
+      "id": "github-delivery-gate-two",
+      "intent": "Deliver idempotent connected-component pull requests behind mandatory human review",
+      "change_spec": "Implement trusted-host branch integration, one commit per node, connected-component PR assembly, GitHub delivery idempotency, scorecard metadata, and Gate 2.",
+      "acceptance_criteria": [
+        "Each independent connected component produces one reviewable PR and each node produces one attributable commit.",
+        "Commits and PR metadata include intent, criteria result, model rationale, cost, and verification evidence links.",
+        "Stable delivery keys prevent duplicate branches, commits, or PRs during reconciliation.",
+        "Only trusted host adapters hold GitHub credentials and repository commands never receive them.",
+        "Gate 2 approval remains mandatory for decomposed and direct-task work."
+      ],
+      "depends_on": ["integration-reverification"]
+    },
+    {
+      "id": "github-revision-webhooks",
+      "intent": "Continue reviewed work safely from authenticated GitHub feedback",
+      "change_spec": "Implement Integration and Delivery webhook ingestion, authenticity and replay checks, comment-to-node mapping, ambiguity escalation, and governed revision commands that re-enter normal execution and grading.",
+      "acceptance_criteria": [
+        "Webhook authenticity and delivery replay are verified before domain commands are accepted.",
+        "Commit comments map to the associated node and PR-level comments map to the latest affected node only when unambiguous.",
+        "Ambiguous or unauthorized feedback escalates without mutating work state.",
+        "Accepted revisions consume normal budgets, execute normal CRAFTS/grading, and append correlated audit evidence.",
+        "HTTP webhook transport remains an adapter while mapping and revision policy remain owned by Integration and Delivery."
+      ],
+      "depends_on": ["controller-failure-policy", "github-delivery-gate-two"]
+    },
+    {
+      "id": "builder-eval-harness",
+      "intent": "Calibrate the highest-volume builder routing row with reproducible evidence",
+      "change_spec": "Implement the builder-only eval harness using tested historical tickets, N=3 repetitions, production-equivalent tools, deterministic grading, cost capture, and routing-table publication.",
+      "acceptance_criteria": [
+        "Only tickets with existing tests enter the initial dataset.",
+        "Each task-model pair runs three isolated repetitions with the production builder tool surface and no CRAFTS wrapper.",
+        "Results record reproducible inputs, model/version, outputs, Tier-1 verdicts, latency, tokens, and cost.",
+        "Routing changes are published only from empirical results and preserve the exact approved model scope.",
+        "Non-builder eval rows remain explicitly deferred with their named grader approaches."
+      ],
+      "depends_on": ["model-routing-foundation", "isolated-pool-worker-execution", "crafts-grading-flow"]
+    },
+    {
+      "id": "single-host-operations",
+      "intent": "Make the v1 controller observable, recoverable, and operable on one host",
+      "change_spec": "Implement health/readiness, correlated logs and audit queries, queue/provider/disk/cost visibility, migrations, bounded retention, startup reconciliation, encrypted WAL-safe backup, and restore documentation.",
+      "acceptance_criteria": [
+        "Health and readiness distinguish controller, Redis, SQLite, provider, worker, and delivery dependencies.",
+        "Logs and audit queries correlate spec, DAG, node, attempt, model call, and GitHub artifact identifiers.",
+        "Migrations and startup reconciliation are idempotent and tested against interrupted states.",
+        "Retention is bounded and an encrypted off-host backup includes a consistent SQLite/WAL snapshot.",
+        "A documented restore drill is executed successfully in a test environment."
+      ],
+      "depends_on": ["async-spec-intake-gate-one", "controller-failure-policy", "github-revision-webhooks", "builder-eval-harness"]
+    },
+    {
+      "id": "v1-end-to-end-traceability",
+      "intent": "Prove the complete v1 objective and map every governing decision to evidence",
+      "change_spec": "Add the final end-to-end fixture, ADR/spec traceability matrix, reproducible verification commands, and approved deferral report covering the complete path from free-form spec through review revision.",
+      "acceptance_criteria": [
+        "A fixture demonstrates POST /specs, decomposition, Gate 1, ready-node dispatch, Pool Worker CRAFTS, grading, integration, PR delivery, Gate 2 feedback, and revision completion.",
+        "Tests cover duplicate delivery, crash reconciliation, logic and integration retries, dependency freezing, budget exhaustion, re-verification failure, and all five human resolution actions.",
+        "Every docs/goal-prompt.md acceptance criterion maps to implementation and automated evidence.",
+        "Every ADR maps to code/tests or an explicitly approved deferred item without contradiction.",
+        "Pinned lint, typecheck, unit, integration, static, and security checks pass."
+      ],
+      "depends_on": ["single-host-operations"]
+    }
+  ],
+  "approval": {
+    "approved_by": "Kyler Berry",
+    "approved_at": "2026-07-25T01:59:23Z",
+    "notes": "Approved with the ADR-034 domain map and its API/webhook ownership resolutions. Execute ready nodes through fresh local CRAFTS slices; use isolated worktrees for parallel writers."
+  }
+}

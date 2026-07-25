@@ -1,0 +1,48 @@
+{
+  "enabledModels": [
+    "openai-codex/gpt-5.6-luna",
+    "openai-codex/gpt-5.6-terra",
+    "openai-codex/gpt-5.6-sol",
+    "moonshot/kimi-k2.7-code",
+    "moonshot/kimi-k3"
+  ],
+  "packages": [
+    "npm:pi-subagents@0.35.1",
+    "npm:pi-web-access@0.13.0"
+  ],
+  "subagents": {
+    "defaultModel": "openai-codex/gpt-5.6-terra",
+    "modelScope": {
+      "enforce": true,
+      "allow": [
+        "openai-codex/gpt-5.6-luna",
+        "openai-codex/gpt-5.6-terra",
+        "openai-codex/gpt-5.6-sol",
+        "moonshot/kimi-k2.7-code",
+        "moonshot/kimi-k3"
+      ]
+    },
+    "agentOverrides": {
+      "craft-planner": {
+        "model": "openai-codex/gpt-5.6-terra",
+        "fallbackModels": ["moonshot/kimi-k3"]
+      },
+      "craft-builder": {
+        "model": "moonshot/kimi-k2.7-code",
+        "fallbackModels": ["openai-codex/gpt-5.6-terra"]
+      },
+      "craft-evaluator": {
+        "model": "openai-codex/gpt-5.6-sol",
+        "fallbackModels": ["moonshot/kimi-k3"]
+      },
+      "craft-security": {
+        "model": "openai-codex/gpt-5.6-sol",
+        "fallbackModels": ["openai-codex/gpt-5.6-terra"]
+      },
+      "craft-sharpener": {
+        "model": "openai-codex/gpt-5.6-luna",
+        "fallbackModels": ["openai-codex/gpt-5.6-terra"]
+      }
+    }
+  }
+}

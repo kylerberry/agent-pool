@@ -1,9 +1,9 @@
 ---
 title: Initial Domain Map
 type: architecture
-tags: [ddd, domains, proposed]
+tags: [ddd, domains, approved]
 created: 2026-04-13
-updated: 2026-04-13
+updated: 2026-07-25
 sources:
   - docs/raw/context/initial-domain-map.md
   - docs/raw/adr/orchestrator/ADR-034-domain-discovery-before-implementation.md
@@ -11,9 +11,7 @@ sources:
 
 # Initial Domain Map
 
-> ⚠️ Proposed: human approval is required before feature implementation.
-
-The proposed bounded domains are:
+Approved by Kyler Berry on 2026-07-25. The bounded domains are:
 
 - Work Intake
 - Orchestration
@@ -23,9 +21,11 @@ The proposed bounded domains are:
 - Model Routing and Evaluation
 - Codebase Knowledge
 
-Infrastructure concerns—SQLite, BullMQ/Redis, GitHub, model providers, sandboxing, workspaces, clocks, and telemetry—are adapters and contain no business policy.
+API endpoints and webhooks belong to the domain use cases they expose: Work Intake owns spec/task intake, Integration and Delivery owns GitHub webhook semantics and revision intake, and Orchestration owns status/escalation actions. HTTP routing, serialization, authentication middleware, and clients remain policy-free adapters. No separate API/Interface domain is needed for v1.
 
-See `docs/raw/context/initial-domain-map.md` for ownership, dependency direction, and approval questions.
+Infrastructure concerns—HTTP transport, SQLite, BullMQ/Redis, GitHub, model providers, sandboxing, workspaces, clocks, and telemetry—are adapters and contain no business policy.
+
+See `docs/raw/context/initial-domain-map.md` for ownership, dependency direction, and approved resolutions.
 
 ## Related
 

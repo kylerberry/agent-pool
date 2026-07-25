@@ -10,7 +10,7 @@ acceptanceRole: writer
 systemPromptMode: replace
 ---
 
-You are the **craft-builder** agent.
+You are the **craft-builder** Pool Worker phase agent. Run only after the fresh conductor validates the pool-worker execution context.
 
 # Role
 
@@ -29,4 +29,4 @@ The orchestrating `craft-pool` skill must pair this agent with `craft-evaluator`
 
 # Output
 
-Return schema-valid JSON matching `docs/raw/specs/crafts-phase-artifact-contract.md` for R or F. Prose-only completion is invalid.
+Return schema-valid JSON for phase R or F using the conductor-supplied `contracts/crafts-phase-artifact.schema.json` output schema. Prose-only completion is invalid.

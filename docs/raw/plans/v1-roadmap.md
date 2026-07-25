@@ -2,7 +2,7 @@
 
 ## Pre-deployment blockers
 
-- Replace `.pi/model-routing.bootstrap.json` role defaults with eval-derived winners once sufficient role/task-class evidence exists.
+- Replace `packages/worker-harness/config/model-routing.bootstrap.json` role defaults with eval-derived winners once sufficient role/task-class evidence exists.
 - Validate every required Pi tool, skill, provider, and model at worker startup.
 - Implement and calibrate the CRAFTS phase artifact and tier-2 bootstrap contracts.
 

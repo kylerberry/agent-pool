@@ -94,8 +94,9 @@ Preflight before spawning:
 
 1. Confirm the pinned models exist in `.pi/runtime-versions.json` `allowedModels`.
 2. Confirm `.pi/model-routing.bootstrap.json` has `failClosedOnUnavailableExplicitModel: true`.
-3. Confirm the previous dependency nodes have passed (their phase artifacts are present and `status === "passed"`).
-4. If this is a feature-implementation node, confirm the ADR-034 domain-map approval seam passes (record exists, is schema-valid, and the map SHA-256 matches).
+3. Run `node .pi/scripts/validate-goal-plan.mjs` from the repository root; it must validate the approved DAG topology and the domain-map approval SHA-256.
+4. Confirm the previous dependency nodes have passed (their phase artifacts are present and `status === "passed"`).
+5. If this is a feature-implementation node, confirm the ADR-034 domain-map approval seam passes (record exists, is schema-valid, and the map SHA-256 matches).
 
 If any preflight check fails, fail closed and report to Kyler.
 

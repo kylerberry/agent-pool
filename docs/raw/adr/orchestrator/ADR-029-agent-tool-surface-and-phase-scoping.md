@@ -30,7 +30,7 @@ Rationale: the agent pays context budget only for what it actually needed. Pre-i
 A's write denial is the load-bearing one: an evaluator able to edit the code it judges is a gate that can rewrite its own exam. This is the same independence principle as builder/evaluator model diversity (craft-pool guarantee 3), enforced at the capability layer rather than the model layer.
 
 **Provisioning requirements** (implementation-level, tracked under repo onboarding):
-- The worker image installs the exact Graphify version pinned by `.pi/runtime-versions.json`; its index is built per workspace and refreshed when the workspace is re-derived against a new head.
+- The worker image installs the exact Graphify version pinned by `packages/worker-harness/config/runtime-versions.json`; its index is built per workspace and refreshed when the workspace is re-derived against a new head.
 - Applicable Pi phase agents explicitly select the project `graphify` skill and receive `bash`; `inheritSkills: false` without an explicit skill is invalid for C, R/F, A, or T.
 - Worker startup preflights the Graphify executable, selected skill, and phase tool grants before dispatch.
 - The wiki needs a **generated directory index** the skill directs the agent to consult first—an agent only reads a page it knows exists, which is what ADR-022's "link/index navigation, not semantic search" requires in practice.

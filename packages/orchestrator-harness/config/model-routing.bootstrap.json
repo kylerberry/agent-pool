@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "status": "bootstrap-until-eval-derived",
+  "actor": "orchestrator-control-plane",
+  "roles": {
+    "decomposition": {
+      "primary": "moonshot/kimi-k3",
+      "fallback": ["openai-codex/gpt-5.6-sol"]
+    }
+  },
+  "rules": {
+    "failClosedOnUnavailableExplicitModel": true
+  }
+}
