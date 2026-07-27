@@ -4,5 +4,6 @@ crafts*.yml
 .obsidian
 .pi-subagents/
 .agent-pool/
+.pi/goal-runs/
 graphify-out/
 .DS_Store

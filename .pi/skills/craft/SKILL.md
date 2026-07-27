@@ -55,6 +55,8 @@ A normal Pi skill cannot create an OS process. The local slice therefore runs in
 2. Spawns phase subagents sequentially with `pi-subagents`, passing only the compact artifact from the previous phase plus the original acceptance criteria.
 3. Validates each artifact before persistence or handoff; invalid or prose-only output fails the phase.
 4. Never forwards a phase's full transcript to the next phase.
+5. Uses one foreground Pi `subagent` call per phase (`agent: "local-craft-*"`, `context: "fresh"`); phases are not combined into a parallel chain.
+6. Writes the returned JSON artifact to a temporary file, validates it through `node .pi/scripts/goal-dispatcher.mjs record-phase <node> <attempt> <phase> <file>`, and only then forwards its compact contents.
 
 ## Tool grants and read-only phases
 
@@ -88,7 +90,7 @@ This distinction matters for review independence: when criteria have an author u
 
 Define scope, test cases, implementation plan, and risks before coding.
 
-Use AgentSpawn with `subagent_type: "local-craft-planner"` for this phase. Pass the user request, relevant issue slice, repository constraints, any provided acceptance criteria, and any known blockers or ambiguities. Use its report as the gate artifact before moving to Render.
+Use the Pi `subagent` tool with `agent: "local-craft-planner"` and `context: "fresh"` for this phase. Pass the user request, relevant issue slice, repository constraints, any provided acceptance criteria, and any known blockers or ambiguities. Use its report as the gate artifact before moving to Render.
 
 - Read the relevant issue slice or user request thoroughly.
 - **If acceptance criteria were provided as input, treat them as ground truth — do not re-author. If none were provided, produce them.**
@@ -101,7 +103,7 @@ Use AgentSpawn with `subagent_type: "local-craft-planner"` for this phase. Pass 
 
 Write failing tests first, then implement the minimum change to pass, then refactor.
 
-Use AgentSpawn with `subagent_type: "local-craft-builder"` for this phase. Pass the C phase report and the original acceptance criteria. The fresh local builder child edits the assigned workspace and returns the R-phase artifact; the local conductor only gates phases and validates/forwards artifacts. The conductor does not implement in the parent context.
+Use the Pi `subagent` tool with `agent: "local-craft-builder"` and `context: "fresh"` for this phase. Pass the C phase report and the original acceptance criteria. The fresh local builder child edits the assigned workspace and returns the R-phase artifact; the local conductor only gates phases and validates/forwards artifacts. The conductor does not implement in the parent context.
 
 - **Red:** write the failing test from the plan. If you can't write it, return to Conceptualize.
 - **Green:** write the minimum implementation to pass. No more.
@@ -112,7 +114,7 @@ Use AgentSpawn with `subagent_type: "local-craft-builder"` for this phase. Pass 
 
 Review the diff for quality, reuse, efficiency, and type correctness.
 
-Use AgentSpawn with `subagent_type: "local-craft-evaluator"` for this phase. Pass the task goal, **the original acceptance criteria (the provided/upstream version when one exists, not only C's derived plan)**, the CRAFTS plan, changed files, verification evidence, and the model used for `local-craft-builder`. The evaluator must run on a different model at equal or higher capability; if the runtime cannot honor this, fail closed and escalate. Treat blocking findings as inputs to Fix.
+Use the Pi `subagent` tool with `agent: "local-craft-evaluator"` and `context: "fresh"` for this phase. Pass the task goal, **the original acceptance criteria (the provided/upstream version when one exists, not only C's derived plan)**, the CRAFTS plan, changed files, verification evidence, and the model used for `local-craft-builder`. The evaluator must run on a different model at equal or higher capability; if the runtime cannot honor this, fail closed and escalate. Treat blocking findings as inputs to Fix.
 
 - **When original criteria are available, check the test suite itself against them — not just the code against the tests.** A suite that faithfully passes but misencodes the criteria is a blocking finding.
 - Check for duplicated logic, missed edge cases, unclear naming.
@@ -123,7 +125,7 @@ Use AgentSpawn with `subagent_type: "local-craft-evaluator"` for this phase. Pas
 
 Address blocking issues from Assess. Re-run quality checks.
 
-Use AgentSpawn with `subagent_type: "local-craft-builder"` for this phase. Pass only the blocking findings and relevant context so fixes remain minimal and scoped. The fresh local builder child edits the assigned workspace and returns the F-phase artifact; the conductor validates and forwards.
+Use the Pi `subagent` tool with `agent: "local-craft-builder"` and `context: "fresh"` for this phase. Pass only the blocking findings and relevant context so fixes remain minimal and scoped. The fresh local builder child edits the assigned workspace and returns the F-phase artifact; the conductor validates and forwards.
 
 - High and medium severity first.
 - Disagree with a finding? Document why instead of blindly fixing.
@@ -132,7 +134,7 @@ Use AgentSpawn with `subagent_type: "local-craft-builder"` for this phase. Pass 
 
 Run the security-hardening review for the diff and fix findings.
 
-Use AgentSpawn with `subagent_type: "local-craft-security"` for this phase. Pass the task goal, changed files, verification output, and any trust boundaries identified during Conceptualize or Render.
+Use the Pi `subagent` tool with `agent: "local-craft-security"` and `context: "fresh"` for this phase. Pass the task goal, changed files, verification output, and any trust boundaries identified during Conceptualize or Render.
 
 - Scan for injection risks, unsafe defaults, exposed secrets.
 - Verify boundary enforcement where applicable.
@@ -141,7 +143,7 @@ Use AgentSpawn with `subagent_type: "local-craft-security"` for this phase. Pass
 
 Capture durable lessons, gotchas, process updates, and any documentation changes so repo docs stay evergreen and aligned to code.
 
-Use AgentSpawn with `subagent_type: "local-craft-sharpener"` for this phase. Pass the final diff summary, verification results, issue status, and any conventions or gotchas discovered during the task.
+Use the Pi `subagent` tool with `agent: "local-craft-sharpener"` and `context: "fresh"` for this phase. Pass the final diff summary, verification results, issue status, and any conventions or gotchas discovered during the task.
 
 - Local S is read-only. It returns a documentation-change artifact describing the exact updates to apply to relevant domain docs (README, ADR, CLAUDE.md, PRD, ISSUES) and any conventions or gotchas discovered during the task.
 - The fresh local conductor validates that every requested path is under `docs/` or a domain `AGENTS.md`/`CLAUDE.md`, then applies only those changes. It rejects paths outside that scope and asks Kyler.

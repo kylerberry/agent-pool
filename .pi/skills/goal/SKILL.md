@@ -25,7 +25,7 @@ A durable proposed build-DAG artifact at:
 docs/raw/plans/proposed-build-dag.json
 ```
 
-The file is written once, then frozen until Kyler approves or amends it.
+The file is written once, then frozen until Kyler approves or amends it. If it already contains valid approval metadata, do not regenerate it: validate it, initialize/resume the ledger, and execute only the reserved node.
 
 ## Steps
 
@@ -50,7 +50,7 @@ The file is written once, then frozen until Kyler approves or amends it.
    - At least one node has `depends_on.length === 0` (ready nodes exist).
 4. **Write the durable artifact.** Save the validated DAG to `docs/raw/plans/proposed-build-dag.json`.
 5. **Stop for Kyler approval.** Present the artifact path, node count, ready nodes, the ADR-034 gate status, and whether a valid domain-map approval record exists. Do not begin implementation until Kyler approves.
-6. **On approval: dispatch ready nodes only.** A node is ready when all of its `depends_on` nodes are completed. For each ready node, launch a **fresh local CRAFTS slice** as described below.
+6. **On approval: reserve one ready node.** A node is ready when all of its `depends_on` nodes have passed in the local ledger. By default, reserve and execute exactly one node per `/goal` invocation, then stop and report the new frontier.
 
 ## ADR-034 domain-map approval seam
 
@@ -80,29 +80,67 @@ If any check fails, block all feature slices and ask Kyler to approve the domain
 
 A template is at `docs/raw/specs/templates/domain-map-approval.json`. Kyler fills it in and moves it to `docs/raw/plans/domain-map-approval.json`; the repository does not ship an approved record.
 
+## Ledger and dispatcher
+
+The local conductor uses `node .pi/scripts/goal-dispatcher.mjs` to durably track node lifecycles. The dispatcher stores its state under `.pi/goal-runs/<runId>/ledger.json` (which is gitignored) and exposes the commands `init`, `status`, `resume`, `start`, `record-phase`, and `complete`. It freezes the approved DAG SHA-256 on `init` and rejects any operation when the approved plan drifts.
+
+Before the first dispatch, run:
+
+```bash
+node .pi/scripts/goal-dispatcher.mjs init
+```
+
+Then query the frontier with:
+
+```bash
+node .pi/scripts/goal-dispatcher.mjs status
+```
+
+And reserve exactly one ready node with its selected flow:
+
+```bash
+node .pi/scripts/goal-dispatcher.mjs start [node-id] [C-R-A-F-T-S|R-S]
+```
+
+A repeated `start` resumes the same active attempt instead of allocating another. `resume` reports its next required phase. Every phase result is written beneath `.pi/goal-runs/<run-id>/incoming/` as a non-symlinked JSON file and persisted before continuing; `record-phase` rejects arbitrary external paths:
+
+```bash
+node .pi/scripts/goal-dispatcher.mjs record-phase <node-id> <attempt-id> <C|R|A|F|T|S> <artifact.json>
+```
+
+After all required phases pass:
+
+```bash
+node .pi/scripts/goal-dispatcher.mjs complete <node-id> <attempt-id> passed
+```
+
+`complete ... passed` fails unless the full selected flow has schema-valid persisted evidence. Failed or escalated attempts use the same command with `failed` or `escalated` and retain their phase artifacts.
+
 ## Dispatching a ready node
 
-A Pi skill cannot create an OS process. To run a node, launch a **fresh Pi conductor session** (a new subagent/session context) with:
+The `/goal` session is the local ledger conductor. It keeps only the approved node payload and compact persisted phase artifacts in active use, and invokes each phase as a separate foreground Pi `subagent` call with `context: "fresh"`:
 
-- the node's `intent`, `change_spec`, and `acceptance_criteria` as the unit payload;
-- the project-local `craft` skill loaded;
-- `pi-subagents` available;
-- model grants pinned exactly to `.pi/model-routing.bootstrap.json` and `.pi/settings.json`;
-- tool grants matching the phase table in `.pi/skills/craft/SKILL.md`.
+- pass the node's `intent`, `change_spec`, and original `acceptance_criteria` as the immutable unit payload;
+- use the project-local `local-craft-*` agents named in `.pi/skills/craft/SKILL.md`;
+- call exactly one phase at a time and wait for its schema-valid JSON result;
+- persist the result through `record-phase` before invoking the next phase;
+- use model grants pinned exactly to `.pi/model-routing.bootstrap.json` and `.pi/settings.json`;
+- obey the phase tool grants in `.pi/skills/craft/SKILL.md`.
 
 Preflight before spawning:
 
 1. Confirm the pinned models exist in `.pi/runtime-versions.json` `allowedModels`.
 2. Confirm `.pi/model-routing.bootstrap.json` has `failClosedOnUnavailableExplicitModel: true`.
 3. Run `node .pi/scripts/validate-goal-plan.mjs` from the repository root; it must validate the approved DAG topology and the domain-map approval SHA-256.
-4. Confirm the previous dependency nodes have passed (their phase artifacts are present and `status === "passed"`).
-5. If this is a feature-implementation node, confirm the ADR-034 domain-map approval seam passes (record exists, is schema-valid, and the map SHA-256 matches).
+4. Run `node .pi/scripts/goal-dispatcher.mjs init`, then `resume`. If an attempt is active, continue its reported `next_phase`; otherwise confirm the target is in the ready frontier.
+5. Confirm dependency nodes are `passed` in the ledger and their completion records and required phase artifacts exist.
+6. If this is a feature-implementation node, confirm the ADR-034 domain-map approval seam passes (record exists, is schema-valid, and the map SHA-256 matches).
 
 If any preflight check fails, fail closed and report to Kyler.
 
 ## Parallelism rule
 
-Default execution is **serial**: finish one node's full CRAFTS flow before starting the next. Independent approved slices may run in parallel **only in isolated worktrees** (separate git worktrees with independent working trees and contexts). Never run multiple writer phases against the same working tree simultaneously.
+Default execution is **serial and one-shot**: finish one node's full CRAFTS flow, persist completion, print the newly derived frontier, and stop the `/goal` invocation. Independent approved slices may run in parallel only after an explicit user request and only in distinct Git worktrees, each with a unique `GOAL_RUN_ID` and its own conductor context. A workspace-wide writer guard prevents different run IDs from writing concurrently in one worktree. Before parallel launch, verify `git rev-parse --show-toplevel` differs for every writer workspace. Never run multiple writer phases against the same working tree.
 
 ## Domain-map approval record
 
