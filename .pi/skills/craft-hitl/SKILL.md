@@ -14,7 +14,7 @@ This is a Repository Builder skill for local work in this repository. It is not 
 
 Invoke this skill for issue slices explicitly labeled **HITL implementation** or **HITL design/review**, or any task where the PRD reserves a critical decision for human judgment.
 
-This inherits the local `/craft` contracts for original acceptance-criteria plumbing, fresh `local-craft-*` children, schema-valid phase artifacts, model diversity, and child-owned implementation. Its only behavioral override is the mandatory human seam inside **R — Render**. The agent scaffolds to the seam, pauses for human input, then resumes and completes the remaining phases.
+This inherits the local `/craft` contracts for original acceptance-criteria plumbing, fresh `local-craft-*` children, schema-valid phase artifacts, model diversity, child-owned implementation, and elevated-risk policy. Its only behavioral override is the mandatory human seam inside **R — Render**. For medium- or high-risk work, C performs the same fresh independent `local-craft-security` plan review with `security-and-hardening` before any Render edit; low-risk work keeps the current HITL flow. The agent scaffolds to the seam, pauses for human input, then resumes and completes the remaining phases.
 
 If the task is unambiguously autonomous, use `/craft` instead.
 
@@ -24,7 +24,7 @@ CRAFTS is a sequential phase-gate workflow. Do not plan or execute phases in par
 
 In HITL mode, the Render phase contains a mandatory pause. The human owns the critical decision-bearing logic; the agent owns everything before and after it.
 
-Each phase should be delegated through Pi's `subagent` tool to its matching local project agent. Spawn exactly one phase subagent at a time, wait for its report, then either proceed to the next phase, fix blockers, or ask the user for clarification. Do not run CRAFTS subagents in parallel.
+Delegate each phase through Pi's `subagent` tool to its matching local project agent, one call at a time. For medium/high work, C additionally invokes the independent `local-craft-security` plan-security checkpoint after the planner and before R. Wait for each report before proceeding, fixing blockers, or asking for clarification. Do not run CRAFTS subagents in parallel.
 
 When exact per-spawn model selection is available, the R/F builder and A evaluator must run on different models, with the evaluator at equal or higher capability. For example, if `local-craft-builder` runs on one frontier/coding-capable model, spawn `local-craft-evaluator` on a different peer model rather than the same model family. If exact model diversity and capability ordering cannot be enforced, fail closed.
 
@@ -49,14 +49,14 @@ Use the Pi `subagent` tool with `agent: "local-craft-planner"` for this phase wh
 - Identify whether the work is AFK (agent can complete solo) or HITL (requires human at a critical seam).
 - If multi-step, create or update a todo list before coding.
 - Treat provided acceptance criteria as ground truth; author them only when none were supplied.
-- Produce: scope boundary, acceptance-criteria alignment, file list, test strategy, and risk assessment.
+- Produce: scope boundary, acceptance-criteria alignment, file list, test strategy, and risk assessment. Classify risk as `low`, `medium`, or `high`; medium and high use the same elevated controls. For elevated work, record the rationale, trust boundaries, assets, abuse cases, and planned security tests, then obtain a passing fresh plan-security review before Render.
 - Stop here if the plan is unclear — do not proceed to Render with ambiguous requirements.
 
 ### R — Render (Test-Drive with HITL Gate)
 
 Write failing tests first, then implement up to the critical seam, pause for human input, then complete implementation and refactor.
 
-Use the Pi `subagent` tool with `agent: "local-craft-builder"` for this phase when available. Pass the C artifact and original acceptance criteria. The fresh local builder child edits the assigned workspace and returns the R artifact; the conductor only validates and gates. When exact model selection is available, choose a model with a different evaluator available at equal or higher capability. Do not implement in the parent conductor context.
+Use the Pi `subagent` tool with `agent: "local-craft-builder"` for this phase when available. Pass the C artifact and original acceptance criteria; for elevated work, also pass the required, passing plan-security report. The fresh local builder child edits the assigned workspace and returns the R artifact; the conductor only validates and gates. When exact model selection is available, choose a model with a different evaluator available at equal or higher capability. Do not implement in the parent conductor context.
 
 #### Red
 Write the failing test from the plan. If you can't write it, return to Conceptualize.
@@ -117,6 +117,7 @@ Use the Pi `subagent` tool with `agent: "local-craft-security"` for this phase w
 - Scan for injection risks, unsafe defaults, exposed secrets.
 - Verify boundary enforcement where applicable.
 - Pay special attention to the HITL seam: does the human-owned logic introduce any trust boundary issues?
+- Use `security-and-hardening` proportionately. For elevated work, account for every C trust boundary and return blocking findings to F before repeating T.
 
 ### S — Sharpen
 
@@ -125,6 +126,7 @@ Capture durable lessons, gotchas, process updates, and any documentation changes
 Use the Pi `subagent` tool with `agent: "local-craft-sharpener"` for this phase. Pass the final diff summary, verification results, issue status, and any conventions or gotchas discovered during the task. The child remains read-only and returns a schema-valid documentation-change artifact; the conductor applies only path-validated documentation changes.
 
 - Document the HITL seam and the rationale for the human-owned decision.
+- When Tighten identifies a reusable security finding, record one disposition: `guidance-update`, `owned-follow-up`, or `documented-non-generalizable`.
 - Update relevant domain instructions and wiki/raw documentation without recording transient noise.
 
 ## Lite Flow: R → S
@@ -134,7 +136,7 @@ For simple HITL tasks (config changes, single-file fixes with one obvious seam):
 1. **R — Render:** scaffold to the seam, pause for human input, complete, verify.
 2. **S — Sharpen:** capture any doc updates and commit.
 
-Start lite, then escalate to full if the task grows or the seam is more complex than expected.
+Start lite, then escalate to full if the task grows, the seam is more complex than expected, or medium/high risk requires C's plan-security checkpoint.
 
 ## Escalation Rules
 

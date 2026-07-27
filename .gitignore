@@ -5,5 +5,6 @@ crafts*.yml
 .pi-subagents/
 .agent-pool/
 .pi/goal-runs/
+.pi/npm/
 graphify-out/
 .DS_Store

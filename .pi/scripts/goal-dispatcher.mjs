@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { emitEvalCandidate, gitSnapshot } from "../extensions/eval-telemetry/core.mjs";
 
 const PHASES = new Set(["C", "R", "A", "F", "T", "S"]);
 const ARTIFACT_STATUSES = new Set(["passed", "needs_fix", "failed", "blocked"]);
@@ -334,7 +335,7 @@ export class GoalDispatcher {
       const attemptId = `${target}-attempt-${sequence}`;
       this._ensureWorkspaceGuard(target, attemptId);
       ledger.nodes[target].status = "in_progress";
-      ledger.nodes[target].attempts.push({ attempt_id: attemptId, sequence, flow, started_at: new Date().toISOString(), phases: {}, final_status: null });
+      ledger.nodes[target].attempts.push({ attempt_id: attemptId, sequence, flow, started_at: new Date().toISOString(), base_git: gitSnapshot(this.rootDir), phases: {}, final_status: null });
       try { this._writeLedger(ledger); } catch (error) { this._releaseWorkspaceGuard(target, attemptId); throw error; }
       return { node_id: target, attempt_id: attemptId, flow, resumed: false };
     });
@@ -384,8 +385,24 @@ export class GoalDispatcher {
       atomicWriteJson(path.join(this.ledgerDir, relativePath), summary); attempt.completion_path = relativePath;
       this._writeLedger(ledger);
       this._releaseWorkspaceGuard(nodeId, attemptId);
-      return { node_id: nodeId, attempt_id: attemptId, status, completion_path: relativePath };
+      let telemetryCandidate;
+      try {
+        const { plan } = GoalDispatcher.validatePlan(this.planPath);
+        telemetryCandidate = emitEvalCandidate({ rootDir: this.rootDir, runId: this.runId, plan, ledger, nodeId, attemptId });
+      } catch (error) {
+        telemetryCandidate = { status: "degraded", error_code: typeof error?.code === "string" ? error.code : "candidate_write_failed" };
+      }
+      return { node_id: nodeId, attempt_id: attemptId, status, completion_path: relativePath, telemetry_candidate: telemetryCandidate };
     });
+  }
+  emitCandidate(nodeId, attemptId) {
+    const ledger = this._readLedger();
+    this._assertNoDrift(ledger);
+    const node = ledger.nodes?.[nodeId];
+    const attempt = node?.attempts?.find((candidate) => candidate.attempt_id === attemptId);
+    if (!attempt?.final_status) fail("candidate source attempt is not complete");
+    const { plan } = GoalDispatcher.validatePlan(this.planPath);
+    return emitEvalCandidate({ rootDir: this.rootDir, runId: this.runId, plan, ledger, nodeId, attemptId });
   }
 }
 
@@ -407,7 +424,8 @@ function main(argv) {
     else if (command === "start") print(dispatcher.start({ nodeId: argv[3] || undefined, flow: argv[4] || "C-R-A-F-T-S" }));
     else if (command === "record-phase") { const [nodeId, attemptId, phase, artifactPath] = argv.slice(3); if (!artifactPath) fail("usage: record-phase <node> <attempt> <phase> <artifact.json>"); print(dispatcher.recordPhase(nodeId, attemptId, phase, readIncomingArtifact(dispatcher, artifactPath))); }
     else if (command === "complete") { const [nodeId, attemptId, status] = argv.slice(3); if (!status) fail("usage: complete <node> <attempt> <passed|failed|escalated>"); print(dispatcher.complete(nodeId, attemptId, status)); }
-    else fail("usage: goal-dispatcher.mjs <init|status|resume|start|record-phase|complete>");
+    else if (command === "emit-candidate") { const [nodeId, attemptId] = argv.slice(3); if (!attemptId) fail("usage: emit-candidate <node> <attempt>"); print(dispatcher.emitCandidate(nodeId, attemptId)); }
+    else fail("usage: goal-dispatcher.mjs <init|status|resume|start|record-phase|complete|emit-candidate>");
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) main(process.argv);

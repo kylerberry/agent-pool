@@ -1,0 +1,3 @@
+# 2026-07-27 — development harness — CRAFTS elevated-risk security checkpoints
+
+Added a medium/high CRAFTS security policy across local, pool-worker, and global workflows. C now classifies risk and, for elevated work, gates Render on an independent fresh-context plan-security review using `security-and-hardening`. Tighten applies the same skill to the final diff and maps declared trust boundaries to evidence; Sharpen records a deliberate disposition only for reusable security findings. The checkpoint is supplemental to CRAFTS and does not alter phase schemas, runtime enforcement, or low-risk flows.

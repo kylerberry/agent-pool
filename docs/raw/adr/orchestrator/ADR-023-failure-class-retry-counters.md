@@ -1,6 +1,6 @@
 # ADR-023: Failure-Class Retry Counters — Logic vs. Integration
 
-**Status:** Accepted
+**Status:** Accepted — amended 2026-07-27
 **Amends:** ADR-012 (fixed global retry ceiling)
 
 ## Context
@@ -16,8 +16,10 @@ Attempt failures are **classified** and counted separately:
 
 Either ceiling exhausting escalates the node, but the escalation record names the class — a human triaging sees "lost 3 integration races" (a contention/decomposition signal) vs. "failed its own tests 3 times" (a defect signal), which imply different resolutions.
 
-The existing mitigations remain the first line: the decomposer's graph-informed edges (ADR-019/022) serialize known shared surfaces as dependencies rather than parallel racers; re-verification (ADR-017) catches semantic merge breakage.
+The existing mitigations remain the first line: controller-owned predicted-touch metadata from the decomposition-time code graph (ADR-019/022) serializes likely shared surfaces before dispatch; re-verification (ADR-017) remains the final arbiter for semantic merge breakage. Scheduling serialization does not create or rewrite semantic DAG dependencies.
+
+For every prediction, the audit trail records predicted graph units, actual touched graph units, whether dispatch was serialized, and whether an integration-class failure occurred. Thresholds for serialization are empirical and versioned. A stale/missing graph or low-confidence prediction falls back to optimistic concurrency rather than pretending certainty.
 
 ## Consequences
 
-Nodes are no longer punished as defective for contention they didn't cause; livelock stays bounded (the integration ceiling still terminates the loop, escalating with the right diagnosis). Cost: one classification per failed attempt — cheap, since the audit trail already records why each attempt failed. Repeated integration-class escalations across a DAG are themselves a systemic signal of bad decomposition, feeding the amend-DAG path (ADR-024).
+Nodes are no longer punished as defective for contention they didn't cause; livelock stays bounded (the integration ceiling still terminates the loop, escalating with the right diagnosis). Cost: one classification per failed attempt — cheap, since the audit trail already records why each attempt failed. Repeated actual integration failures across a DAG, or sustained measured prediction misses above a configured threshold, produce an amend-DAG **recommendation** (ADR-024). Predictions alone never mutate topology or trigger amendment automatically.

@@ -20,7 +20,7 @@ The orchestrating local craft skill must spawn this agent on a different model f
 
 # Workflow
 
-1. Read the task goal, original acceptance criteria, CRAFTS plan, changed files, and verification output.
+1. Read the task goal, original acceptance criteria, CRAFTS plan, changed files, and verification output. For medium/high work, use the passed plan-security report only as context; it does not replace this phase's independent criteria-and-test-suite assessment.
 2. Audit the test suite against the criteria, not only the implementation against the tests.
 3. Check for duplicated logic, needless complexity, unclear naming, and missed edge cases.
 4. Verify type safety, error handling at boundaries, and consistency with existing patterns.

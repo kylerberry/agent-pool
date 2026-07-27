@@ -55,7 +55,7 @@ A normal Pi skill cannot create an OS process. The local slice therefore runs in
 2. Spawns phase subagents sequentially with `pi-subagents`, passing only the compact artifact from the previous phase plus the original acceptance criteria.
 3. Validates each artifact before persistence or handoff; invalid or prose-only output fails the phase.
 4. Never forwards a phase's full transcript to the next phase.
-5. Uses one foreground Pi `subagent` call per phase (`agent: "local-craft-*"`, `context: "fresh"`); phases are not combined into a parallel chain.
+5. Uses one foreground Pi `subagent` call at a time (`agent: "local-craft-*"`, `context: "fresh"`); phases are not combined into a parallel chain. Medium/high C adds one sequential supplemental plan-security call after the C planner and before R.
 6. Writes the returned JSON artifact to a temporary file, validates it through `node .pi/scripts/goal-dispatcher.mjs record-phase <node> <attempt> <phase> <file>`, and only then forwards its compact contents.
 
 ## Tool grants and read-only phases
@@ -99,11 +99,17 @@ Use the Pi `subagent` tool with `agent: "local-craft-planner"` and `context: "fr
 - Produce: scope boundary, acceptance criteria (authored only if not provided), file list, test strategy, and risk assessment.
 - Stop here if the plan is unclear — do not proceed to Render with ambiguous requirements.
 
+### Elevated-risk plan-security checkpoint
+
+C classifies every full-flow task as `low`, `medium`, or `high` risk. `medium` and `high` use the same elevated controls; low-risk work keeps the current flow. A task is elevated when it changes a trust boundary or handles untrusted input, authentication/authorization, secrets or sensitive data, external/network integration, file or command execution, CI/deploy permissions, or tenant isolation. C records the risk level, rationale, trust boundaries, assets, abuse cases, and planned security tests in its existing plan artifact fields; do not change the artifact schema for this policy.
+
+For elevated work, the conductor invokes `local-craft-security` **after C and before R** in a fresh, independent context. It applies `security-and-hardening` to the plan, original criteria, risk declaration, and trust boundaries. This is a supplemental C checkpoint, not a new CRAFTS phase or a T artifact. Blocking plan findings return to C; Render begins only after the plan-security report passes. Pass that compact report to R, T, and S. Do not add this checkpoint to low-risk work.
+
 ### R — Render (Test-Drive)
 
 Write failing tests first, then implement the minimum change to pass, then refactor.
 
-Use the Pi `subagent` tool with `agent: "local-craft-builder"` and `context: "fresh"` for this phase. Pass the C phase report and the original acceptance criteria. The fresh local builder child edits the assigned workspace and returns the R-phase artifact; the local conductor only gates phases and validates/forwards artifacts. The conductor does not implement in the parent context.
+Use the Pi `subagent` tool with `agent: "local-craft-builder"` and `context: "fresh"` for this phase. Pass the C phase report and the original acceptance criteria; for elevated work, also pass the passed plan-security report. Do not begin implementation until that report passes. The fresh local builder child edits the assigned workspace and returns the R-phase artifact; the local conductor only gates phases and validates/forwards artifacts. The conductor does not implement in the parent context.
 
 - **Red:** write the failing test from the plan. If you can't write it, return to Conceptualize.
 - **Green:** write the minimum implementation to pass. No more.
@@ -132,12 +138,13 @@ Use the Pi `subagent` tool with `agent: "local-craft-builder"` and `context: "fr
 
 ### T — Tighten
 
-Run the security-hardening review for the diff and fix findings.
+Use `security-and-hardening` for the diff review and fix findings.
 
-Use the Pi `subagent` tool with `agent: "local-craft-security"` and `context: "fresh"` for this phase. Pass the task goal, changed files, verification output, and any trust boundaries identified during Conceptualize or Render.
+Use the Pi `subagent` tool with `agent: "local-craft-security"` and `context: "fresh"` for this phase. Pass the task goal, changed files, verification output, and any trust boundaries identified during Conceptualize or Render; for elevated work, also pass the C risk declaration and plan-security report.
 
-- Scan for injection risks, unsafe defaults, exposed secrets.
-- Verify boundary enforcement where applicable.
+- Apply the skill proportionately to the changed surface, not as a generic scan.
+- For elevated work, account for every C trust boundary and record evidence, finding, or explicit non-applicability for each.
+- Return blocking findings to F, then repeat T after the fix.
 
 ### S — Sharpen
 
@@ -146,6 +153,7 @@ Capture durable lessons, gotchas, process updates, and any documentation changes
 Use the Pi `subagent` tool with `agent: "local-craft-sharpener"` and `context: "fresh"` for this phase. Pass the final diff summary, verification results, issue status, and any conventions or gotchas discovered during the task.
 
 - Local S is read-only. It returns a documentation-change artifact describing the exact updates to apply to relevant domain docs (README, ADR, CLAUDE.md, PRD, ISSUES) and any conventions or gotchas discovered during the task.
+- If Tighten identified a reusable security finding, record exactly one disposition in `durable_learnings`: `guidance-update`, `owned-follow-up`, or `documented-non-generalizable`. Do not create documentation churn for ordinary, non-reusable findings.
 - The fresh local conductor validates that every requested path is under `docs/` or a domain `AGENTS.md`/`CLAUDE.md`, then applies only those changes. It rejects paths outside that scope and asks Kyler.
 - Commit and push if applicable.
 
@@ -159,9 +167,16 @@ For config, scaffolding, and simple single-file fixes:
 ## Escalation Rules
 
 - Start lite. If the task grows beyond a single file or requires domain reasoning, escalate to full.
+- Escalate lite work to the full flow before editing when CRAFTS' elevated-risk signals apply, so C can run the independent plan-security checkpoint.
 - Never skip Assess and Tighten on code that crosses a trust boundary or handles user input.
 
 ---
+
+## Changelog (v4)
+
+- Added risk classification and a medium/high-only, fresh-context plan-security checkpoint inside C; low-risk full and lite flows remain unchanged.
+- Tighten now applies `security-and-hardening` to the diff and maps elevated-task findings back to C trust boundaries.
+- Sharpen records a deliberate disposition only for reusable security learnings.
 
 ## Changelog (v3)
 

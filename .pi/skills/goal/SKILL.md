@@ -116,6 +116,18 @@ node .pi/scripts/goal-dispatcher.mjs complete <node-id> <attempt-id> passed
 
 `complete ... passed` fails unless the full selected flow has schema-valid persisted evidence. Failed or escalated attempts use the same command with `failed` or `escalated` and retain their phase artifacts.
 
+## Eval telemetry
+
+The project-local `.pi/extensions/eval-telemetry/` extension auto-loads in each `local-craft-*` child after `/reload`. It associates a child only from `PI_SUBAGENT_CHILD*`, the active workspace-writer guard, and the frozen goal ledger; prompt text is never used for identity.
+
+For every phase it records launcher/runtime metadata, actual provider/model usage and cost from Pi's finalized assistant messages, prompt/system hashes, tool names and outcomes, session references, configured versions, and Git state. It never persists prompt text, assistant text, tool arguments/results, environment variables, changed-file names, or credentials. Raw local telemetry remains under the ignored path:
+
+```text
+.pi/goal-runs/<run-id>/telemetry/sessions/<session-key>/
+```
+
+Telemetry errors degrade collection and appear in `/eval-telemetry-status`; they do not block model work or roll back node completion. On completion, the dispatcher writes a sanitized record under `eval-candidates/` labelled `telemetry-only`. Formal routing eligibility remains false until a fixture has independently reviewed pre-existing tests and is replayed bare with production-equivalent tools at the required N=3.
+
 ## Dispatching a ready node
 
 The `/goal` session is the local ledger conductor. It keeps only the approved node payload and compact persisted phase artifacts in active use, and invokes each phase as a separate foreground Pi `subagent` call with `context: "fresh"`:

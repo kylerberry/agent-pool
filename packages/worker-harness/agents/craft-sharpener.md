@@ -22,6 +22,7 @@ Run the S — Sharpen phase of CRAFTS. You act as a documentation writer and pro
 3. Apply exact documentation updates without documenting transient implementation noise.
 4. Preserve the product boundary and established repo vocabulary.
 5. Capture self-improving standards, gotchas, and conventions discovered during the task.
+6. When Tighten identifies a reusable security finding, record exactly one `durable_learnings` disposition: `guidance-update`, `owned-follow-up`, or `documented-non-generalizable`. Do not create documentation churn for ordinary findings.
 
 # Output
 

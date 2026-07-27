@@ -159,7 +159,12 @@ describe("GoalDispatcher", () => {
     dispatcher.init(); const active = dispatcher.start({ flow: "R-S" });
     dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id, { flow: "R-S" }));
     dispatcher.recordPhase(active.node_id, active.attempt_id, "S", artifact("S", active.node_id, active.attempt_id, { flow: "R-S" }));
-    dispatcher.complete(active.node_id, active.attempt_id, "passed"); assert.deepEqual(dispatcher.status().completed, ["a"]);
+    const completed = dispatcher.complete(active.node_id, active.attempt_id, "passed");
+    assert.deepEqual(dispatcher.status().completed, ["a"]);
+    assert.equal(completed.telemetry_candidate.status, "written");
+    const candidate = JSON.parse(fs.readFileSync(path.join(root, completed.telemetry_candidate.path), "utf8"));
+    assert.equal(candidate.eligibility, "telemetry-only");
+    assert.ok(candidate.eligibility_reasons.includes("missing_actual_usage"));
   });
   test("completed attempts reject additional phase writes", () => {
     dispatcher.init(); const active = dispatcher.start({ flow: "R-S" });
@@ -175,6 +180,18 @@ describe("GoalDispatcher", () => {
   test("plan drift is reported and blocks mutation and resume", () => {
     dispatcher.init(); const plan = JSON.parse(fs.readFileSync(planPath)); plan.nodes[0].intent = "changed"; fs.writeFileSync(planPath, JSON.stringify(plan));
     assert.equal(dispatcher.status().planDrift, true); assert.throws(() => dispatcher.start(), /drift/); assert.throws(() => dispatcher.resume(), /drift/);
+  });
+  test("candidate write failure degrades telemetry without rolling back completion", () => {
+    dispatcher.init(); const active = dispatcher.start({ flow: "R-S" });
+    dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id, { flow: "R-S" }));
+    dispatcher.recordPhase(active.node_id, active.attempt_id, "S", artifact("S", active.node_id, active.attempt_id, { flow: "R-S" }));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "candidate-outside-"));
+    const evalPath = path.join(dispatcher.ledgerDir, "eval-candidates"); fs.symlinkSync(outside, evalPath);
+    try {
+      const completed = dispatcher.complete(active.node_id, active.attempt_id, "passed");
+      assert.equal(completed.status, "passed"); assert.equal(completed.telemetry_candidate.status, "degraded");
+      assert.deepEqual(dispatcher.status().completed, ["a"]);
+    } finally { fs.rmSync(outside, { recursive: true, force: true }); }
   });
   test("failure blocks dependent branches", () => {
     dispatcher.init(); const active = dispatcher.start(); dispatcher.complete(active.node_id, active.attempt_id, "failed");

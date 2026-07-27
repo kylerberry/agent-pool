@@ -77,7 +77,11 @@
         }
       ]
     },
-    "transcript_path": { "type": ["string", "null"] },
+    "transcript_path": {
+      "type": ["string", "null"],
+      "description": "Deprecated transient workspace-relative extraction locator. Never a durable audit reference; replaced by ADR-026 transcript_object_id metadata after verified extraction.",
+      "pattern": "^(?![\\\\/])(?![A-Za-z]:[\\\\/])(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).*$"
+    },
     "phase_data": { "type": "object" }
   },
   "allOf": [

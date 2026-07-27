@@ -21,11 +21,19 @@ Every artifact contains:
 - `cost`: input/output tokens and provider-reported cost when available
 - `risks`, `open_questions`, `recommended_next_step`
 - `failure_context`: required unless `status` is `passed`; includes `attempted`, `failure_reason`, `discoveries`, and `dead_ends`
-- `transcript_path`: audit reference only; transcripts are never forwarded as phase context
+- `transcript_path`: deprecated transient extraction locator only; when non-null it must be workspace-relative and is never the durable audit reference or forwarded as phase context. The orchestrator replaces it with ADR-026 `transcript_object_id` metadata after verified extraction.
 
 The controller rejects missing criteria, unknown criteria, unqualified model IDs, invalid status transitions, write reports from read-only phases, or output that fails schema validation.
 
 Phase-specific fields live under `phase_data`; fields outside the schema are rejected.
+
+## Elevated-risk security checkpoints
+
+C classifies full-flow work as `low`, `medium`, or `high` risk. Medium and high follow the same elevated controls: C records the risk rationale, trust boundaries, assets, abuse cases, and planned security tests using its existing summary, risks, and `phase_data` fields. This policy adds no schema fields.
+
+For elevated work, the conductor runs an independent, fresh-context plan-security review after C and before R. It applies `security-and-hardening` to the C plan, original criteria, risk declaration, and trust boundaries. The review is a supplemental C checkpoint—not a CRAFTS phase and not a T artifact. Blocking findings return to C; its compact report is retained beside the C artifact and passed to R, T, and S.
+
+T applies `security-and-hardening` to the final diff. For elevated work, it maps every C trust boundary to evidence, a finding, or explicit non-applicability; blocking findings return to F and T reruns. If Tighten identifies a reusable security finding, S records exactly one durable-learning disposition: `guidance-update`, `owned-follow-up`, or `documented-non-generalizable`.
 
 ## Phase payloads
 

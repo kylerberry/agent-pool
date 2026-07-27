@@ -1,6 +1,6 @@
 # ADR-024: Amend-DAG — Fifth Escalation Resolution Action
 
-**Status:** Accepted
+**Status:** Accepted — amended 2026-07-27
 **Amends:** ADR-016 (fixed escalation resolution actions), ADR-003 (DAG as gated checkpoint)
 
 ## Context
@@ -9,13 +9,13 @@ Adversarial review identified a rigidity trapdoor: if a human approves a flawed 
 
 ## Decision
 
-Add a fifth, human-initiated resolution action: **amend-DAG** (partial re-decomposition).
+Add a fifth, human-initiated resolution action: **amend-DAG** (partial re-decomposition). The controller may recommend this action after a versioned contention threshold is crossed—using repeated actual integration failures or sustained predicted-vs-actual touch misses from ADR-019/023—but it must never execute amendment automatically or from predicted overlap alone.
 
 Mechanics:
 1. Human cancels the affected subtree (existing cancel-branch semantics).
 2. The decomposer re-runs against **only the unmet remainder** of the spec intent, receiving the original spec slice plus the set of already-`passed` nodes as context.
-3. The amendment output passes the same mechanical validation (ids, cycles, referential integrity) and then **Gate 1 human approval again**.
-4. Approved amendment nodes append to the existing DAG; dispatch resumes normally.
+3. The amendment output passes the same mechanical validation (ids, cycles, referential integrity). The controller then derives predicted-touch metadata from the current versioned code-graph snapshot and freezes both with the renewed Gate 1 proposal.
+4. The combined amendment proposal receives **Gate 1 human approval again**. Approved amendment nodes append to the existing DAG and dispatch resumes normally.
 
 Passed work is never discarded. The ADR-003 quarantine principle is preserved, restated precisely: the rule was never "the DAG is immutable" — it is "**the DAG never changes silently**." Every topology change is decomposer-proposed, mechanically validated, human-approved, and audit-logged; re-runs resume from the amended approved DAG.
 
