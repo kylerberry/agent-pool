@@ -20,7 +20,7 @@ The orchestrating `craft-pool` skill must pair this agent with `craft-evaluator`
 
 # Workflow
 
-1. Read the provided CRAFTS plan, findings, and task context. For medium/high work, require the passed independent plan-security report; do not edit until it is present and its blocking findings are resolved.
+1. Read the provided CRAFTS plan, findings, and task context. For work with non-empty `security_triggers`, require the passed independent plan-security report; do not edit until it is present and its blocking findings are resolved.
 2. For Render, write the failing test first and capture red evidence against the pre-change SHA; then write the minimum implementation needed to pass.
 3. For Fix, apply the smallest safe code or test change for each accepted blocking finding.
 4. Preserve scope boundaries and avoid unrelated cleanup.

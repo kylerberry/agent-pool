@@ -61,7 +61,7 @@ When exact per-spawn model selection is used, R/F and A run on different models;
 
 ## Full Flow: C → R → A → F → T → S
 
-CRAFTS is a sequential phase-gate workflow. Do not run phases in parallel per unit; finish the current phase before the next. **The primary agent spawns each phase's subagent itself** — including C — passing that phase's payload directly. Spawn only one subagent at a time, wait for its report, then proceed, fix blockers, or escalate. Medium/high C adds one sequential, independent plan-security checkpoint after the C planner and before R. Do not run CRAFTS subagents in parallel, and do not let one phase subagent spawn another.
+CRAFTS is a sequential phase-gate workflow. Do not run phases in parallel per unit; finish the current phase before the next. **The primary agent spawns each phase's subagent itself** — including C — passing that phase's payload directly. Spawn only one subagent at a time, wait for its report, then proceed, fix blockers, or escalate. A non-empty C `security_triggers` list adds one sequential, independent plan-security checkpoint after the C planner and before R. Do not run CRAFTS subagents in parallel, and do not let one phase subagent spawn another.
 
 **Schema enforcement.** Launch each phase with bundled `../../contracts/crafts-phase-artifact.schema.json` adapted as the Pi `outputSchema`; the child must call `structured_output`. Validate before persistence or handoff. Prose-only completion fails the phase.
 
@@ -85,11 +85,11 @@ The primary agent constructs each phase's payload explicitly. Pass what the phas
 | Phase | Receives | Must NOT receive |
 | --- | --- | --- |
 | C | unit request, **original acceptance criteria**, repo/branch constraints, prior failure artifacts (on retry) | — |
-| R | C's plan artifact, original criteria, pinned builder model; for elevated work, the passed plan-security report | C's working transcript |
+| R | C's plan artifact, original criteria, pinned builder model; for triggered work, the passed plan-security report | C's working transcript |
 | A | task goal, **original upstream acceptance criteria**, C's plan, changed files/diff, tier-1 evidence (incl. red-run output), builder model used | C's derived interpretation *in place of* the original criteria; the builder's transcript |
 | F | **only** the blocking findings from A, plus the diff and relevant context | A's full review transcript; unrelated findings |
-| T | task goal, changed files, verification output, trust boundaries identified in C or R; for elevated work, C's risk declaration and passed plan-security report | — |
-| S | final diff summary, verification results, unit status, conventions/gotchas discovered; for elevated work, the plan-security and T results | full phase transcripts |
+| T | task goal, changed files, verification output, trust boundaries identified in C or R; for triggered work, C's declared security triggers and passed plan-security report | — |
+| S | final diff summary, verification results, unit status, conventions/gotchas discovered; for triggered work, the plan-security and T results | full phase transcripts |
 
 On retry, every phase additionally receives prior attempts' **failure-context artifacts** (see below) — never prior transcripts.
 
@@ -122,15 +122,15 @@ Use `craft-planner` when available. Pass the unit request, relevant issue slice,
 
 ### Elevated-risk plan-security checkpoint
 
-C classifies every full-flow node as `low`, `medium`, or `high` risk. Medium and high use the same elevated controls. A node is elevated when it changes a trust boundary or handles untrusted input, authentication/authorization, secrets or sensitive data, external/network integration, file or command execution, CI/deploy permissions, or tenant isolation. C records the level, rationale, trust boundaries, assets, abuse cases, and planned security tests in existing C artifact fields; this policy does not change the artifact schema.
+C emits `phase_data.security_triggers` from the contract's closed vocabulary. An empty list keeps the normal flow; any trigger deterministically requires elevated controls. C does not assign `low|medium|high` scores or produce separate asset/abuse-case documents. Existing `trust_boundaries` and `test_strategy` carry the concrete security plan; unknown or duplicate triggers fail validation.
 
-For elevated work, the conductor invokes `craft-security` **after C and before R** in a fresh, independent context. It applies `security-and-hardening` to the C plan, original criteria, risk declaration, and trust boundaries. This is a supplemental C checkpoint, not a new CRAFTS phase or a T artifact. Blocking findings return to C; Render begins only after the compact plan-security report passes. Persist the report beside the C record and pass it to R, T, and S. Low-risk work skips this checkpoint.
+For triggered work, the conductor invokes `craft-security` **after C and before R** in a fresh, independent context. It applies `security-and-hardening` to the C plan, original criteria, declared triggers, trust boundaries, and test strategy. This is a supplemental C checkpoint, not a new CRAFTS phase or a T artifact. Blocking findings return to C; Render begins only after the compact plan-security report passes. Persist the report beside the C record and pass it to R, T, and S. An empty trigger list skips this checkpoint.
 
 ### R — Render (Test-Drive)
 
 Write failing tests first, implement the minimum to pass, then refactor.
 
-Use `craft-builder` when available. Choose a builder model that has a different evaluator model available at equal or higher capability. For elevated work, pass the required, passing plan-security report and do not begin implementation before it passes.
+Use `craft-builder` when available. Choose a builder model that has a different evaluator model available at equal or higher capability. For triggered work, pass the required, passing plan-security report and do not begin implementation before it passes.
 
 - **Red:** write the failing test from the plan and **run it against the pre-change tree to demonstrate it fails**. Capture that red-run output as tier-1 evidence (ADR-025) — a suite that cannot produce a red state is rejected mechanically. If you can't write the failing test, return to Conceptualize.
 - **Green:** minimum implementation to pass. No more.
@@ -161,10 +161,10 @@ Use `craft-builder` when available. Pass only the blocking findings and relevant
 
 Apply `security-and-hardening` to the diff; fix findings.
 
-Use `craft-security` when available. Pass the task goal, changed files, verification output, and trust boundaries identified during C or R. For elevated work, also pass C's risk declaration and the plan-security report.
+Use `craft-security` when available. Pass the task goal, changed files, verification output, and trust boundaries identified during C or R. For triggered work, also pass C's declared security triggers and the plan-security report.
 
 - Apply the skill proportionately to the changed surface, not as a generic scan.
-- For elevated work, account for every C trust boundary with evidence, a finding, or explicit non-applicability.
+- For triggered work, account for every C trust boundary with evidence, a finding, or explicit non-applicability.
 - Return blocking findings to F and repeat T after the fix.
 
 ### S — Sharpen
@@ -179,7 +179,7 @@ Use `craft-sharpener` when available. Pass the final diff summary, verification 
 
 ## Lite Flow: R → S
 
-For clearly low-risk config, scaffolding, and simple single-file fixes. Escalate medium/high work to the full flow before editing so C can run the plan-security checkpoint:
+For config, scaffolding, and simple single-file fixes with no applicable security trigger. If any closed-vocabulary trigger applies, escalate to the full flow before editing so C can emit it and the conductor can run the plan-security checkpoint:
 
 1. **R — Render:** smallest correct change. Use `craft-builder` when available. Write/update tests if the codebase has them (tier-1 gate still applies).
 2. **S — Sharpen:** capture doc updates and commit. Use `craft-sharpener` when available.
@@ -188,4 +188,4 @@ For clearly low-risk config, scaffolding, and simple single-file fixes. Escalate
 
 Retry and budget ceilings are owned by the orchestrator (fixed global retry ceiling; per-node and per-DAG budget caps), not by CRAFTS. When a unit exhausts retries or blows budget, CRAFTS surfaces the failure with its audit records; the orchestrator handles freeze/escalation and the human resolution actions (retry / manual fix / cancel branch / override-with-logged-reason / amend-DAG). Retry ceilings are tracked per failure class — `logic` (this node's own defect) vs. `integration` (re-failed at re-verification because a sibling changed the head) — so a node is never escalated as defective for losing integration races (ADR-023).
 
-Never skip Assess and Tighten on code that crosses a trust boundary or handles user input.
+Never skip Assess and Tighten on work with a non-empty `security_triggers` list.

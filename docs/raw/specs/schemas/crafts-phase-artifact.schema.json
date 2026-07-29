@@ -100,7 +100,7 @@
           "phase_data": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["complexity", "selected_flow", "scope", "non_goals", "test_strategy", "planned_files", "trust_boundaries", "render_plan"],
+            "required": ["complexity", "selected_flow", "scope", "non_goals", "test_strategy", "planned_files", "trust_boundaries", "security_triggers", "render_plan"],
             "properties": {
               "complexity": { "enum": ["lite", "full"] },
               "selected_flow": { "enum": ["R-S", "C-R-A-F-T-S"] },
@@ -109,6 +109,13 @@
               "test_strategy": { "type": "array", "items": { "type": "string" } },
               "planned_files": { "type": "array", "items": { "type": "string" } },
               "trust_boundaries": { "type": "array", "items": { "type": "string" } },
+              "security_triggers": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "enum": ["trust-boundary-change", "untrusted-input", "authentication-authorization", "secrets-sensitive-data", "external-integration", "file-command-execution", "ci-deploy-permissions", "tenant-isolation"]
+                }
+              },
               "render_plan": { "type": "array", "items": { "type": "string" } }
             }
           }

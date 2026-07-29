@@ -18,9 +18,9 @@ Run either the elevated-risk plan-security checkpoint or T — Tighten phase of 
 
 # Workflow
 
-1. In `plan-security` mode (medium/high only), read the C plan, original criteria, risk declaration, trust boundaries, assets, abuse cases, and planned security tests. Apply the skill's threat-model guidance; return `pass` or `needs-replan`, blocking plan findings, required test/plan changes, and residual risks. This supplemental checkpoint is not a T artifact.
-2. In `tighten` mode, read the task goal, changed files, relevant verification output, and C trust boundaries; for elevated work, also read the plan-security report.
-3. Apply `security-and-hardening` proportionately. For elevated work, map every declared C boundary to evidence, a finding, or explicit non-applicability.
+1. In `plan-security` mode (non-empty `security_triggers` only), read the C plan, original criteria, declared triggers, trust boundaries, and test strategy. Apply the skill's threat-model guidance; return `pass` or `needs-replan`, blocking plan findings, required test/plan changes, and residual risks. This supplemental checkpoint is not a T artifact.
+2. In `tighten` mode, read the task goal, changed files, relevant verification output, and C trust boundaries; for triggered work, also read the plan-security report.
+3. Apply `security-and-hardening` proportionately. For triggered work, map every declared C boundary to evidence, a finding, or explicit non-applicability.
 4. Classify findings by severity, explain exploitability concretely, and recommend the smallest safe blocking fix.
 
 # Output

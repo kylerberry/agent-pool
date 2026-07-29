@@ -29,17 +29,17 @@ Phase-specific fields live under `phase_data`; fields outside the schema are rej
 
 ## Elevated-risk security checkpoints
 
-C classifies full-flow work as `low`, `medium`, or `high` risk. Medium and high follow the same elevated controls: C records the risk rationale, trust boundaries, assets, abuse cases, and planned security tests using its existing summary, risks, and `phase_data` fields. This policy adds no schema fields.
+C does not assign a subjective risk score. It emits `phase_data.security_triggers` as a unique subset of this closed vocabulary: `trust-boundary-change`, `untrusted-input`, `authentication-authorization`, `secrets-sensitive-data`, `external-integration`, `file-command-execution`, `ci-deploy-permissions`, and `tenant-isolation`. An empty list means no elevated checkpoint; any trigger means the conductor deterministically requires one. Unknown or duplicate values fail schema validation.
 
-For elevated work, the conductor runs an independent, fresh-context plan-security review after C and before R. It applies `security-and-hardening` to the C plan, original criteria, risk declaration, and trust boundaries. The review is a supplemental C checkpoint—not a CRAFTS phase and not a T artifact. Blocking findings return to C; its compact report is retained beside the C artifact and passed to R, T, and S.
+For triggered work, the conductor runs an independent, fresh-context plan-security review after C and before R. It applies `security-and-hardening` to the C plan, original criteria, declared triggers, and existing `trust_boundaries` and `test_strategy`. The review is a supplemental C checkpoint—not a CRAFTS phase and not a T artifact. Blocking findings return to C; its compact report is retained beside the C artifact and passed to R, T, and S. No separate scoring system, asset inventory, abuse-case document, or security policy service is required.
 
-T applies `security-and-hardening` to the final diff. For elevated work, it maps every C trust boundary to evidence, a finding, or explicit non-applicability; blocking findings return to F and T reruns. If Tighten identifies a reusable security finding, S records exactly one durable-learning disposition: `guidance-update`, `owned-follow-up`, or `documented-non-generalizable`.
+T applies `security-and-hardening` to the final diff. For triggered work, it maps every C trust boundary to evidence, a finding, or explicit non-applicability; blocking findings return to F and T reruns. If Tighten identifies a reusable security finding, S records exactly one durable-learning disposition: `guidance-update`, `owned-follow-up`, or `documented-non-generalizable`.
 
 ## Phase payloads
 
 ### C — Conceptualize
 
-Adds `complexity`, `selected_flow`, `scope`, `non_goals`, `test_strategy`, `planned_files`, `trust_boundaries`, and `render_plan`. C may not author or alter acceptance criteria.
+Adds `complexity`, `selected_flow`, `scope`, `non_goals`, `test_strategy`, `planned_files`, `trust_boundaries`, `security_triggers`, and `render_plan`. C may not author or alter acceptance criteria.
 
 ### R — Render
 

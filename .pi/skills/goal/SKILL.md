@@ -82,7 +82,7 @@ A template is at `docs/raw/specs/templates/domain-map-approval.json`. Kyler fill
 
 ## Ledger and dispatcher
 
-The local conductor uses `node .pi/scripts/goal-dispatcher.mjs` to durably track node lifecycles. The dispatcher stores its state under `.pi/goal-runs/<runId>/ledger.json` (which is gitignored) and exposes the commands `init`, `status`, `resume`, `start`, `record-phase`, and `complete`. It freezes the approved DAG SHA-256 on `init` and rejects any operation when the approved plan drifts.
+The local conductor uses `node .pi/scripts/goal-dispatcher.mjs` to durably track node lifecycles. The dispatcher stores its state under `.pi/goal-runs/<runId>/ledger.json` (which is gitignored) and exposes the commands `init`, `status`, `resume`, `start`, `record-phase`, `complete`, `emit-candidate`, and `migrate-plan`. It freezes the approved DAG SHA-256 on `init` and rejects any operation when the approved plan drifts.
 
 Before the first dispatch, run:
 
@@ -115,6 +115,45 @@ node .pi/scripts/goal-dispatcher.mjs complete <node-id> <attempt-id> passed
 ```
 
 `complete ... passed` fails unless the full selected flow has schema-valid persisted evidence. Failed or escalated attempts use the same command with `failed` or `escalated` and retain their phase artifacts.
+
+### Approved-plan migration (`migrate-plan`)
+
+When an approved plan needs a bounded post-approval amendment, use:
+
+```bash
+node .pi/scripts/goal-dispatcher.mjs migrate-plan <old-plan.json> <new-plan.json> <approval.json>
+```
+
+All three arguments are repository-relative paths. `old-plan.json` is the snapshot that was frozen in the ledger. `new-plan.json` must be the dispatcher's canonical plan path (`docs/raw/plans/proposed-build-dag.json`) and must match the detached approved hash. `approval.json` is a separate, human-signed envelope.
+
+The approval envelope must contain exactly:
+
+```json
+{
+  "schema_version": 1,
+  "run_id": "<run-id>",
+  "expected_old_plan_sha256": "<sha256-of-old-plan-bytes>",
+  "approved_new_plan_sha256": "<sha256-of-new-plan-bytes>",
+  "approver": "<identifier>",
+  "approved_at": "<ISO-8601-timestamp>",
+  "approval_context": "<human-readable rationale>"
+}
+```
+
+Mechanical checks performed by the dispatcher:
+
+- The envelope is owned by the effective user and is not group- or world-writable.
+- `run_id` matches the dispatcher's run ID.
+- `expected_old_plan_sha256` equals both the SHA-256 of `old-plan.json` and the ledger's `frozen_plan_sha`.
+- `approved_new_plan_sha256` equals the SHA-256 of `new-plan.json`.
+- The new plan's approval timestamp is later than the old plan's approval timestamp.
+- No active attempt or workspace writer exists.
+- Node IDs, intents, change specs, and dependency topology are unchanged.
+- Completed (`passed`) nodes keep their existing acceptance criteria verbatim.
+- Pending nodes may only receive append-only additions to acceptance criteria; existing criteria must not be altered or removed.
+- Completed node definitions and phase evidence are preserved and re-verified before activation.
+
+On success the dispatcher writes content-addressed audit objects (old plan, new plan, approval envelope, evidence manifest, amendment record) under `.pi/goal-runs/<runId>/migrations/objects/`, updates the ledger's `frozen_plan_sha` atomically, and appends the amendment. Re-running the same command with identical inputs is a verified idempotent replay that returns the existing amendment index. The ledger is never deleted or reinitialized to resolve approved-plan drift.
 
 ## Eval telemetry
 

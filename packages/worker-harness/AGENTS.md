@@ -13,7 +13,7 @@ A Pool Worker executes one assigned DAG node attempt. The supervisor, product sp
 - Stay inside the assigned unit; escalate unapproved product, architecture, security, cost, or scope decisions.
 - Emit schema-valid phase artifacts and preserve failure context.
 - Respect phase tool boundaries: R/F may write code, A/T are read-only, and S may write documentation only.
-- For medium/high work, require the fresh independent plan-security checkpoint after C and before R; `craft-security` applies `security-and-hardening`, while low-risk work keeps the normal flow.
+- When C emits any closed-vocabulary `security_triggers`, require the fresh independent plan-security checkpoint after C and before R; `craft-security` applies `security-and-hardening`, while an empty list keeps the normal flow.
 - Never infer Pool Worker status from repository subject matter or prompt wording. The execution marker and preflight decide the actor.
 
 ## Fail Closed

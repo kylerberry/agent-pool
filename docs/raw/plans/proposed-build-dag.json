@@ -50,7 +50,8 @@
         "A workspace graph can be built and refreshed against an identified repository head.",
         "Decomposition can request breadth-oriented dependency context and receive index revision metadata.",
         "Grep/LSP remain direct precise lookup tools and no vector store is introduced.",
-        "Wiki discovery follows index links and retains raw-source traceability."
+        "Wiki discovery follows index links and retains raw-source traceability.",
+        "Controller-owned predicted-touch metadata identifies its versioned code-graph snapshot and records likely graph units and shared surfaces with provenance sufficient to freeze the advisory metadata with Gate 1; workers neither author nor receive DAG topology."
       ],
       "depends_on": ["domain-scaffolding"]
     },
@@ -90,7 +91,8 @@
         "One deterministic attempt job is emitted per ready node and duplicate delivery is idempotent.",
         "Pool Worker payloads contain one immutable unit and no DAG topology.",
         "State transitions use expected-version checks and invalid transitions are rejected.",
-        "Leases and startup reconciliation recover interrupted dispatch/result windows without silently losing work."
+        "Leases and startup reconciliation recover interrupted dispatch/result windows without silently losing work.",
+        "Otherwise-ready nodes are serialized when versioned controller-owned predicted-touch metadata indicates sufficiently confident likely overlap, without rewriting approved semantic dependency edges; unavailable or low-confidence predictions fall back to optimistic concurrency, and the prediction and serialization decision are durably recorded."
       ],
       "depends_on": ["work-contracts-direct-intake"]
     },
@@ -103,7 +105,8 @@
         "A failed or escalated node blocks only its dependent branch while unrelated ready work continues.",
         "Per-node exhaustion escalates the node; aggregate DAG exhaustion stops new dispatch and lets bounded in-flight work finish.",
         "Retry, manual fix, cancel branch, override/force-pass, and amend-DAG are authorized, validated, and durably audited.",
-        "Crash-recovery tests demonstrate reconciliation for leased and partially delivered work."
+        "Crash-recovery tests demonstrate reconciliation for leased and partially delivered work.",
+        "Repeated actual integration contention or sustained measured prediction misses may produce an amend-DAG recommendation, but predictions never mutate topology or invoke amendment automatically; amend-DAG remains human-initiated, mechanically validated, and subject to renewed Gate 1 approval."
       ],
       "depends_on": ["controller-ready-frontier"]
     },
@@ -116,7 +119,8 @@
         "Worker startup validates package files, exact models, Graphify, routing diversity, and schemas before paid work.",
         "Repository commands cannot access provider or GitHub credentials.",
         "The worker receives no DAG topology and executes exactly one attempt contract.",
-        "Backend fallback remains the same attempt and records all consumed cost and evidence."
+        "Backend fallback remains the same attempt and records all consumed cost and evidence.",
+        "Before workspace cleanup, each retained transcript is finalized, redacted, hashed, durably persisted, verified, and transactionally indexed under transcript_object_id, while transcript_path is only a workspace-relative extraction locator; extraction failure records audit_incomplete and cannot retain an unsafe workspace indefinitely."
       ],
       "depends_on": ["model-routing-foundation", "codebase-knowledge-foundation"]
     },
@@ -142,7 +146,8 @@
         "Conflicting test edits cause the later unit to re-derive against the new head rather than overwrite.",
         "The merged connected component reruns all accumulated Tier-1 suites before sealing.",
         "A re-verification failure can reopen a provisional pass and increments only the integration-failure counter.",
-        "Integration evidence is linked to node, attempt, suite hash, and head SHA."
+        "Integration evidence is linked to node, attempt, suite hash, and head SHA.",
+        "Integration records actual touched graph units and resulting contention, compares predicted and actual overlap for scheduler precision/recall measurement, and retains merged-suite re-verification as the final conflict arbiter."
       ],
       "depends_on": ["controller-ready-frontier", "crafts-grading-flow"]
     },
@@ -194,7 +199,8 @@
         "Logs and audit queries correlate spec, DAG, node, attempt, model call, and GitHub artifact identifiers.",
         "Migrations and startup reconciliation are idempotent and tested against interrupted states.",
         "Retention is bounded and an encrypted off-host backup includes a consistent SQLite/WAL snapshot.",
-        "A documented restore drill is executed successfully in a test environment."
+        "A documented restore drill is executed successfully in a test environment.",
+        "Operations cover transcript-object access classification, bounded retention/deletion state, extraction alerts, WAL-safe backup and restore of audit metadata, and cleanup state that distinguishes complete from incomplete transcript extraction and audit."
       ],
       "depends_on": ["async-spec-intake-gate-one", "controller-failure-policy", "github-revision-webhooks", "builder-eval-harness"]
     },
@@ -207,7 +213,8 @@
         "Tests cover duplicate delivery, crash reconciliation, logic and integration retries, dependency freezing, budget exhaustion, re-verification failure, and all five human resolution actions.",
         "Every docs/goal-prompt.md acceptance criterion maps to implementation and automated evidence.",
         "Every ADR maps to code/tests or an explicitly approved deferred item without contradiction.",
-        "Pinned lint, typecheck, unit, integration, static, and security checks pass."
+        "Pinned lint, typecheck, unit, integration, static, and security checks pass.",
+        "Evidence covers predicted-touch scheduling and predicted-vs-actual contention measurement, transcript-cleanup success and extraction-failure fixtures, and traceability for the amended ADR-019, ADR-023, ADR-024, ADR-026, and ADR-032 requirements."
       ],
       "depends_on": ["single-host-operations"]
     }

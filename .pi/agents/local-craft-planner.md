@@ -25,9 +25,9 @@ The orchestrating local craft skill must pair the later R/F phase (`local-craft-
 3. Identify whether the task is AFK or HITL, including any `TODO(human)` seams.
 4. Propose a test strategy with concrete red-green-refactor cases.
 5. Identify likely files, dependencies, risks, and trust boundaries.
-6. Classify risk as `low`, `medium`, or `high`. Medium and high use the same elevated controls. For elevated work, record the rationale, trust boundaries, assets, abuse cases, and planned security tests in the existing C artifact fields.
+6. Emit `phase_data.security_triggers` from the contract's closed vocabulary: `trust-boundary-change`, `untrusted-input`, `authentication-authorization`, `secrets-sensitive-data`, `external-integration`, `file-command-execution`, `ci-deploy-permissions`, `tenant-isolation`. Use an empty list when none apply; otherwise declare every applicable trigger and use existing `trust_boundaries` and `test_strategy` for the concrete plan. Do not assign a risk score or create separate asset/abuse-case fields.
 7. Stop if requirements are ambiguous and return the exact clarification needed.
 
 # Output
 
-Return schema-valid JSON matching the C payload in `docs/raw/specs/crafts-phase-artifact-contract.md`. For elevated work, make the risk declaration explicit in existing summary/risks and `phase_data.trust_boundaries`; do not invent schema fields. Prose-only completion is invalid.
+Return schema-valid JSON matching the C payload in `docs/raw/specs/crafts-phase-artifact-contract.md`. Populate schema-defined `phase_data.security_triggers`; unknown or duplicate values are invalid. Prose-only completion is invalid.

@@ -6,7 +6,30 @@ import { fileURLToPath } from "node:url";
 import { emitEvalCandidate, gitSnapshot } from "../extensions/eval-telemetry/core.mjs";
 
 const PHASES = new Set(["C", "R", "A", "F", "T", "S"]);
+const SECURITY_TRIGGERS = new Set(["trust-boundary-change", "untrusted-input", "authentication-authorization", "secrets-sensitive-data", "external-integration", "file-command-execution", "ci-deploy-permissions", "tenant-isolation"]);
 const ARTIFACT_STATUSES = new Set(["passed", "needs_fix", "failed", "blocked"]);
+const MIGRATION_BOUNDS = {
+  max_plan_bytes: 10 * 1024 * 1024,
+  max_approval_bytes: 64 * 1024,
+  max_nodes: 256,
+  max_id_length: 128,
+  max_string_field: 16384,
+  max_criteria: 256,
+  max_criterion_length: 4096,
+  max_approver_length: 256,
+  max_approval_context_length: 4096,
+  max_depth: 32,
+  max_values: 100_000,
+  max_array_length: 4096,
+  max_string_length: 100_000,
+};
+const ENVELOPE_BOUNDS = {
+  max_depth: 16,
+  max_values: 1024,
+  max_array_length: 64,
+  max_string_length: 8192,
+};
+const CLOCK_SKEW_MS = 5 * 60 * 1000;
 const FLOWS = new Set(["C-R-A-F-T-S", "R-S"]);
 const TOP_LEVEL_KEYS = [
   "schema_version", "node_id", "attempt_id", "phase", "status", "model",
@@ -19,6 +42,14 @@ function fail(message) { throw new Error(message); }
 function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function exactKeys(value, keys, label) {
   if (!isObject(value) || Object.keys(value).sort().join("|") !== [...keys].sort().join("|")) {
+    fail(`${label} has missing or unknown fields`);
+  }
+}
+function exactKeysOptional(value, required, optional, label) {
+  if (!isObject(value)) fail(`${label} is not an object`);
+  const keys = Object.keys(value);
+  const allowed = new Set([...required, ...optional]);
+  if (!required.every((key) => keys.includes(key)) || keys.some((key) => !allowed.has(key))) {
     fail(`${label} has missing or unknown fields`);
   }
 }
@@ -36,6 +67,243 @@ function canonical(value) {
 }
 function sha256(value) { return crypto.createHash("sha256").update(value).digest("hex"); }
 function sha256File(filePath) { return sha256(fs.readFileSync(filePath)); }
+function assertBound(value, min, max, label) { if (value < min || value > max) fail(`${label} is out of bounds`); }
+
+function readAllBytes(descriptor) {
+  const chunks = [];
+  while (true) {
+    const buffer = Buffer.alloc(65536);
+    const bytesRead = fs.readSync(descriptor, buffer, 0, 65536, null);
+    if (bytesRead === 0) break;
+    chunks.push(buffer.subarray(0, bytesRead));
+  }
+  return Buffer.concat(chunks);
+}
+
+function safeOpenRead(rootDir, inputPath, label) {
+  if (path.isAbsolute(inputPath)) fail(`${label} must be a relative path`);
+  const lexical = path.resolve(rootDir, inputPath);
+  if (!isWithin(rootDir, lexical)) fail(`${label} escapes repository root`);
+  assertNoSymlinkAncestors(rootDir, lexical);
+  const beforeChain = captureDirectoryChain(rootDir, path.dirname(lexical));
+  let descriptor;
+  try {
+    descriptor = fs.openSync(lexical, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+  } catch (error) {
+    if (error.code === "ELOOP") fail(`${label} is a symlink`);
+    if (error.code === "ENOENT") fail(`${label} does not exist`);
+    throw error;
+  }
+  try {
+    const stats = fs.fstatSync(descriptor);
+    if (!stats.isFile() || stats.isSymbolicLink()) fail(`${label} is not a regular file`);
+    const bytes = readAllBytes(descriptor);
+    const realPath = fs.realpathSync(lexical);
+    if (!isWithin(rootDir, realPath)) fail(`${label} resolves outside repository root`);
+    revalidateDirectoryChain(beforeChain);
+    return { bytes, stats, realPath };
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+function validateTrustBasis(stats, relativePath) {
+  if (typeof process.getuid !== "function" || typeof process.getgid !== "function") fail("POSIX ownership primitives are required");
+  if (!stats.isFile() || stats.isSymbolicLink()) fail("approval must be a regular non-symlink file");
+  if (stats.uid !== process.getuid()) fail("approval must be owned by the effective user");
+  if ((stats.mode & 0o022) !== 0) fail("approval must not be group or world writable");
+  return { uid: stats.uid, gid: stats.gid, mode: stats.mode.toString(8), path: relativePath };
+}
+
+function validateJsonBounds(value, bounds, label) {
+  function visit(item, depth) {
+    if (typeof item === "string") {
+      if (item.length > bounds.max_string_length) fail(`${label} string exceeds maximum length`);
+      return;
+    }
+    if (typeof item === "number" || typeof item === "boolean" || item === null) return;
+    if (Array.isArray(item)) {
+      if (depth > bounds.max_depth) fail(`${label} exceeds maximum nesting depth`);
+      if (item.length > bounds.max_array_length) fail(`${label} array exceeds maximum length`);
+      for (const element of item) visit(element, depth + 1);
+      return;
+    }
+    if (isObject(item)) {
+      if (depth > bounds.max_depth) fail(`${label} exceeds maximum nesting depth`);
+      for (const [key, child] of Object.entries(item)) {
+        if (key.length > bounds.max_string_length) fail(`${label} object key exceeds maximum length`);
+        visit(child, depth + 1);
+      }
+      return;
+    }
+    fail(`${label} contains an unsupported JSON value`);
+  }
+  let values = 0;
+  function count(item) {
+    values += 1;
+    if (values > bounds.max_values) fail(`${label} exceeds maximum value count`);
+    if (Array.isArray(item)) for (const element of item) count(element);
+    else if (isObject(item)) for (const child of Object.values(item)) count(child);
+  }
+  visit(value, 0);
+  count(value);
+}
+
+function atomicWriteBytes(filePath, bytes, mode = 0o600) {
+  const directory = path.dirname(filePath);
+  fs.mkdirSync(directory, { recursive: true });
+  const temporary = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${crypto.randomUUID()}.tmp`);
+  const descriptor = fs.openSync(temporary, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, mode);
+  try { fs.writeFileSync(descriptor, bytes); fs.fsyncSync(descriptor); } finally { fs.closeSync(descriptor); }
+  fs.renameSync(temporary, filePath);
+  const directoryDescriptor = fs.openSync(directory, "r");
+  try { fs.fsyncSync(directoryDescriptor); } finally { fs.closeSync(directoryDescriptor); }
+}
+
+function writeImmutableObject(rootDir, subPath, bytes) {
+  const digest = sha256(bytes);
+  const filePath = path.resolve(rootDir, subPath, digest);
+  const directory = path.dirname(filePath);
+  if (!isWithin(rootDir, directory) && directory !== rootDir) fail("content-addressed object directory escapes repository");
+  assertNoSymlinkAncestors(rootDir, directory);
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const chain = captureDirectoryChain(rootDir, directory);
+  try {
+    const descriptor = fs.openSync(filePath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
+    try { fs.writeFileSync(descriptor, bytes); fs.fsyncSync(descriptor); } finally { fs.closeSync(descriptor); }
+    const directoryDescriptor = fs.openSync(directory, "r");
+    try { fs.fsyncSync(directoryDescriptor); } finally { fs.closeSync(directoryDescriptor); }
+    revalidateDirectoryChain(chain);
+    return { path: filePath, sha: digest };
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+  }
+  const descriptor = fs.openSync(filePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+  try {
+    const stats = fs.fstatSync(descriptor);
+    if (!stats.isFile() || stats.isSymbolicLink()) fail(`content-addressed object is not a regular file: ${digest}`);
+    if (isPosix() && stats.uid !== process.getuid()) fail(`content-addressed object is not owned by effective user: ${digest}`);
+    if (isPosix() && (stats.mode & 0o7777) !== 0o600) fail(`content-addressed object must be mode 0600: ${digest}`);
+    const existing = readAllBytes(descriptor);
+    if (Buffer.compare(existing, bytes) !== 0) fail(`content-addressed object collision at ${digest}`);
+    revalidateDirectoryChain(chain);
+    return { path: filePath, sha: digest };
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+function validateApprovalEnvelope(envelope) {
+  validateJsonBounds(envelope, ENVELOPE_BOUNDS, "approval envelope");
+  exactKeys(envelope, ["schema_version", "run_id", "expected_old_plan_sha256", "approved_new_plan_sha256", "approver", "approved_at", "approval_context"], "approval envelope");
+  if (envelope.schema_version !== 1) fail("approval envelope schema_version must be 1");
+  safeSegment(envelope.run_id, "approval run_id");
+  if (!/^[0-9a-f]{64}$/.test(envelope.expected_old_plan_sha256)) fail("approval envelope expected_old_plan_sha256 is invalid");
+  if (!/^[0-9a-f]{64}$/.test(envelope.approved_new_plan_sha256)) fail("approval envelope approved_new_plan_sha256 is invalid");
+  if (typeof envelope.approver !== "string" || !envelope.approver || envelope.approver.length > MIGRATION_BOUNDS.max_approver_length) fail("approval envelope approver is invalid");
+  validDate(envelope.approved_at, "approval envelope approved_at");
+  if (typeof envelope.approval_context !== "string" || envelope.approval_context.length > MIGRATION_BOUNDS.max_approval_context_length) fail("approval envelope approval_context is invalid");
+}
+
+function compareMigrationPlans(oldPlan, newPlan, ledgerNodes) {
+  if (!Array.isArray(oldPlan.nodes) || !Array.isArray(newPlan.nodes) || oldPlan.nodes.length !== newPlan.nodes.length) fail("plan node count changed");
+  const newMap = new Map(newPlan.nodes.map((node) => [node.id, node]));
+  for (const oldNode of oldPlan.nodes) {
+    const newNode = newMap.get(oldNode.id);
+    if (!newNode) fail(`node ${oldNode.id} was removed in new plan`);
+    if (oldNode.intent !== newNode.intent) fail(`node ${oldNode.id} intent changed`);
+    if (oldNode.change_spec !== newNode.change_spec) fail(`node ${oldNode.id} change_spec changed`);
+    if (JSON.stringify(oldNode.depends_on) !== JSON.stringify(newNode.depends_on)) fail(`node ${oldNode.id} depends_on changed`);
+    const oldCrit = oldNode.acceptance_criteria;
+    const newCrit = newNode.acceptance_criteria;
+    stringArray(oldCrit, `node ${oldNode.id} old acceptance_criteria`);
+    stringArray(newCrit, `node ${oldNode.id} new acceptance_criteria`);
+    if (oldCrit.length > MIGRATION_BOUNDS.max_criteria || newCrit.length > MIGRATION_BOUNDS.max_criteria) fail(`node ${oldNode.id} has too many acceptance criteria`);
+    for (const criterion of [...oldCrit, ...newCrit]) if (typeof criterion !== "string" || criterion.length > MIGRATION_BOUNDS.max_criterion_length) fail(`node ${oldNode.id} criterion is out of bounds`);
+    if (ledgerNodes?.[oldNode.id]?.status === "passed") {
+      if (JSON.stringify(oldCrit) !== JSON.stringify(newCrit)) fail(`completed node ${oldNode.id} acceptance_criteria changed`);
+    } else {
+      if (newCrit.length < oldCrit.length) fail(`pending node ${oldNode.id} acceptance_criteria shortened`);
+      for (let index = 0; index < oldCrit.length; index += 1) if (oldCrit[index] !== newCrit[index]) fail(`pending node ${oldNode.id} existing acceptance criterion altered`);
+    }
+  }
+}
+
+function resolveLedgerArtifact(ledgerDir, relativePath, label) {
+  if (typeof relativePath !== "string" || path.isAbsolute(relativePath) || relativePath === ".." || relativePath.startsWith(`..${path.sep}`)) fail(`${label} path is unsafe`);
+  const base = fs.realpathSync(ledgerDir);
+  const resolved = safeOpenRead(base, relativePath, label);
+  if (!isWithin(base, resolved.realPath)) fail(`${label} resolves outside ledger directory`);
+  return { ...resolved, relative: path.relative(base, resolved.realPath).split(path.sep).join("/") };
+}
+
+function verifyCompletedEvidence(ledger, ledgerDir) {
+  const result = [];
+  for (const [id, node] of Object.entries(ledger.nodes)) {
+    if (node.status !== "passed") continue;
+    const attempt = node.attempts.at(-1);
+    if (!attempt?.completion_path) fail(`completed node ${id} has no completion record`);
+    const completion = resolveLedgerArtifact(ledgerDir, attempt.completion_path, `completed node ${id} completion`);
+    const completionBytes = completion.bytes;
+    const completionSha = sha256(completionBytes);
+    if (typeof attempt.completion_sha256 === "string" && attempt.completion_sha256 !== completionSha) {
+      fail(`completed node ${id} completion digest mismatch`);
+    }
+    const parsedCompletion = JSON.parse(completionBytes);
+    const expectedCompletion = {
+      schema_version: 1,
+      node_id: id,
+      attempt_id: attempt.attempt_id,
+      status: attempt.final_status,
+      flow: attempt.flow,
+      completed_at: attempt.completed_at,
+      phases: attempt.phases,
+    };
+    if (canonical(parsedCompletion) !== canonical(expectedCompletion)) fail(`completed node ${id} completion does not match immutable attempt fields`);
+    const phaseDigests = [];
+    for (const [phase, record] of Object.entries(attempt.phases || {})) {
+      const phaseArtifact = resolveLedgerArtifact(ledgerDir, record.path, `completed node ${id} phase ${phase}`);
+      const phaseBytes = phaseArtifact.bytes;
+      const phaseSha = sha256(phaseBytes);
+      if (typeof record.bytes_sha256 === "string" && record.bytes_sha256 !== phaseSha) fail(`completed node ${id} phase ${phase} exact-byte digest mismatch`);
+      const parsedArtifact = JSON.parse(phaseBytes);
+      if (sha256(canonical(parsedArtifact)) !== record.sha256) fail(`completed node ${id} phase ${phase} canonical digest mismatch`);
+      phaseDigests.push({ phase, sha256: phaseSha });
+    }
+    phaseDigests.sort((a, b) => a.phase.localeCompare(b.phase));
+    result.push({ node_id: id, completion_path: completion.relative, completion_sha256: completionSha, phase_digests: phaseDigests });
+  }
+  result.sort((a, b) => a.node_id.localeCompare(b.node_id));
+  return result;
+}
+
+function buildManifest({ oldSha, newSha, oldObjectSha, newObjectSha, approvalSha, approvalObjectSha, completedEvidence }) {
+  return {
+    schema_version: 1,
+    old_plan_sha: oldSha,
+    new_plan_sha: newSha,
+    old_plan_object: oldObjectSha,
+    new_plan_object: newObjectSha,
+    approval_envelope_sha: approvalSha,
+    approval_object: approvalObjectSha,
+    completed_evidence: completedEvidence,
+  };
+}
+
+function buildAmendment({ envelope, approvalSha, manifestSha, trustBasis }) {
+  return {
+    schema_version: 1,
+    old_plan_sha: envelope.expected_old_plan_sha256,
+    new_plan_sha: envelope.approved_new_plan_sha256,
+    approver: envelope.approver,
+    approved_at: envelope.approved_at,
+    approval_context: envelope.approval_context,
+    approval_envelope_sha: approvalSha,
+    evidence_manifest_sha: manifestSha,
+    trust_basis: trustBasis,
+  };
+}
+
 function safeSegment(value, label) {
   if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) fail(`${label} must be a safe path segment`);
   return value;
@@ -54,20 +322,63 @@ function assertNoSymlinkAncestors(root, candidate) {
   }
 }
 
-function atomicWriteJson(filePath, data) {
-  const directory = path.dirname(filePath);
-  fs.mkdirSync(directory, { recursive: true });
-  const temporary = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${crypto.randomUUID()}.tmp`);
-  const descriptor = fs.openSync(temporary, "wx", 0o600);
+function isPosix() { return typeof process.getuid === "function"; }
+
+// Capture the identity of a real directory (not a symlink). On POSIX the
+// effective UID must own the directory and it must not be group/world writable.
+// The dev+ino pair records the inode identity so replacement by symlink, mount
+// rebinding, or directory recreation is detected on revalidation. A malicious
+// process running under the same UID remains outside the local approval trust
+// boundary; the global workspace guard only blocks coordinated repository
+// writers in the same worktree.
+function captureDirectoryIdentity(dirPath) {
+  const stats = fs.lstatSync(dirPath);
+  if (!stats.isDirectory() || stats.isSymbolicLink()) fail(`directory identity failed: ${dirPath} is not a real directory`);
+  if (isPosix() && (stats.mode & 0o022) !== 0) fail(`directory identity failed: ${dirPath} is group or world writable`);
+  return { path: dirPath, dev: stats.dev, ino: stats.ino, uid: isPosix() ? stats.uid : null, mode: stats.mode };
+}
+
+// Capture identities for every existing directory on the path from rootDir to
+// candidatePath (inclusive). Non-existent tail segments are skipped because
+// callers validate them separately (e.g., via O_EXCL or ENOENT handling).
+function captureDirectoryChain(rootDir, candidatePath) {
+  const resolvedRoot = fs.realpathSync(rootDir);
+  let resolvedCandidate;
   try {
-    fs.writeFileSync(descriptor, `${JSON.stringify(data, null, 2)}\n`);
-    fs.fsyncSync(descriptor);
-  } finally {
-    fs.closeSync(descriptor);
+    resolvedCandidate = fs.realpathSync(candidatePath);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    let current = candidatePath;
+    while (current !== resolvedRoot && !fs.existsSync(current)) {
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+    resolvedCandidate = fs.existsSync(current) && fs.lstatSync(current).isDirectory() ? fs.realpathSync(current) : resolvedRoot;
   }
-  fs.renameSync(temporary, filePath);
-  const directoryDescriptor = fs.openSync(directory, "r");
-  try { fs.fsyncSync(directoryDescriptor); } finally { fs.closeSync(directoryDescriptor); }
+  if (!isWithin(resolvedRoot, resolvedCandidate) && resolvedCandidate !== resolvedRoot) fail("candidate escapes repository root");
+  const chain = [captureDirectoryIdentity(resolvedRoot)];
+  const relative = path.relative(resolvedRoot, resolvedCandidate);
+  if (relative === "") return chain;
+  let current = resolvedRoot;
+  for (const segment of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    try { chain.push(captureDirectoryIdentity(current)); } catch (error) { if (error.code !== "ENOENT") throw error; }
+  }
+  return chain;
+}
+
+function revalidateDirectoryChain(chain) {
+  for (const entry of chain) {
+    const current = captureDirectoryIdentity(entry.path);
+    if (current.dev !== entry.dev || current.ino !== entry.ino || current.uid !== entry.uid || current.mode !== entry.mode) {
+      fail(`directory identity changed: ${entry.path}`);
+    }
+  }
+}
+
+function atomicWriteJson(filePath, data) {
+  atomicWriteBytes(filePath, Buffer.from(`${JSON.stringify(data, null, 2)}\n`), 0o600);
 }
 
 function validateEvidence(value, label) {
@@ -91,11 +402,13 @@ function validatePhaseData(artifact) {
   const data = artifact.phase_data;
   if (!isObject(data)) fail("phase_data must be an object");
   if (artifact.phase === "C") {
-    const keys = ["complexity", "selected_flow", "scope", "non_goals", "test_strategy", "planned_files", "trust_boundaries", "render_plan"];
+    const keys = ["complexity", "selected_flow", "scope", "non_goals", "test_strategy", "planned_files", "trust_boundaries", "security_triggers", "render_plan"];
     exactKeys(data, keys, "C phase_data");
     if (!["lite", "full"].includes(data.complexity) || !FLOWS.has(data.selected_flow)) fail("C complexity or selected_flow is invalid");
     if (typeof data.scope !== "string") fail("C scope must be a string");
     for (const key of ["non_goals", "test_strategy", "planned_files", "trust_boundaries", "render_plan"]) stringArray(data[key], `C ${key}`);
+    stringArray(data.security_triggers, "C security_triggers", { unique: true });
+    if (data.security_triggers.some((trigger) => !SECURITY_TRIGGERS.has(trigger))) fail("C security_triggers contains an unknown value");
   } else if (artifact.phase === "R") {
     exactKeys(data, ["red_evidence", "green_evidence", "implementation_notes", "patch_path"], "R phase_data");
     validateEvidence(data.red_evidence, "R red_evidence");
@@ -221,12 +534,18 @@ export class GoalDispatcher {
     this.workspaceGuardPath = path.join(this.ledgerBase, "workspace-writer.json");
     this.incomingDir = path.join(this.ledgerDir, "incoming");
   }
-  static validatePlan(planPath) {
-    if (!fs.existsSync(planPath)) fail(`plan not found: ${planPath}`);
-    const raw = fs.readFileSync(planPath);
-    let plan;
-    try { plan = JSON.parse(raw); } catch (error) { fail(`plan JSON parse error: ${error.message}`); }
-    if (!Array.isArray(plan.nodes) || !plan.nodes.length || !plan.approval?.approved_by || Number.isNaN(Date.parse(plan.approval?.approved_at))) fail("plan nodes or approval are invalid");
+  static validatePlanObject(plan, byteLength) {
+    if (byteLength > MIGRATION_BOUNDS.max_plan_bytes) fail("plan exceeds size bound");
+    validateJsonBounds(plan, MIGRATION_BOUNDS, "plan");
+    exactKeysOptional(plan, ["schema_version", "nodes", "approval"], ["kind", "source"], "plan");
+    if (plan.schema_version !== 1) fail("plan schema_version must be 1");
+    if (plan.kind !== undefined && (typeof plan.kind !== "string" || plan.kind.length > MIGRATION_BOUNDS.max_string_field)) fail("plan kind is invalid");
+    if (plan.source !== undefined && (typeof plan.source !== "string" || plan.source.length > MIGRATION_BOUNDS.max_string_field)) fail("plan source is invalid");
+    if (!Array.isArray(plan.nodes) || !plan.nodes.length) fail("plan nodes are invalid");
+    exactKeysOptional(plan.approval, ["approved_by", "approved_at"], ["notes"], "plan approval");
+    if (typeof plan.approval.approved_by !== "string" || !plan.approval.approved_by || plan.approval.approved_by.length > MIGRATION_BOUNDS.max_approver_length) fail("plan approval.approved_by is invalid");
+    validDate(plan.approval.approved_at, "plan approval.approved_at");
+    if (plan.approval.notes !== undefined && (typeof plan.approval.notes !== "string" || plan.approval.notes.length > MIGRATION_BOUNDS.max_approval_context_length)) fail("plan approval.notes is invalid");
     const required = ["id", "intent", "change_spec", "acceptance_criteria", "depends_on"];
     const ids = new Set();
     for (const node of plan.nodes) {
@@ -236,6 +555,7 @@ export class GoalDispatcher {
       ids.add(node.id);
       if (typeof node.intent !== "string" || typeof node.change_spec !== "string") fail(`plan node ${node.id} contract is invalid`);
       stringArray(node.acceptance_criteria, `plan node ${node.id} acceptance_criteria`); stringArray(node.depends_on, `plan node ${node.id} depends_on`);
+      if (node.id.length > MIGRATION_BOUNDS.max_id_length || node.intent.length > MIGRATION_BOUNDS.max_string_field || node.change_spec.length > MIGRATION_BOUNDS.max_string_field) fail(`node ${node.id} field is out of bounds`);
     }
     const incoming = new Map(plan.nodes.map((node) => [node.id, new Set(node.depends_on)]));
     for (const [id, dependencies] of incoming) for (const dependency of dependencies) {
@@ -248,11 +568,20 @@ export class GoalDispatcher {
       for (const [candidate, dependencies] of incoming) if (dependencies.delete(id) && dependencies.size === 0 && !visited.includes(candidate) && !ready.includes(candidate)) ready.push(candidate);
     }
     if (visited.length !== plan.nodes.length) fail("plan contains a cycle or has no root");
+    return plan;
+  }
+  static validatePlan(planPath) {
+    if (!fs.existsSync(planPath)) fail(`plan not found: ${planPath}`);
+    const raw = fs.readFileSync(planPath);
+    let plan;
+    try { plan = JSON.parse(raw); } catch (error) { fail(`plan JSON parse error: ${error.message}`); }
+    GoalDispatcher.validatePlanObject(plan, raw.length);
     return { plan, sha: sha256(raw) };
   }
   _withLock(operation) { const lock = new FileLock(this.lockPath); lock.acquire(); try { return operation(); } finally { lock.release(); } }
   _readLedger() { return JSON.parse(fs.readFileSync(this.ledgerPath, "utf8")); }
   _writeLedger(ledger) { ledger.updated_at = new Date().toISOString(); atomicWriteJson(this.ledgerPath, ledger); }
+  _migrationHook(/* name */) { /* no-op; tests may override for deterministic race injection */ }
   _assertNoDrift(ledger) { const current = sha256File(this.planPath); if (current !== ledger.frozen_plan_sha) fail(`plan drift detected: frozen ${ledger.frozen_plan_sha}, current ${current}`); }
   _guardIdentity(nodeId, attemptId) { return { run_id: this.runId, node_id: nodeId, attempt_id: attemptId, workspace: this.rootDir }; }
   _ensureWorkspaceGuard(nodeId, attemptId) {
@@ -304,7 +633,7 @@ export class GoalDispatcher {
       if (fs.existsSync(this.ledgerPath)) { const ledger = this._readLedger(); if (ledger.frozen_plan_sha !== sha) fail("plan drift detected on init"); return { created: false, ledger_path: this.ledgerPath }; }
       const nodes = Object.fromEntries(plan.nodes.map((node) => [node.id, { status: "pending", depends_on: [...node.depends_on], attempts: [] }]));
       const now = new Date().toISOString();
-      this._writeLedger({ schema_version: 1, run_id: this.runId, created_at: now, updated_at: now, frozen_plan_sha: sha, plan_path: path.relative(this.rootDir, this.planPath), nodes });
+      this._writeLedger({ schema_version: 1, run_id: this.runId, created_at: now, updated_at: now, frozen_plan_sha: sha, plan_path: path.relative(this.rootDir, this.planPath), nodes, amendments: [] });
       return { created: true, ledger_path: this.ledgerPath };
     });
   }
@@ -404,6 +733,171 @@ export class GoalDispatcher {
     const { plan } = GoalDispatcher.validatePlan(this.planPath);
     return emitEvalCandidate({ rootDir: this.rootDir, runId: this.runId, plan, ledger, nodeId, attemptId });
   }
+  migratePlan({ oldPlanPath, newPlanPath, approvalPath }) {
+    const oldFile = safeOpenRead(this.rootDir, oldPlanPath, "old plan");
+    const newFile = safeOpenRead(this.rootDir, newPlanPath, "new plan");
+    const approvalFile = safeOpenRead(this.rootDir, approvalPath, "approval envelope");
+    if (oldFile.bytes.length > MIGRATION_BOUNDS.max_plan_bytes) fail("old plan exceeds size bound");
+    if (newFile.bytes.length > MIGRATION_BOUNDS.max_plan_bytes) fail("new plan exceeds size bound");
+    if (approvalFile.bytes.length > MIGRATION_BOUNDS.max_approval_bytes) fail("approval envelope exceeds size bound");
+    if (newFile.realPath !== this.planPath) fail("newPlanPath must resolve to dispatcher.planPath");
+
+    const oldSha = sha256(oldFile.bytes);
+    const newSha = sha256(newFile.bytes);
+    const approvalSha = sha256(approvalFile.bytes);
+
+    let oldPlan;
+    let newPlan;
+    let envelope;
+    try { oldPlan = JSON.parse(oldFile.bytes); } catch (error) { fail(`old plan JSON parse error: ${error.message}`); }
+    try { newPlan = JSON.parse(newFile.bytes); } catch (error) { fail(`new plan JSON parse error: ${error.message}`); }
+    try { envelope = JSON.parse(approvalFile.bytes); } catch (error) { fail(`approval envelope JSON parse error: ${error.message}`); }
+
+    GoalDispatcher.validatePlanObject(oldPlan, oldFile.bytes.length);
+    GoalDispatcher.validatePlanObject(newPlan, newFile.bytes.length);
+    validateApprovalEnvelope(envelope);
+
+    if (envelope.run_id !== this.runId) fail("approval run_id does not match dispatcher run ID");
+    if (envelope.expected_old_plan_sha256 !== oldSha) fail("expected old plan hash does not match actual old plan bytes");
+    if (envelope.approved_new_plan_sha256 !== newSha) fail("approved new plan hash does not match actual new plan bytes");
+
+    const oldApprovedAt = Date.parse(oldPlan.approval.approved_at);
+    const approvedAt = Date.parse(envelope.approved_at);
+    const now = Date.now();
+    if (Number.isNaN(oldApprovedAt) || Number.isNaN(approvedAt)) fail("approval timestamps are invalid");
+    if (approvedAt <= oldApprovedAt) fail("approval approved_at must be later than the old plan approval timestamp");
+    if (approvedAt > now + CLOCK_SKEW_MS) fail("approval approved_at is too far in the future");
+
+    const approvalRel = path.relative(this.rootDir, approvalFile.realPath).split(path.sep).join("/");
+    const trustBasis = validateTrustBasis(approvalFile.stats, approvalRel);
+
+    if (oldPlan.nodes.length > MIGRATION_BOUNDS.max_nodes || newPlan.nodes.length > MIGRATION_BOUNDS.max_nodes) fail("plan has too many nodes");
+
+    return this._withLock(() => {
+      const ledger = this._readLedger();
+      const frontier = this._frontier(ledger);
+      if (frontier.inProgress.length) fail(`active attempt in progress: ${frontier.inProgress[0]}`);
+
+      const migrationId = this._guardIdentity("migration", `migration-${process.pid}-${crypto.randomUUID()}`);
+      let guardAcquired = false;
+      try {
+        this._ensureWorkspaceGuard(migrationId.node_id, migrationId.attempt_id);
+        guardAcquired = true;
+      } catch (error) {
+        this._releaseWorkspaceGuard(migrationId.node_id, migrationId.attempt_id);
+        throw error;
+      }
+      const ledgerChain = captureDirectoryChain(this.rootDir, this.ledgerDir);
+
+      try {
+        if (!ledger.amendments) ledger.amendments = [];
+
+        const replayIndex = ledger.amendments.findIndex((amendment) => amendment.old_plan_sha === oldSha && amendment.new_plan_sha === newSha && amendment.approval_envelope_sha === approvalSha);
+        if (replayIndex !== -1) {
+          this._verifyReplay({ ledger, amendment: ledger.amendments[replayIndex], oldSha, newSha, approvalSha, oldBytes: oldFile.bytes, newBytes: newFile.bytes, approvalBytes: approvalFile.bytes });
+          return { old_plan_sha: oldSha, new_plan_sha: newSha, amendment_index: replayIndex, replayed: true, manifest_sha: ledger.amendments[replayIndex].evidence_manifest_sha };
+        }
+        if (ledger.amendments.some((amendment) => amendment.old_plan_sha === oldSha && (amendment.new_plan_sha !== newSha || amendment.approval_envelope_sha !== approvalSha))) {
+          fail("conflicting migration replay");
+        }
+
+        if (ledger.frozen_plan_sha !== oldSha) fail("ledger frozen plan hash does not match old plan hash");
+        compareMigrationPlans(oldPlan, newPlan, ledger.nodes);
+        const completedEvidence = verifyCompletedEvidence(ledger, this.ledgerDir);
+
+        const oldSnapshot = writeImmutableObject(this.ledgerDir, path.join("migrations", "objects"), oldFile.bytes);
+        const newSnapshot = writeImmutableObject(this.ledgerDir, path.join("migrations", "objects"), newFile.bytes);
+        const approvalSnapshot = writeImmutableObject(this.ledgerDir, path.join("migrations", "objects"), approvalFile.bytes);
+
+        const manifest = buildManifest({
+          oldSha,
+          newSha,
+          oldObjectSha: oldSnapshot.sha,
+          newObjectSha: newSnapshot.sha,
+          approvalSha,
+          approvalObjectSha: approvalSnapshot.sha,
+          completedEvidence,
+        });
+        const manifestBytes = Buffer.from(canonical(manifest), "utf8");
+        const manifestSnapshot = writeImmutableObject(this.ledgerDir, path.join("migrations", "objects"), manifestBytes);
+
+        const amendment = buildAmendment({ envelope, approvalSha, manifestSha: manifestSnapshot.sha, trustBasis });
+        const amendmentBytes = Buffer.from(canonical(amendment), "utf8");
+        const amendmentSnapshot = writeImmutableObject(this.ledgerDir, path.join("migrations", "objects"), amendmentBytes);
+
+        this._migrationHook("before-activation-recheck");
+
+        revalidateDirectoryChain(ledgerChain);
+
+        if (!fs.existsSync(this.workspaceGuardPath)) fail("migration guard disappeared before activation");
+        const currentGuard = JSON.parse(fs.readFileSync(this.workspaceGuardPath, "utf8"));
+        if (canonical(currentGuard) !== canonical(migrationId)) fail("migration guard changed before activation");
+
+        const finalPlan = safeOpenRead(this.rootDir, path.relative(this.rootDir, this.planPath), "canonical plan");
+        if (sha256(finalPlan.bytes) !== newSha) fail("canonical plan changed after pre-lock read");
+
+        verifyCompletedEvidence(ledger, this.ledgerDir);
+
+        const recheckFrontier = this._frontier(ledger);
+        if (recheckFrontier.inProgress.length) fail(`active attempt in progress: ${recheckFrontier.inProgress[0]}`);
+
+        ledger.frozen_plan_sha = newSha;
+        ledger.amendments.push({ ...amendment, amendment_object_sha: amendmentSnapshot.sha });
+        this._writeLedger(ledger);
+        revalidateDirectoryChain(ledgerChain);
+
+        return { old_plan_sha: oldSha, new_plan_sha: newSha, amendment_index: ledger.amendments.length - 1, replayed: false, manifest_sha: manifestSnapshot.sha };
+      } finally {
+        if (guardAcquired) this._releaseWorkspaceGuard(migrationId.node_id, migrationId.attempt_id);
+      }
+    });
+  }
+  _verifyReplay({ ledger, amendment, oldSha, newSha, approvalSha, oldBytes, newBytes, approvalBytes }) {
+    const planFile = safeOpenRead(this.rootDir, path.relative(this.rootDir, this.planPath), "canonical plan");
+    if (sha256(planFile.bytes) !== newSha) fail("current canonical plan hash does not match approved new hash");
+    if (ledger.frozen_plan_sha !== newSha) fail("ledger frozen plan hash does not match approved new hash");
+
+    const expectObject = (expectedSha, expectedBytes, label) => {
+      const resolved = safeOpenRead(this.ledgerDir, path.join("migrations", "objects", expectedSha), label);
+      const actualSha = sha256(resolved.bytes);
+      if (actualSha !== expectedSha) fail(`${label} object digest mismatch`);
+      if (expectedBytes && Buffer.compare(resolved.bytes, expectedBytes) !== 0) fail(`${label} object bytes mismatch`);
+      return resolved.bytes;
+    };
+    expectObject(oldSha, oldBytes, "old plan");
+    expectObject(newSha, newBytes, "new plan");
+    expectObject(approvalSha, approvalBytes, "approval envelope");
+
+    const manifestBytes = expectObject(amendment.evidence_manifest_sha, null, "manifest");
+    const manifestObj = JSON.parse(manifestBytes);
+    const recomputedEvidence = verifyCompletedEvidence(ledger, this.ledgerDir);
+    const recomputedManifest = buildManifest({
+      oldSha,
+      newSha,
+      oldObjectSha: oldSha,
+      newObjectSha: newSha,
+      approvalSha,
+      approvalObjectSha: approvalSha,
+      completedEvidence: recomputedEvidence,
+    });
+    if (canonical(manifestObj) !== canonical(recomputedManifest)) fail("manifest does not match recomputed manifest");
+
+    const amendmentBytes = expectObject(amendment.amendment_object_sha, null, "amendment");
+    const amendmentObj = JSON.parse(amendmentBytes);
+    const derivedAmendment = buildAmendment({
+      envelope: {
+        expected_old_plan_sha256: amendment.old_plan_sha,
+        approved_new_plan_sha256: amendment.new_plan_sha,
+        approver: amendment.approver,
+        approved_at: amendment.approved_at,
+        approval_context: amendment.approval_context,
+      },
+      approvalSha: amendment.approval_envelope_sha,
+      manifestSha: amendment.evidence_manifest_sha,
+      trustBasis: amendment.trust_basis,
+    });
+    if (canonical(amendmentObj) !== canonical(derivedAmendment)) fail("amendment object does not match ledger entry");
+  }
 }
 
 function readIncomingArtifact(dispatcher, artifactPath) {
@@ -425,7 +919,8 @@ function main(argv) {
     else if (command === "record-phase") { const [nodeId, attemptId, phase, artifactPath] = argv.slice(3); if (!artifactPath) fail("usage: record-phase <node> <attempt> <phase> <artifact.json>"); print(dispatcher.recordPhase(nodeId, attemptId, phase, readIncomingArtifact(dispatcher, artifactPath))); }
     else if (command === "complete") { const [nodeId, attemptId, status] = argv.slice(3); if (!status) fail("usage: complete <node> <attempt> <passed|failed|escalated>"); print(dispatcher.complete(nodeId, attemptId, status)); }
     else if (command === "emit-candidate") { const [nodeId, attemptId] = argv.slice(3); if (!attemptId) fail("usage: emit-candidate <node> <attempt>"); print(dispatcher.emitCandidate(nodeId, attemptId)); }
-    else fail("usage: goal-dispatcher.mjs <init|status|resume|start|record-phase|complete|emit-candidate>");
+    else if (command === "migrate-plan") { const [oldPlan, newPlan, approval] = argv.slice(3); if (!approval) fail("usage: migrate-plan <old-plan.json> <new-plan.json> <approval.json>"); print(dispatcher.migratePlan({ oldPlanPath: oldPlan, newPlanPath: newPlan, approvalPath: approval })); }
+    else fail("usage: goal-dispatcher.mjs <init|status|resume|start|record-phase|complete|emit-candidate|migrate-plan>");
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) main(process.argv);
