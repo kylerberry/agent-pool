@@ -1,6 +1,6 @@
 # ADR-029: Agent Tool Surface — Pull Not Push, Scoped Per Phase
 
-**Status:** Accepted
+**Status:** Accepted — amended 2026-07-27
 **Relates to:** ADR-022 (three retrieval modes), craft-pool skill (phase bindings)
 
 ## Context
@@ -13,7 +13,7 @@ ADR-022 decided *which* retrieval modes exist (grep/LSP, code graph, LLM wiki) b
 
 1. **What its parent hands it** — the phase payload (see the per-phase contract below).
 2. **Tools installed in the worker container** — `graphify` (the pluggable code-graph tool from ADR-022) plus native grep/LSP, with a skill present in the repo instructing the agent how and when to use them.
-3. **Repo-resident knowledge** — the LLM wiki and any skills/docs that live in the working repo.
+3. **Target-repository knowledge** — instructions, skills, documentation indexes, ADRs, an existing wiki, or another controller-approved knowledge provider that is available in the working repository's configured tool surface. Agent Pool product documentation is not target-repository knowledge unless Agent Pool itself is the target.
 
 Rationale: the agent pays context budget only for what it actually needed. Pre-injection guesses at relevance and spends tokens on retrieval that may go unused — precisely the waste the phase-gate compaction discipline exists to avoid.
 
@@ -25,7 +25,7 @@ Rationale: the agent pays context budget only for what it actually needed. Pre-i
 | R / F — Render / Fix | read, **write**, grep, graphify |
 | A — Assess | read, grep, graphify — **no write** |
 | T — Tighten | read, grep, graphify, security tooling |
-| S — Sharpen | write **scoped to docs/wiki**, read, grep |
+| S — Sharpen | read, grep; write only to an owner-approved target-repository knowledge sink |
 
 A's write denial is the load-bearing one: an evaluator able to edit the code it judges is a gate that can rewrite its own exam. This is the same independence principle as builder/evaluator model diversity (craft-pool guarantee 3), enforced at the capability layer rather than the model layer.
 
@@ -33,8 +33,9 @@ A's write denial is the load-bearing one: an evaluator able to edit the code it 
 - The worker image installs the exact Graphify version pinned by `packages/worker-harness/config/runtime-versions.json`; its index is built per workspace and refreshed when the workspace is re-derived against a new head.
 - Applicable Pi phase agents explicitly select the project `graphify` skill and receive `bash`; `inheritSkills: false` without an explicit skill is invalid for C, R/F, A, or T.
 - Worker startup preflights the Graphify executable, selected skill, and phase tool grants before dispatch.
-- The wiki needs a **generated directory index** the skill directs the agent to consult first—an agent only reads a page it knows exists, which is what ADR-022's "link/index navigation, not semantic search" requires in practice.
-- S's docs-only write restriction must be enforced by the controller or a path-scoped Pi tool; prompt wording alone is not a security boundary.
+- When target-repository prose knowledge exists, it needs a **generated or maintained directory index** the skill directs the agent to consult first—an agent only reads a page it knows exists, which is what ADR-022's "link/index navigation, not semantic search" requires in practice. Its absence is non-blocking; normal repository instructions and documentation remain available.
+- S's write restriction must be enforced by the controller or a path-scoped Pi tool. The permitted path is the target repository's owner-approved knowledge sink; absent one, S emits a structured knowledge proposal and does not create a sink automatically. Prompt wording alone is not a security boundary.
+- Repository-declared MCP or similar provider configuration is untrusted input. v1 does not auto-launch it. Any future provider requires controller onboarding approval, a pinned server/image and version, explicit read-only tool allowlists, scoped secrets and egress, phase grants, and provider/tool/version provenance. A write-capable external provider is separately approved.
 
 ## Consequences
 

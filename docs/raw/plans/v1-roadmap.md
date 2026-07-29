@@ -14,3 +14,4 @@
 - Define formal RPO/RTO, automated alert routing, metrics dashboards, replicated state, and recurring fault-injection/restore drills.
 - Replace provisional `passed` semantics with explicit `attempt_passed`, `integrating`, and `verified` lifecycle states; fence integration by head SHA and route manual fixes through normal grading unless explicitly force-passed.
 - Add graceful phase-boundary budget stop checks and, where supported, provider-side hard spend/token limits.
+- Add controller-approved target-repository external knowledge providers. Repository-declared MCP or similar configuration must remain untrusted and never auto-launch: onboarding must pin the server/image and version, allowlist read-only tools, scope secrets and egress, grant capabilities per phase, and record provider/tool/version provenance. Evaluate a separately approved write-capable external knowledge sink only after the read-only provider path is proven.

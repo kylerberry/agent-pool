@@ -51,7 +51,9 @@
         "Decomposition can request breadth-oriented dependency context and receive index revision metadata.",
         "Grep/LSP remain direct precise lookup tools and no vector store is introduced.",
         "Wiki discovery follows index links and retains raw-source traceability.",
-        "Controller-owned predicted-touch metadata identifies its versioned code-graph snapshot and records likely graph units and shared surfaces with provenance sufficient to freeze the advisory metadata with Gate 1; workers neither author nor receive DAG topology."
+        "Controller-owned predicted-touch metadata identifies its versioned code-graph snapshot and records likely graph units and shared surfaces with provenance sufficient to freeze the advisory metadata with Gate 1; workers neither author nor receive DAG topology.",
+        "Target-repository documentation discovery follows available instruction and documentation indexes with raw-source traceability; an absent wiki or other knowledge store is non-blocking and reported as unavailable.",
+        "Graph/index data is target-repository scoped, keyed by repository identity, head, and tool/index version, and retained only as bounded, regenerable controller cache data rather than Agent Pool product documentation or a shared sidecar corpus."
       ],
       "depends_on": ["domain-scaffolding"]
     },
@@ -133,7 +135,8 @@
         "Original criteria and origin from either decomposition or direct-task submission reach C and A unchanged; C never re-authors them.",
         "Red-state evidence, green evidence, suite path/hash, commit, image, and tool outputs are attested and persisted.",
         "A is read-only, runs on a different equal-or-higher model, and audits tests and code against the original criteria.",
-        "Failure artifacts survive compaction and are supplied to retries while transcripts remain indexed escape hatches."
+        "Failure artifacts survive compaction and are supplied to retries while transcripts remain indexed escape hatches.",
+        "S persists durable learnings only to an owner-approved target-repository knowledge sink; when no sink exists, it emits a structured proposal and does not create a documentation convention automatically."
       ],
       "depends_on": ["isolated-pool-worker-execution"]
     },

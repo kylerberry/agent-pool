@@ -3,7 +3,7 @@ title: ADR-022: Codebase Knowledge — Three Retrieval Modes, Not One RAG Layer
 type: source
 tags: [source, ingest]
 created: 2026-07-22
-updated: 2026-07-22
+updated: 2026-07-27
 sources:
   - docs/raw/adr/orchestrator/ADR-022-codebase-knowledge-three-retrieval-modes.md
 ---
@@ -16,7 +16,11 @@ This ADR records `ADR-022: Codebase Knowledge — Three Retrieval Modes, Not One
 
 ## Key decisions / claims
 
-Three retrieval modes, each matched to a knowledge shape: 1. **Grep / LSP — precise, real-time code lookup (builder / R/F).** When the builder hits an unforeseen problem and needs surrounding code, it needs exact current lookups ("where is this defined, what's the signature, what calls it"). That is grep/LSP/AST territory — exact, no staleness. Semantic RAG is the wrong tool when you know literally what you're looking for. RAG stays out of the R/F path. 2. **Code graph — structure and dependency edges (decomposer; deferred regression_risk).** AST / call-graph / dependency-graph navigation answers "what depends on what" precisely. Load-bearing in two places: the decomposer needs it for hidden dependency edges between units sharing a module (ADR-018/019), and the deferred tier-2 `regression_risk` dimension needs blast-radius ("what imports this"). **Implemented via a pluggable existing too
+ADR-022 retains three retrieval modes: direct grep/LSP for precise code lookup, a target-workspace code graph for structural/dependency context, and target-repository prose knowledge when present. Code-graph output is bounded, regenerable controller cache data keyed by target repository, head, and tool/index version; it is not a shared memory corpus.
+
+Target-repository instructions, ordinary docs, ADRs, indexes, and an existing wiki are the prose sources. A wiki is optional: absence falls back to those sources plus grep/LSP and the graph. S may write only to an owner-approved target-repository knowledge sink; otherwise it returns a proposal. Agent Pool's own `docs/wiki/` is never a knowledge store for another target repository, and `.agent-pool/` remains reserved for launcher context.
+
+Read-only external MCP knowledge providers are roadmap work. Repository configuration cannot auto-launch them; controller approval, pinning, least privilege, and provenance are required.
 
 ## Related pages
 

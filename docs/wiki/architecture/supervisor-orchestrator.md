@@ -3,7 +3,7 @@ title: Supervisor Orchestrator
 type: architecture
 tags: [orchestrator, dag, agents]
 created: 2026-07-22
-updated: 2026-07-22
+updated: 2026-07-27
 sources:
   - docs/raw/specs/orchestrator-spec.md
   - docs/raw/adr/orchestrator/
@@ -20,6 +20,7 @@ The supervisor orchestrator accepts a free-form feature spec, decomposes it into
 - Decomposition runs through a separate orchestrator-side harness/queue and produces ADR-018 output for deterministic validation and Gate 1; it is not a Pool Worker capability.
 - The pool receives flat, atomic queue jobs and does not need DAG awareness.
 - Each node launches a fresh Pool Worker Pi session with the explicitly loaded `packages/worker-harness/`; it conducts CRAFTS through sequential `pi-subagents` phase calls.
+- Codebase knowledge is target-repository scoped: bounded controller caches hold regenerable graph data, while prose knowledge is read from the target repository's own docs or approved provider. Missing wiki/docs are non-blocking; Agent Pool product docs are not exposed as knowledge for another target.
 - v1 delivery uses stable attempt IDs, idempotent results, CAS transitions, leases, and startup reconciliation.
 - Failed nodes freeze only their dependent branch; unrelated ready branches continue.
 
