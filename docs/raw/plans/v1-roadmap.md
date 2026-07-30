@@ -8,6 +8,8 @@
 
 ## Fast-follow hardening
 
+- **P0 — target-repository codebase-knowledge hardening:** extend the ADR-032 baseline with content-level secret scanning/redaction for target-derived artifacts; OS-enforced default-deny egress for Graphify and related indexing processes; OS read-only mount/sandbox isolation for target workspaces; and reproducible worker-image build-and-smoke attestation for pinned Graphify and runtime capabilities. These controls augment, rather than revise, ADR-032's accepted v1 baseline.
+
 - Promote local eval telemetry from run-scoped JSONL/manifests to a dual-layer persistence model: retain the files as an inspectable crash-recovery/write-ahead spool, transactionally ingest normalized events and attempt manifests into the orchestrator-owned SQLite audit store, and continue emitting sanitized portable eval-candidate JSON. Add unique event identities, idempotent ingestion, schema migrations, integrity checks, retention/backup policy, and explicit telemetry-only-to-formal-eval promotion state. Keep `.pi/goal-runs/` as disposable local runtime state rather than the durable source of truth; use ADR-033's WAL-safe backup process for SQLite.
 - Replace reconciliation-based cross-store delivery with transactional outbox/inbox and stronger fencing if operational evidence warrants it.
 - Add rootless/read-only/seccomp sandboxing, default-deny egress, GitHub App short-lived tokens, image signatures, and SBOM verification.

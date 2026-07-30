@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -13,6 +13,11 @@ const script = join(packageRoot, "scripts/preflight.mjs");
 function workspaceWith(marker) {
   const workspace = mkdtempSync(join(tmpdir(), "agent-pool-worker-"));
   mkdirSync(join(workspace, ".agent-pool"));
+  mkdirSync(join(workspace, ".pi", "skills", "graphify"), { recursive: true });
+  writeFileSync(
+    join(workspace, ".pi/skills/graphify/SKILL.md"),
+    `# graphify\ngraphify 0.9.25\n\`\`\`bash\npip install graphifyy==0.9.25\n\`\`\`\n`,
+  );
   if (marker !== undefined) {
     writeFileSync(join(workspace, ".agent-pool/execution-context.json"), JSON.stringify(marker));
   }
@@ -139,4 +144,78 @@ test("bundled execution schema matches the canonical source", () => {
   const canonical = readFileSync(join(repoRoot, "docs/raw/specs/schemas/pool-worker-execution-context.schema.json"), "utf8");
   const bundled = readFileSync(join(packageRoot, "contracts/pool-worker-execution-context.schema.json"), "utf8");
   assert.equal(bundled, canonical);
+});
+
+function fakeBinDir(overrides = {}) {
+  const runtime = JSON.parse(readFileSync(join(packageRoot, "config/runtime-versions.json"), "utf8"));
+  const dir = mkdtempSync(join(tmpdir(), "agent-pool-fake-bin-"));
+
+  const allowedModels = runtime.allowedModels.map((m) => m.split("/").join(" "));
+  const piLines = ["provider      model                context  max-out  thinking  images", ...allowedModels];
+  writeFileSync(join(dir, "pi"), `#!/bin/sh\necho '${piLines.join("\n")}'\n`);
+
+  const graphifyVersion = overrides.graphifyVersion ?? runtime.graphify;
+  const graphifyExit = overrides.graphifyExit ?? 0;
+  writeFileSync(
+    join(dir, "graphify"),
+    `#!/bin/sh\nif [ "$1" = "--version" ]; then\n  echo "graphify ${graphifyVersion}"\n  exit ${graphifyExit}\nfi\necho "graphify ${graphifyVersion}"\n`,
+  );
+
+  for (const name of ["pi", "graphify"]) {
+    chmodSync(join(dir, name), 0o755);
+  }
+  return dir;
+}
+
+function runExternal(workspace, fakeBin, actor = "pool-worker") {
+  const envPath = `${fakeBin}${process.env.PATH ? `:${process.env.PATH}` : ""}`;
+  return spawnSync(process.execPath, [script], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      AGENT_POOL_ACTOR: actor,
+      AGENT_POOL_NODE_ID: "node-1",
+      AGENT_POOL_ATTEMPT_ID: "attempt-1",
+      AGENT_POOL_TARGET_REPO: "owner/repo",
+      AGENT_POOL_TARGET_BRANCH: "main",
+      AGENT_POOL_WORKSPACE: workspace,
+      PATH: envPath,
+    },
+  });
+}
+
+test("preflight accepts exact pinned Graphify version", () => {
+  const workspace = workspaceWith(validMarker());
+  const fakeBin = fakeBinDir();
+  writeFileSync(join(fakeBin, "graphify"), `#!/bin/sh\necho "graphify 0.9.25"\n`, { mode: 0o755 });
+  const result = runExternal(workspace, fakeBin);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test("preflight rejects substring version like 0.9.250", () => {
+  const workspace = workspaceWith(validMarker());
+  const fakeBin = fakeBinDir({ graphifyVersion: "0.9.250" });
+  writeFileSync(join(fakeBin, "graphify"), `#!/bin/sh\necho "graphify 0.9.250"\n`, { mode: 0o755 });
+  const result = runExternal(workspace, fakeBin);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /version mismatch/);
+});
+
+test("preflight rejects unavailable Graphify executable", () => {
+  const workspace = workspaceWith(validMarker());
+  const fakeBin = fakeBinDir();
+  writeFileSync(join(fakeBin, "graphify"), `#!/bin/sh\nexit 1\n`, { mode: 0o755 });
+  const result = runExternal(workspace, fakeBin);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Graphify/);
+});
+
+test("preflight rejects Graphify skill provenance mismatch", () => {
+  const workspace = workspaceWith(validMarker());
+  writeFileSync(join(workspace, ".pi/skills/graphify/SKILL.md"), "graphify 0.9.24\n", { mode: 0o644 });
+  const fakeBin = fakeBinDir();
+  writeFileSync(join(fakeBin, "graphify"), `#!/bin/sh\necho "graphify 0.9.25"\n`, { mode: 0o755 });
+  const result = runExternal(workspace, fakeBin);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /skill provenance/);
 });

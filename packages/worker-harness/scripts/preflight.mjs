@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
@@ -142,14 +142,36 @@ if (!skipExternal) {
   const missingModels = allowed.filter((model) => !live.has(model));
   if (missingModels.length) fail(`configured models unavailable: ${missingModels.join(", ")}`);
 
-  const graphify = spawnSync("graphify", ["--version"], { encoding: "utf8" });
-  if (graphify.status !== 0 || !graphify.stdout.includes(runtime.graphify)) fail("pinned Graphify executable is unavailable");
+  const graphifyPath = (() => {
+    const which = spawnSync("which", ["graphify"], { encoding: "utf8" });
+    if (which.status !== 0) fail("Graphify executable not found in PATH");
+    const resolved = which.stdout.trim().split("\n")[0];
+    if (!resolved || !isAbsolute(resolved)) fail("Graphify path is not absolute");
+    return resolved;
+  })();
+  const graphify = spawnSync(graphifyPath, ["--version"], {
+    encoding: "utf8",
+    env: { LANG: "C", LC_ALL: "C", PATH: process.env.PATH },
+  });
+  if (graphify.status !== 0) fail("Graphify executable failed");
+  const versionMatch = /^graphify\s+v?(\d+\.\d+\.\d+)$/m.exec(graphify.stdout.trim());
+  if (!versionMatch || versionMatch[1] !== runtime.graphify) {
+    fail(`pinned Graphify version mismatch: expected ${runtime.graphify}, got ${versionMatch?.[1] ?? "unknown"}`);
+  }
   const skillCandidates = [
     process.env.AGENT_POOL_GRAPHIFY_SKILL_PATH,
     join(workspace, ".pi/skills/graphify/SKILL.md"),
     join(homedir(), ".pi/agent/skills/graphify/SKILL.md"),
   ].filter(Boolean);
-  if (!skillCandidates.some(existsSync)) fail("Graphify skill is unavailable");
+  const skillPath = skillCandidates.find(existsSync);
+  if (!skillPath) fail("Graphify skill is unavailable");
+  const skillText = readFileSync(skillPath, "utf8");
+  if (!skillText.includes(`graphify ${runtime.graphify}`)) {
+    fail(`Graphify skill provenance does not match pinned version ${runtime.graphify}`);
+  }
+  if (!skillText.includes("graphifyy")) {
+    fail("Graphify skill does not reference the graphifyy Python distribution");
+  }
 }
 
 console.log(`worker-harness preflight passed: node=${marker.node_id} attempt=${marker.attempt_id}`);

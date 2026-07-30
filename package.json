@@ -1,0 +1,20 @@
+{
+  "name": "agent-pool",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test test/codebase-knowledge/*.test.ts",
+    "test:worker": "cd packages/worker-harness && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

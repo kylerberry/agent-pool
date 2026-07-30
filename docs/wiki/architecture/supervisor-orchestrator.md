@@ -35,7 +35,7 @@ The supervisor orchestrator accepts a free-form feature spec, decomposes it into
 
 - Domain discovery and human approval precede feature implementation.
 - Workers pin Pi, Node, Graphify, and extension versions and preflight capabilities.
-- Practical worker isolation and single-host recovery controls are required for v1; stronger enterprise hardening is tracked as fast-follow work.
+- Practical worker isolation and single-host recovery controls are required for v1. P0 fast-follow hardening adds content-level secret scanning/redaction, OS default-deny egress, OS read-only mount/sandbox isolation, and reproducible worker-image smoke attestation for pinned Graphify/runtime capabilities.
 - Pi model selection is restricted to five exact OpenAI/Moonshot models. Bootstrap role mappings are committed and will be replaced by eval-derived routing.
 
 ## Related
