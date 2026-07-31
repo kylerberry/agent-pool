@@ -1,0 +1,586 @@
+▶ approved-models registry
+  ✔ contains exactly the five approved provider-qualified models (0.680833ms)
+  ✔ matches capability ranks 1 through 5 in canonical order (0.092ms)
+  ✔ rejects unqualified IDs (0.12525ms)
+  ✔ rejects aliases and casing variants (0.059417ms)
+  ✔ rejects unknown providers and models (0.066792ms)
+  ✔ rejects non-string and empty inputs (0.066417ms)
+  ✔ parses and decomposes approved IDs (0.061791ms)
+  ✔ compares capability monotonically (0.08375ms)
+  ✔ requires unique ranks and complete coverage (0.080375ms)
+  ✔ rejects extra models outside the tuple (0.086ms)
+  ✖ runtime-freezes the registry and canonical ordering (3.794292ms)
+✖ approved-models registry (5.982333ms)
+▶ architecture boundaries
+  ✔ worker bootstrap fixture has no decomposition row (1.245625ms)
+  ✔ orchestrator bootstrap fixture owns decomposition only (1.231375ms)
+  ✔ model-routing source has no craft-pool or DAG-control dependency (13.068875ms)
+  ✔ bootstrap loaders do not import packages/worker-harness (0.237541ms)
+  ✔ domain index exports only narrow interfaces (0.097167ms)
+  ✖ source-bound worker loader reads only the worker-harness fixture (0.484959ms)
+  ✖ source-bound orchestrator loader reads only the orchestrator-harness fixture (0.122667ms)
+✖ architecture boundaries (17.311292ms)
+▶ bootstrap policy loaders
+  ✔ loads the worker bootstrap with version, status, actor, capability ranks, roles, and rules (0.953875ms)
+  ✔ requires all worker roles and rejects decomposition in worker bootstrap (0.13975ms)
+  ✔ loads the orchestrator bootstrap with actor and decomposition only (0.171459ms)
+  ✔ rejects unknown fields in worker bootstrap (0.224125ms)
+  ✔ rejects unknown fields in orchestrator bootstrap (0.097042ms)
+  ✔ rejects worker bootstrap containing decomposition row (0.114042ms)
+  ✔ rejects orchestrator bootstrap containing worker roles (0.083333ms)
+  ✔ rejects malformed version and status in worker bootstrap (0.085375ms)
+  ✔ rejects non-unique capability ranks in worker bootstrap (0.115541ms)
+  ✖ rejects malformed capability rank values (0.38ms)
+  ✔ rejects primary or fallback models outside the approved registry (0.08825ms)
+  ✔ requires capability rank for every approved model (0.067583ms)
+  ✔ requires fallback lists to contain only approved models (0.073708ms)
+  ✖ rejects role configs with unknown fields (0.086833ms)
+  ✖ rejects duplicate candidates in a role config (0.090292ms)
+  ✖ rejects bootstrap policies that disable builder/evaluator diversity (0.074375ms)
+  ✖ rejects bootstrap policies that omit builder/evaluator diversity (0.081125ms)
+  ✖ rejects bootstrap policies that disable evaluator capability invariant (0.061834ms)
+  ✖ rejects bootstrap policies that omit evaluator capability invariant (0.063167ms)
+  ✔ cross-checks bootstrap fixtures against the canonical approved scope (0.07575ms)
+  ✖ exposes trusted source-bound worker and orchestrator bootstrap loaders (0.257208ms)
+  ✖ source-bound worker loader reads only the worker-harness fixture (0.060458ms)
+  ✖ source-bound orchestrator loader reads only the orchestrator-harness fixture (0.050709ms)
+✖ bootstrap policy loaders (4.321458ms)
+▶ eval-derived policy publications
+  ✔ accepts a valid worker eval-derived publication (0.256292ms)
+  ✔ accepts a valid orchestrator eval-derived publication (0.055833ms)
+  ✖ accepts a builder-only worker eval-derived publication (0.056167ms)
+  ✖ rejects an eval-derived publication with a non-eval-derived status (0.082792ms)
+  ✔ rejects an unapproved model in a publication (0.057417ms)
+  ✔ rejects aliases and unqualified IDs in publications (0.050916ms)
+  ✔ rejects unknown fields in publications (0.054167ms)
+  ✖ rejects unknown rules in worker eval-derived publications (0.094291ms)
+  ✖ rejects disabled builder/evaluator diversity in eval-derived publications (0.073083ms)
+  ✖ rejects disabled evaluator capability invariant in eval-derived publications (0.0665ms)
+  ✔ rejects malformed version and status (0.084583ms)
+  ✖ rejects duplicate candidates in a publication role config (0.068ms)
+  ✖ rejects unknown fields in a publication role config (0.07325ms)
+  ✖ rejects missing required worker roles no longer as a blanket requirement (0.056875ms)
+  ✔ rejects worker publications containing decomposition (0.061208ms)
+  ✔ rejects orchestrator publications containing worker roles (0.052083ms)
+  ✔ rejects publications whose actor disagrees with their role set (0.062708ms)
+  ✔ rejects non-unique capability ranks in worker publications (0.051583ms)
+  ✖ rejects malformed capability ranks in worker publications (0.067625ms)
+  ✔ rejects extra models outside the canonical registry (0.041708ms)
+  ✔ rejects worker publications missing source metadata (0.045458ms)
+✖ eval-derived policy publications (1.705166ms)
+▶ availability snapshot validation
+  ✔ accepts a clean snapshot of approved models (0.571209ms)
+  ✔ rejects a malformed container (0.238834ms)
+  ✔ rejects unqualified IDs in availability entries (0.079708ms)
+  ✔ rejects aliases and unknown provider/model IDs (0.065417ms)
+  ✔ rejects duplicate entries (0.071791ms)
+  ✔ rejects entries with inconsistent provider/model fields (0.075833ms)
+  ✔ treats absent models as unavailable but does not fail the snapshot (0.055208ms)
+✔ availability snapshot validation (2.275208ms)
+▶ role routing
+  ✔ selects the configured primary when available (0.239583ms)
+  ✔ selects the first available ordered fallback when primary is absent (0.074833ms)
+  ✔ fails closed when no configured candidate is available (0.079542ms)
+  ✔ fails closed for unavailable explicit model without consulting fallback (0.069583ms)
+  ✔ accepts an available explicit approved model (0.0585ms)
+  ✔ rejects an explicit unapproved model (0.040417ms)
+  ✔ records rationale and fallback behavior (0.074791ms)
+✔ role routing (0.778625ms)
+▶ builder/evaluator pair routing
+  ✔ selects distinct builder and evaluator models (0.204625ms)
+  ✔ ensures evaluator capability is never lower than builder capability (0.057833ms)
+  ✔ fails closed when no valid pair exists (0.032458ms)
+  ✔ respects explicit builder and evaluator constraints (0.053541ms)
+  ✔ fails closed when explicit pair violates the capability invariant (0.034833ms)
+  ✖ enforces builder/evaluator invariants unconditionally even if policy rules disable them (0.4105ms)
+  ✔ exhaustively validates builder/evaluator pairs over availability subsets (0.226042ms)
+✖ builder/evaluator pair routing (1.123667ms)
+▶ decision evidence projection and immutability
+  ✔ projects only allowlisted decision fields (0.426542ms)
+  ✔ projects only allowlisted failure fields (0.06375ms)
+  ✔ keeps credentials and provider payloads out of decisions and failures (0.068583ms)
+  ✔ deeply freezes decision evidence against source mutation (0.145125ms)
+  ✔ serializes consistently after repeated mutation attempts (0.053541ms)
+  ✔ does not serialize failures as successful decisions (0.038542ms)
+  ✖ projects only allowlisted, credential-free failure fields (0.253166ms)
+✖ decision evidence projection and immutability (1.129542ms)
+▶ provider adapter registry
+  ✔ dispatches to the correct provider adapter from the selected model ID (0.506792ms)
+  ✔ rejects unregistered providers (0.081ms)
+  ✔ normalizes request and response shapes (0.075167ms)
+  ✔ does not allow adapters to alter routing policy (0.057208ms)
+  ✖ uses allowlist-coded adapter errors and strips raw exception text (0.60625ms)
+  ✖ does not echo arbitrary adapter exception text (0.147291ms)
+  ✔ returns only allowlisted adapter error fields (0.397625ms)
+✖ provider adapter registry (3.216167ms)
+ℹ tests 97
+ℹ suites 9
+ℹ pass 71
+ℹ fail 26
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 143.47375
+
+✖ failing tests:
+
+test at test/model-routing-and-evaluation/approved-models.test.ts:102:3
+✖ runtime-freezes the registry and canonical ordering (3.794292ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/approved-models.test.ts:103:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/architecture-boundaries.test.ts:68:3
+✖ source-bound worker loader reads only the worker-harness fixture (0.484959ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/architecture-boundaries.test.ts:70:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/architecture-boundaries.test.ts:74:3
+✖ source-bound orchestrator loader reads only the orchestrator-harness fixture (0.122667ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/architecture-boundaries.test.ts:76:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:126:3
+✖ rejects malformed capability rank values (0.38ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:128:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /rank/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:174:3
+✖ rejects role configs with unknown fields (0.086833ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:182:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /unknown/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:185:3
+✖ rejects duplicate candidates in a role config (0.090292ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:193:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /duplicate/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:205:3
+✖ rejects bootstrap policies that disable builder/evaluator diversity (0.074375ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:210:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /builder.*evaluator|diversity/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:213:3
+✖ rejects bootstrap policies that omit builder/evaluator diversity (0.081125ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:216:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /builder.*evaluator|diversity/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:219:3
+✖ rejects bootstrap policies that disable evaluator capability invariant (0.061834ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:224:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /evaluator|capability/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:227:3
+✖ rejects bootstrap policies that omit evaluator capability invariant (0.063167ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:230:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /evaluator|capability/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:248:3
+✖ exposes trusted source-bound worker and orchestrator bootstrap loaders (0.257208ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'undefined'
+  - 'function'
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:249:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'undefined',
+    expected: 'function',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:255:3
+✖ source-bound worker loader reads only the worker-harness fixture (0.060458ms)
+  TypeError: bp.loadWorkerBootstrapPolicyFromSource is not a function
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:256:27)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7)
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:263:3
+✖ source-bound orchestrator loader reads only the orchestrator-harness fixture (0.050709ms)
+  TypeError: bp.loadOrchestratorBootstrapPolicyFromSource is not a function
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:264:27)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7)
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:335:3
+✖ accepts a builder-only worker eval-derived publication (0.056167ms)
+  Error: Missing required worker role node_conductor
+      at loadWorkerEvalPublication (file:///Users/kylerberry/Projects/agent-pool/src/domains/model-routing-and-evaluation/bootstrap-policy.ts:385:13)
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:343:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7)
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:348:3
+✖ rejects an eval-derived publication with a non-eval-derived status (0.082792ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:350:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /status/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:380:3
+✖ rejects unknown rules in worker eval-derived publications (0.094291ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:385:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /unknown|rule/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:388:3
+✖ rejects disabled builder/evaluator diversity in eval-derived publications (0.073083ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:393:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /builder.*evaluator|diversity/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:396:3
+✖ rejects disabled evaluator capability invariant in eval-derived publications (0.0665ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:401:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /evaluator|capability/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:409:3
+✖ rejects duplicate candidates in a publication role config (0.068ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:417:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /duplicate/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:420:3
+✖ rejects unknown fields in a publication role config (0.07325ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:428:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /unknown/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:431:3
+✖ rejects missing required worker roles no longer as a blanket requirement (0.056875ms)
+  Error: Missing required worker role building
+      at loadWorkerEvalPublication (file:///Users/kylerberry/Projects/agent-pool/src/domains/model-routing-and-evaluation/bootstrap-policy.ts:385:13)
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:437:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7)
+
+test at test/model-routing-and-evaluation/bootstrap-policy.test.ts:479:3
+✖ rejects malformed capability ranks in worker publications (0.067625ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/bootstrap-policy.test.ts:481:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /rank/i,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/model-router.test.ts:211:3
+✖ enforces builder/evaluator invariants unconditionally even if policy rules disable them (0.4105ms)
+  AssertionError [ERR_ASSERTION]: Expected "actual" to be strictly unequal to:
+  
+  'openai-codex/gpt-5.6-luna'
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/model-router.test.ts:233:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'openai-codex/gpt-5.6-luna',
+    expected: 'openai-codex/gpt-5.6-luna',
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/model-router.test.ts:360:3
+✖ projects only allowlisted, credential-free failure fields (0.253166ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'secret-role-password=hunter2'
+  - undefined
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/model-router.test.ts:368:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'secret-role-password=hunter2',
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/provider-adapters.test.ts:61:3
+✖ uses allowlist-coded adapter errors and strips raw exception text (0.60625ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  95 !== -1
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/provider-adapters.test.ts:79:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 95,
+    expected: -1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/model-routing-and-evaluation/provider-adapters.test.ts:83:3
+✖ does not echo arbitrary adapter exception text (0.147291ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  86 !== -1
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/test/model-routing-and-evaluation/provider-adapters.test.ts:96:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 86,
+    expected: -1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

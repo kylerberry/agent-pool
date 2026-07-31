@@ -1,0 +1,34 @@
+
+> agent-pool@0.1.0 test:worker
+> cd packages/worker-harness && npm test
+
+
+> agent-pool-worker-harness@0.1.0 test
+> node --test ./test/*.test.mjs
+
+✔ accepts a valid pool-worker launch context (37.7155ms)
+✔ rejects missing execution context (26.3875ms)
+✔ rejects Repository Builder environment (26.878542ms)
+✔ rejects malformed or expanded marker (27.502959ms)
+✔ rejects marker identity that differs from launcher expectations (29.030958ms)
+✔ rejects repository or branch that differs from launcher expectations (33.556416ms)
+✔ rejects non-RFC-3339 timestamps (27.872167ms)
+✔ rejects impossible calendar dates (27.971333ms)
+✔ accepts canonical UTC timestamps with fractional seconds (27.357917ms)
+✔ rejects stale markers (25.372417ms)
+✔ worker routing excludes orchestrator-side decomposition (0.184542ms)
+✔ runtime resources are not locally auto-discovered (1.174042ms)
+✔ bundled phase schema matches the canonical source (0.55625ms)
+✔ bundled execution schema matches the canonical source (0.359667ms)
+✔ preflight accepts exact pinned Graphify version (275.875958ms)
+✔ preflight rejects substring version like 0.9.250 (251.95575ms)
+✔ preflight rejects unavailable Graphify executable (249.390292ms)
+✔ preflight rejects Graphify skill provenance mismatch (250.14375ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1368.820334
