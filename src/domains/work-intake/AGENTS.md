@@ -24,11 +24,19 @@
 
 ## Public interfaces
 
-- `POST /specs` — submit a new spec or idempotent retry.
-- `GET /specs/{id}` — retrieve a spec and its current status.
-- Approval/amendment routes — Gate 1 actions producing an approved work definition.
-- `POST /tasks` — submit a direct task that becomes a single-node spec.
-- Emits **approved work definition** events to Orchestration.
+- `POST /specs` — submit a new spec or idempotent retry. *(not yet implemented)*
+- `GET /specs/{id}` — retrieve a spec and its current status. *(not yet implemented)*
+- Approval/amendment routes — Gate 1 actions producing an approved work definition. *(not yet implemented)*
+- `POST /tasks` — submit one direct unit or a hand-authored flat DAG. **Implemented**; exported from `index.ts` as `acceptDirectTasks` (domain boundary) and `handleDirectTaskRequest` (policy-free HTTP adapter).
+- Emits **approved work definition** events to Orchestration. *(not yet implemented)*
+
+### Direct-task path (implemented)
+
+`acceptDirectTasks` is **synchronous by signature**. That is load-bearing, not stylistic: a synchronous function cannot await a model call, so "no decomposition occurs on this path" is enforced by the type rather than by convention. Do not make it `async`.
+
+`gate2_required` is the literal type `true` and `gate1_required` the literal `false`. Gate 1 is skipped only because there is no decomposition to quarantine (ADR-028). Never add a caller-reachable path that clears Gate 2.
+
+Accepted units carry `acceptance_criteria_provenance` with `origin=direct_task`. Criteria are copied verbatim — no trimming, casing, reordering, or renumbering — because the CRAFTS C phase treats them as ground truth.
 
 ## Dependencies
 
@@ -60,3 +68,9 @@
 - Reusing idempotency keys across callers collapses ownership boundaries.
 - Allowing Gate 1 amendment to skip re-validation can introduce cyclic or incomplete DAGs.
 - Exposing internal spec IDs before approval leaks draft work.
+- Reading `caller_id` from the request body instead of the authenticated principal lets any caller address another caller's idempotency scope. It is an unknown field in the body for exactly this reason.
+- Hashing the raw body rather than the normalized submission makes honest retries conflict on key ordering alone.
+- Recording an idempotency key for a *rejected* payload burns the key and blocks the caller's corrected retry.
+- Concatenating idempotency scope components without length prefixes lets crafted caller ids and keys collide.
+- Adding a field to `UNIT_FIELDS` silently widens the accepted contract; ADR-018 deliberately excludes runtime state, `required_role`, and `complexity`.
+- Source-scanning architecture tests must strip comments first — prose describing a forbidden construct is not that construct.
