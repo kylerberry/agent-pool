@@ -26,6 +26,17 @@ export type RoutingPolicyPublication = {
 };
 
 /**
+ * Assert that a candidate value is a safe positive integer.
+ * Rejects non-numbers, non-integral numbers, NaN, Infinity, zero, negatives,
+ * and values outside the safe integer range.
+ */
+export function assertPositiveIntegerVersion(value: unknown, label = 'version'): asserts value is number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`${label} must be a positive integer`);
+  }
+}
+
+/**
  * Validate a candidate publication against the canonical approved-model scope
  * and actor-specific role ownership. Returns a typed failure if the
  * publication would expand the approved scope, cross actor roles, or carry
@@ -41,9 +52,7 @@ export function validateRoutingPolicyPublication(
   }
   const pub = candidate as Record<string, unknown>;
 
-  if (typeof pub.version !== 'number' || pub.version < 1) {
-    throw new Error('Publication version must be a positive integer');
-  }
+  assertPositiveIntegerVersion(pub.version, 'Publication version');
   if (pub.status !== 'eval-derived') {
     throw new Error('Publication status must be eval-derived');
   }

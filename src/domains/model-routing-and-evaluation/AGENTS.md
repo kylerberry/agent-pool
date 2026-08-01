@@ -2,62 +2,64 @@
 
 ## Terms
 
-- **Provider-normalized model capability**: A capability description independent of any single provider's naming or API.
-- **Approved model scope**: The set of models authorized for use by the system.
-- **Role-indexed routing**: Selecting a model based on the phase role (e.g., builder, evaluator) and required capability.
-- **Eval dataset/run**: A benchmark or empirical measurement used to assess model performance.
-- **Empirical threshold**: A performance floor derived from eval runs that gates role assignment.
-- **Routing table publication**: The published mapping from roles to approved models and fallbacks.
+- **Approved model**: One of the five exact provider-qualified IDs in the frozen registry.
+- **Availability snapshot**: A strictly validated caller-provided set of currently usable approved models.
+- **Routing policy**: A versioned, actor-scoped mapping of roles to approved primary and fallback models.
+- **Routing decision**: Immutable, credential-free evidence of a deterministic role selection.
+- **Eval-derived publication**: A validated future policy replacement with `status=eval-derived`; it does not make bootstrap ranks empirical by itself.
 
 ## Owned state
 
-- Provider-normalized capability registry.
-- Approved model scope and backend metadata.
-- Role-indexed routing table and fallback chains.
-- Eval datasets, run results, and computed empirical thresholds.
-- Routing-table publication versions and provenance.
+- Exact approved-model registry and canonical capability ordering.
+- Strict worker and orchestrator bootstrap-policy parsers/loaders.
+- Validated availability snapshots, role routing, and builder/evaluator pair selection.
+- Provider-neutral injected adapter registry and public decision/error projections.
 
 ## Invariants
 
-- Every routed model belongs to the approved model scope.
-- Routing decisions are deterministic for a given role, capability requirement, and table version.
-- Fallback chains degrade capability monotonically and never exceed the approved scope.
-- Empirical thresholds are computed from eval runs, not manual assignment.
+- Only approved provider-qualified IDs may enter policies, availability, adapters, or decisions.
+- A malformed availability snapshot fails closed; an unavailable explicit model never falls back.
+- Builder/evaluator selection is atomic, distinct, and the evaluator capability is never lower.
+- Routing evidence is allowlisted, deeply immutable, credential-free, and defensively serialized.
+- The worker bootstrap owns worker roles only; the orchestrator bootstrap owns decomposition only.
+- Eval-derived publications are actor-scoped, source-bearing, `status=eval-derived`, and cannot expand approved scope.
 
 ## Public interfaces
 
-- `getModelForRole(role, capabilityRequirement)` returning a model decision and fallback chain.
-- Routing table publication for other domains to consume.
-- Eval run ingestion and threshold computation commands.
-- Queries for capability coverage and model status.
+- `validateAvailability()` validates a complete availability snapshot.
+- `selectForRole()` and `selectBuilderEvaluatorPair()` produce fail-closed routing outcomes.
+- Source-bound worker/orchestrator bootstrap loaders read their actor-owned fixtures.
+- Eval-publication loaders and `validateRoutingPolicyPublication()` validate future replacement policies.
+- `InjectedAdapterRegistry` dispatches an already-selected canonical model without choosing routing policy.
 
 ## Dependencies
 
-- Provides routing decisions to Agent Execution and Verification.
-- Does not control DAG flow; Orchestration owns dispatch.
-- Uses model-provider clients as policy-free adapters.
+- Serves Agent Execution and Verification with routing decisions.
+- Orchestration owns dispatch and persistence; this domain exposes immutable evidence only.
+- Provider clients remain injected policy-free adapters.
 
 ## Trust boundaries
 
-- Model-provider credentials are isolated in adapters; this domain sees only normalized capabilities.
-- Routing-table changes are versioned and auditable.
-- Eval datasets must be representative and free from test-set leakage.
-- Fallback decisions are bounded by policy, not by runtime convenience.
+- Bootstrap/publication JSON and availability data are untrusted until strict validation passes.
+- Credentials, provider payloads, and raw provider exceptions never cross into routing policy, public failures, or evidence.
+- Worker and orchestrator package ownership is enforced by actor-specific loaders and role schemas.
 
 ## Verification guidance
 
-- Test role-to-model resolution and fallback chains exhaustively.
-- Verify empirical threshold computation from sample eval runs.
-- Confirm routing-table versions are immutable once published.
-
-## Relevant sources
-
-- `docs/raw/context/initial-domain-map.md`
-- `docs/raw/adr/orchestrator/`
-- `docs/raw/specs/orchestrator-spec.md`
+- Run focused tests: `node --experimental-strip-types --test test/model-routing-and-evaluation/*.test.ts`.
+- Run regressions: `npm test`, `npm run typecheck`, and `npm run test:worker`.
+- Test hostile availability/policy input, explicit fail-closed behavior, immutable evidence, pair invariants, actor separation, and adapter error redaction.
 
 ## Footguns
 
-- Hard-coding model names in other domains bypasses the routing table.
-- Publishing a routing table without eval evidence creates false capability guarantees.
-- Allowing fallback to unapproved models expands the trust boundary silently.
+- Do not load a generic production fixture in place of actor-bound policy loaders.
+- Do not propagate provider exception text or payloads into public routing errors.
+- Do not treat bootstrap capability ranks as empirical evaluation results.
+- Do not add a model, provider, alias, or fallback outside the approved registry.
+
+## Relevant sources
+
+- `docs/raw/adr/orchestrator/ADR-007-provider-agnostic-model-interface.md`
+- `docs/raw/adr/orchestrator/ADR-009-empirical-routing-threshold.md`
+- `docs/raw/adr/orchestrator/ADR-020-role-indexed-routing-table.md`
+- `docs/raw/adr/orchestrator/ADR-021-eval-scope-builder-first.md`

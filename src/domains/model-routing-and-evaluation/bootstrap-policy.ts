@@ -23,7 +23,7 @@ import type {
   BootstrapWorkerPolicyShape,
   RoleConfig,
 } from './contracts.ts';
-import type { RoutingPolicy } from './routing-policy.ts';
+import { assertPositiveIntegerVersion, type RoutingPolicy } from './routing-policy.ts';
 
 const WORKER_ROLES = new Set<string>([
   'node_conductor',
@@ -239,9 +239,7 @@ export function loadWorkerBootstrapPolicy(json: unknown): RoutingPolicy {
   const allowed = new Set(['version', 'status', 'capability_rank', 'roles', 'rules']);
   assertNoUnknownFields(json, allowed, 'worker bootstrap');
 
-  if (typeof json.version !== 'number') {
-    throw new Error('Worker bootstrap version must be a number');
-  }
+  assertPositiveIntegerVersion(json.version, 'Worker bootstrap version');
   if (json.status !== 'bootstrap-until-eval-derived') {
     throw new Error('Worker bootstrap status must be bootstrap-until-eval-derived');
   }
@@ -263,9 +261,7 @@ export function loadOrchestratorBootstrapPolicy(json: unknown): RoutingPolicy {
   const allowed = new Set(['version', 'status', 'actor', 'roles', 'rules']);
   assertNoUnknownFields(json, allowed, 'orchestrator bootstrap');
 
-  if (typeof json.version !== 'number') {
-    throw new Error('Orchestrator bootstrap version must be a number');
-  }
+  assertPositiveIntegerVersion(json.version, 'Orchestrator bootstrap version');
   if (json.status !== 'bootstrap-until-eval-derived') {
     throw new Error('Orchestrator bootstrap status must be bootstrap-until-eval-derived');
   }
@@ -415,9 +411,7 @@ function assertEvalPublicationEnvelope(
   }
   assertNoUnknownFields(json, allowedFields, 'eval-derived publication');
 
-  if (typeof pub.version !== 'number' || pub.version < 1) {
-    throw new Error('Publication version must be a positive integer');
-  }
+  assertPositiveIntegerVersion(pub.version, 'Publication version');
   if (pub.status !== 'eval-derived') {
     throw new Error('Publication status must be eval-derived');
   }

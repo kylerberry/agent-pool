@@ -406,6 +406,18 @@ describe('eval-derived policy publications', () => {
     assert.throws(() => loadWorkerEvalPublication({ ...validWorkerPublication, status: '' }), /status/i);
   });
 
+  it('rejects non-integer versions in worker eval-derived publications', () => {
+    assert.throws(() => loadWorkerEvalPublication({ ...validWorkerPublication, version: 1.5 }), /version/i);
+    assert.throws(() => loadWorkerEvalPublication({ ...validWorkerPublication, version: Number.NaN }), /version/i);
+    assert.throws(() => loadWorkerEvalPublication({ ...validWorkerPublication, version: Number.POSITIVE_INFINITY }), /version/i);
+  });
+
+  it('rejects non-integer versions in orchestrator eval-derived publications', () => {
+    assert.throws(() => loadOrchestratorEvalPublication({ ...validOrchestratorPublication, version: 1.5 }), /version/i);
+    assert.throws(() => loadOrchestratorEvalPublication({ ...validOrchestratorPublication, version: Number.NaN }), /version/i);
+    assert.throws(() => loadOrchestratorEvalPublication({ ...validOrchestratorPublication, version: Number.POSITIVE_INFINITY }), /version/i);
+  });
+
   it('rejects duplicate candidates in a publication role config', () => {
     const tampered = {
       ...validWorkerPublication,
