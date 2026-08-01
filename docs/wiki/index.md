@@ -3,7 +3,7 @@ title: Wiki Index
 type: index
 tags: [index]
 created: 2026-07-22
-updated: 2026-07-25
+updated: 2026-07-31
 sources:
   - docs/raw/
 ---
@@ -30,6 +30,7 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/sources/2026-04-13_initial-domain-map|Initial Domain Map]] — `docs/raw/context/initial-domain-map.md`
 - [[wiki/sources/2026-04-13_repository-builder-vs-pool-worker|Repository Builder and Pool Worker Role Boundary]] — `docs/raw/context/repository-builder-vs-pool-worker.md`
 - [[wiki/sources/2026-04-13_pool-worker-execution-context-schema|Pool Worker Execution Context Schema]] — `docs/raw/specs/schemas/pool-worker-execution-context.schema.json`
+- [[wiki/sources/2026-07-31_pool-worker-attempt-contract-schema|Pool Worker Attempt Contract Schema]] — `docs/raw/specs/schemas/pool-worker-attempt-contract.schema.json`
 - [[wiki/sources/2026-07-22_orchestrator-spec|Supervisor Orchestrator — Consolidated Specification]] — `docs/raw/specs/orchestrator-spec.md`
 - [[wiki/sources/2026-07-22_adr-001-deterministic-controller-vs-agentic-orchestrator|ADR-001: Deterministic Controller vs. Agentic Orchestrator]] — `docs/raw/adr/orchestrator/ADR-001-deterministic-controller-vs-agentic-orchestrator.md`
 - [[wiki/sources/2026-07-22_adr-002-fuzzy-in-structured-out-spec-boundary|ADR-002: Fuzzy-In / Structured-Out Spec Boundary]] — `docs/raw/adr/orchestrator/ADR-002-fuzzy-in-structured-out-spec-boundary.md`

@@ -1,16 +1,65 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { checkSchemaIntegrity, findDagTopology, validateInstance } from "../lib/json-schema-subset.mjs";
 
 const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repoRoot = resolve(packageRoot, "../..");
 const script = join(packageRoot, "scripts/preflight.mjs");
 
-function workspaceWith(marker) {
+const NONCE = "a".repeat(64);
+
+function validContract(workspace, overrides = {}) {
+  return {
+    schema_version: 1,
+    node_id: "node-1",
+    attempt_id: "attempt-1",
+    attempt_number: 1,
+    intent: "Execute one node attempt",
+    change_spec: "Integrate the worker harness.",
+    acceptance_criteria: [{ id: "ac-1", text: "Every attempt receives a fresh launcher-owned context." }],
+    criteria_origin: { source: "decomposition", source_id: "spec-1" },
+    target_repo: "owner/repo",
+    target_branch: "main",
+    prior_failure_context: [],
+    ...overrides,
+  };
+}
+
+function validMarker(workspace, overrides = {}) {
+  const issuedAt = new Date();
+  return {
+    schema_version: 2,
+    actor: "pool-worker",
+    node_id: "node-1",
+    attempt_id: "attempt-1",
+    attempt_nonce: NONCE,
+    issued_by: "agent-pool-supervisor",
+    issued_at: issuedAt.toISOString(),
+    expires_at: new Date(issuedAt.getTime() + 180_000).toISOString(),
+    max_age_seconds: 180,
+    target_repo: "owner/repo",
+    target_branch: "main",
+    workspace_path: workspace,
+    ...overrides,
+  };
+}
+
+/**
+ * Build a fresh attempt workspace. `marker`/`contract` are factories so each test
+ * can mutate exactly one input and leave the rest of the launch valid.
+ */
+function workspaceWith({
+  marker = validMarker,
+  contract = validContract,
+  omitMarker = false,
+  omitContract = false,
+  extraControlFiles = {},
+} = {}) {
   const workspace = mkdtempSync(join(tmpdir(), "agent-pool-worker-"));
   mkdirSync(join(workspace, ".agent-pool"));
   mkdirSync(join(workspace, ".pi", "skills", "graphify"), { recursive: true });
@@ -18,23 +67,16 @@ function workspaceWith(marker) {
     join(workspace, ".pi/skills/graphify/SKILL.md"),
     `# graphify\ngraphify 0.9.25\n\`\`\`bash\npip install graphifyy==0.9.25\n\`\`\`\n`,
   );
-  if (marker !== undefined) {
-    writeFileSync(join(workspace, ".agent-pool/execution-context.json"), JSON.stringify(marker));
+  if (!omitMarker) {
+    writeFileSync(join(workspace, ".agent-pool/execution-context.json"), JSON.stringify(marker(workspace)));
+  }
+  if (!omitContract) {
+    writeFileSync(join(workspace, ".agent-pool/attempt-contract.json"), JSON.stringify(contract(workspace)));
+  }
+  for (const [name, content] of Object.entries(extraControlFiles)) {
+    writeFileSync(join(workspace, ".agent-pool", name), content);
   }
   return workspace;
-}
-
-function validMarker() {
-  return {
-    schema_version: 1,
-    actor: "pool-worker",
-    node_id: "node-1",
-    attempt_id: "attempt-1",
-    issued_by: "agent-pool-supervisor",
-    issued_at: new Date().toISOString(),
-    target_repo: "owner/repo",
-    target_branch: "main"
-  };
 }
 
 function run(workspace, actor = "pool-worker") {
@@ -54,69 +96,275 @@ function run(workspace, actor = "pool-worker") {
 }
 
 test("accepts a valid pool-worker launch context", () => {
-  const result = run(workspaceWith(validMarker()));
+  const result = run(workspaceWith());
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /preflight passed/);
 });
 
 test("rejects missing execution context", () => {
-  const result = run(workspaceWith(undefined));
+  const result = run(workspaceWith({ omitMarker: true }));
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /marker is missing/);
 });
 
 test("rejects Repository Builder environment", () => {
-  const result = run(workspaceWith(validMarker()), "repository-builder");
+  const result = run(workspaceWith(), "repository-builder");
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /AGENT_POOL_ACTOR/);
 });
 
 test("rejects malformed or expanded marker", () => {
-  const marker = { ...validMarker(), unexpected: true };
-  const result = run(workspaceWith(marker));
+  const result = run(workspaceWith({ marker: (w) => ({ ...validMarker(w), unexpected: true }) }));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /missing or unknown fields/);
+});
+
+test("rejects a version 1 marker that carries no launcher-owned freshness", () => {
+  const result = run(
+    workspaceWith({
+      marker: () => ({
+        schema_version: 1,
+        actor: "pool-worker",
+        node_id: "node-1",
+        attempt_id: "attempt-1",
+        issued_by: "agent-pool-supervisor",
+        issued_at: new Date().toISOString(),
+        target_repo: "owner/repo",
+        target_branch: "main",
+      }),
+    }),
+  );
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /missing or unknown fields/);
 });
 
 test("rejects marker identity that differs from launcher expectations", () => {
-  const marker = { ...validMarker(), attempt_id: "stale-attempt" };
-  const result = run(workspaceWith(marker));
+  const result = run(workspaceWith({ marker: (w) => validMarker(w, { attempt_id: "stale-attempt" }) }));
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /identity does not match launcher expectations/);
 });
 
 test("rejects repository or branch that differs from launcher expectations", () => {
-  const marker = { ...validMarker(), target_branch: "untrusted-branch" };
-  const result = run(workspaceWith(marker));
+  const result = run(workspaceWith({ marker: (w) => validMarker(w, { target_branch: "untrusted-branch" }) }));
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /target does not match launcher expectations/);
 });
 
-test("rejects non-RFC-3339 timestamps", () => {
-  const marker = { ...validMarker(), issued_at: "April 13, 2026" };
-  const result = run(workspaceWith(marker));
+test("rejects an untrusted issuer", () => {
+  const result = run(workspaceWith({ marker: (w) => validMarker(w, { issued_by: "repository-builder" }) }));
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /RFC 3339/);
+  assert.match(result.stderr, /missing or unknown fields/);
+});
+
+test("rejects non-RFC-3339 timestamps", () => {
+  const result = run(workspaceWith({ marker: (w) => validMarker(w, { issued_at: "April 13, 2026" }) }));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /missing or unknown fields|RFC 3339/);
 });
 
 test("rejects impossible calendar dates", () => {
-  const marker = { ...validMarker(), issued_at: "2026-02-30T12:00:00Z" };
-  const result = run(workspaceWith(marker));
+  const result = run(
+    workspaceWith({
+      marker: (w) => validMarker(w, { issued_at: "2026-02-30T12:00:00Z", expires_at: "2026-02-30T12:03:00Z" }),
+    }),
+  );
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /invalid calendar date/);
 });
 
 test("accepts canonical UTC timestamps with fractional seconds", () => {
-  const marker = { ...validMarker(), issued_at: new Date().toISOString() };
-  const result = run(workspaceWith(marker));
+  const result = run(workspaceWith());
   assert.equal(result.status, 0, result.stderr);
 });
 
 test("rejects stale markers", () => {
-  const marker = { ...validMarker(), issued_at: new Date(Date.now() - 301_000).toISOString() };
-  const result = run(workspaceWith(marker));
+  const issuedAt = new Date(Date.now() - 301_000);
+  const result = run(
+    workspaceWith({
+      marker: (w) =>
+        validMarker(w, {
+          issued_at: issuedAt.toISOString(),
+          expires_at: new Date(issuedAt.getTime() + 180_000).toISOString(),
+        }),
+    }),
+  );
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /stale/);
+});
+
+test("rejects a marker whose expiry has already passed", () => {
+  const issuedAt = new Date(Date.now() - 60_000);
+  const result = run(
+    workspaceWith({
+      marker: (w) =>
+        validMarker(w, {
+          issued_at: issuedAt.toISOString(),
+          expires_at: new Date(issuedAt.getTime() + 30_000).toISOString(),
+          max_age_seconds: 300,
+        }),
+    }),
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /stale/);
+});
+
+test("rejects a marker issued too far in the future", () => {
+  const issuedAt = new Date(Date.now() + 120_000);
+  const result = run(
+    workspaceWith({
+      marker: (w) =>
+        validMarker(w, {
+          issued_at: issuedAt.toISOString(),
+          expires_at: new Date(issuedAt.getTime() + 60_000).toISOString(),
+        }),
+    }),
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /future/);
+});
+
+test("rejects a freshness budget above the five-minute ceiling", () => {
+  const result = run(workspaceWith({ marker: (w) => validMarker(w, { max_age_seconds: 301 }) }));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /missing or unknown fields|ceiling/);
+});
+
+test("rejects an expiry that outruns the marker's own freshness budget", () => {
+  const issuedAt = new Date();
+  const result = run(
+    workspaceWith({
+      marker: (w) =>
+        validMarker(w, {
+          issued_at: issuedAt.toISOString(),
+          expires_at: new Date(issuedAt.getTime() + 240_000).toISOString(),
+          max_age_seconds: 60,
+        }),
+    }),
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /max_age_seconds budget/);
+});
+
+test("rejects a marker bound to a different workspace", () => {
+  const other = mkdtempSync(join(tmpdir(), "agent-pool-other-"));
+  const result = run(workspaceWith({ marker: () => validMarker(other) }));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /workspace does not match/);
+});
+
+test("rejects a marker whose workspace_path does not exist", () => {
+  const result = run(workspaceWith({ marker: () => validMarker("/nonexistent/agent-pool/attempt") }));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /workspace_path does not exist/);
+});
+
+test("rejects a reused workspace carrying prior-attempt residue", () => {
+  const result = run(workspaceWith({ extraControlFiles: { "attempt-0-result.json": "{}" } }));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /not fresh/);
+});
+
+test("rejects an oversized marker field before pattern matching", () => {
+  const result = run(workspaceWith({ marker: (w) => validMarker(w, { target_repo: "o".repeat(100_000) }) }));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /maximum field length/);
+});
+
+test("rejects a symlinked control directory", () => {
+  const workspace = workspaceWith();
+  // Move the (otherwise entirely valid) control directory outside the workspace
+  // and symlink it back in, so only the symlink itself distinguishes this launch.
+  const outside = mkdtempSync(join(tmpdir(), "agent-pool-outside-"));
+  const relocated = join(outside, ".agent-pool");
+  mkdirSync(relocated);
+  for (const name of ["execution-context.json", "attempt-contract.json"]) {
+    writeFileSync(join(relocated, name), readFileSync(join(workspace, ".agent-pool", name), "utf8"));
+  }
+  rmSync(join(workspace, ".agent-pool"), { recursive: true });
+  symlinkSync(relocated, join(workspace, ".agent-pool"));
+
+  const result = run(workspace);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /must be a real directory/);
+});
+
+test("rejects a missing attempt contract", () => {
+  const result = run(workspaceWith({ omitContract: true }));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /attempt contract is missing/);
+});
+
+test("rejects an attempt contract carrying DAG topology", () => {
+  const result = run(
+    workspaceWith({ contract: (w) => ({ ...validContract(w), depends_on: ["model-routing-foundation"] }) }),
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /attempt contract is invalid|must not carry DAG topology/);
+});
+
+test("rejects DAG topology nested inside an allowed contract field", () => {
+  const result = run(
+    workspaceWith({
+      contract: (w) =>
+        validContract(w, {
+          prior_failure_context: [
+            {
+              attempt_id: "attempt-0",
+              phase: "R",
+              attempted: [],
+              failure_reason: "failed",
+              discoveries: [],
+              dead_ends: [],
+              nodes: ["a"],
+            },
+          ],
+        }),
+    }),
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /attempt contract is invalid|must not carry DAG topology/);
+});
+
+test("rejects an attempt contract for a different attempt", () => {
+  const result = run(workspaceWith({ contract: (w) => validContract(w, { attempt_id: "attempt-9" }) }));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /attempt contract identity does not match/);
+});
+
+test("rejects an attempt contract with no acceptance criteria", () => {
+  const result = run(workspaceWith({ contract: (w) => validContract(w, { acceptance_criteria: [] }) }));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /attempt contract is invalid/);
+});
+
+test("rejects a missing bundled contract schema", () => {
+  const workspace = workspaceWith();
+  const schemaPath = join(packageRoot, "contracts/pool-worker-attempt-contract.schema.json");
+  const original = readFileSync(schemaPath, "utf8");
+  rmSync(schemaPath);
+  try {
+    const result = run(workspace);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /contract schema missing/);
+  } finally {
+    writeFileSync(schemaPath, original);
+  }
+});
+
+test("rejects a corrupted contract schema before any paid work", () => {
+  const workspace = workspaceWith();
+  const schemaPath = join(packageRoot, "contracts/pool-worker-attempt-contract.schema.json");
+  const original = readFileSync(schemaPath, "utf8");
+  const widened = JSON.parse(original);
+  widened.additionalProperties = true;
+  writeFileSync(schemaPath, JSON.stringify(widened));
+  try {
+    const result = run(workspace);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /integrity check/);
+  } finally {
+    writeFileSync(schemaPath, original);
+  }
 });
 
 test("worker routing excludes orchestrator-side decomposition", () => {
@@ -134,16 +382,59 @@ test("runtime resources are not locally auto-discovered", () => {
   assert.equal(existsSync(join(repoRoot, ".pi/skills/craft-pool/SKILL.md")), false);
 });
 
-test("bundled phase schema matches the canonical source", () => {
-  const canonical = readFileSync(join(repoRoot, "docs/raw/specs/schemas/crafts-phase-artifact.schema.json"), "utf8");
-  const bundled = readFileSync(join(packageRoot, "contracts/crafts-phase-artifact.schema.json"), "utf8");
-  assert.equal(bundled, canonical);
+test("bundled contract schemas match their canonical sources", () => {
+  for (const name of [
+    "crafts-phase-artifact.schema.json",
+    "pool-worker-execution-context.schema.json",
+    "pool-worker-attempt-contract.schema.json",
+  ]) {
+    const canonical = readFileSync(join(repoRoot, "docs/raw/specs/schemas", name), "utf8");
+    const bundled = readFileSync(join(packageRoot, "contracts", name), "utf8");
+    assert.equal(bundled, canonical, `${name} drifted from its canonical source`);
+  }
 });
 
-test("bundled execution schema matches the canonical source", () => {
-  const canonical = readFileSync(join(repoRoot, "docs/raw/specs/schemas/pool-worker-execution-context.schema.json"), "utf8");
-  const bundled = readFileSync(join(packageRoot, "contracts/pool-worker-execution-context.schema.json"), "utf8");
-  assert.equal(bundled, canonical);
+test("every bundled contract schema passes the integrity check", () => {
+  for (const name of [
+    "crafts-phase-artifact.schema.json",
+    "pool-worker-execution-context.schema.json",
+    "pool-worker-attempt-contract.schema.json",
+  ]) {
+    const schema = JSON.parse(readFileSync(join(packageRoot, "contracts", name), "utf8"));
+    assert.deepEqual(checkSchemaIntegrity(schema), [], `${name} failed integrity check`);
+  }
+});
+
+test("schema subset validator enforces the keywords the contracts rely on", () => {
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "count"],
+    properties: {
+      kind: { enum: ["a", "b"] },
+      count: { type: "integer", minimum: 1, maximum: 3 },
+      tags: { type: "array", uniqueItems: true, items: { type: "string", minLength: 1 } },
+    },
+  };
+  assert.deepEqual(validateInstance(schema, { kind: "a", count: 2 }), []);
+  assert.ok(validateInstance(schema, { kind: "c", count: 2 }).length > 0);
+  assert.ok(validateInstance(schema, { kind: "a", count: 4 }).length > 0);
+  assert.ok(validateInstance(schema, { kind: "a", count: 1, extra: true }).length > 0);
+  assert.ok(validateInstance(schema, { kind: "a", count: 1, tags: ["x", "x"] }).length > 0);
+  assert.ok(validateInstance(schema, { kind: "a" }).length > 0);
+});
+
+test("schema integrity rejects an unresolvable reference and an unsupported keyword", () => {
+  assert.ok(checkSchemaIntegrity({ type: "object", properties: { a: { $ref: "#/$defs/missing" } } }).length > 0);
+  assert.ok(checkSchemaIntegrity({ type: "object", propertyNames: { type: "string" } }).length > 0);
+});
+
+test("topology sweep finds DAG keys at any depth and tolerates cycles", () => {
+  assert.equal(findDagTopology({ a: { b: { depends_on: [] } } }), "payload.a.b.depends_on");
+  assert.equal(findDagTopology({ items: [{ ready_frontier: [] }] }), "payload.items[0].ready_frontier");
+  const cyclic = { safe: true };
+  cyclic.self = cyclic;
+  assert.equal(findDagTopology(cyclic), null);
 });
 
 function fakeBinDir(overrides = {}) {
@@ -185,7 +476,7 @@ function runExternal(workspace, fakeBin, actor = "pool-worker") {
 }
 
 test("preflight accepts exact pinned Graphify version", () => {
-  const workspace = workspaceWith(validMarker());
+  const workspace = workspaceWith();
   const fakeBin = fakeBinDir();
   writeFileSync(join(fakeBin, "graphify"), `#!/bin/sh\necho "graphify 0.9.25"\n`, { mode: 0o755 });
   const result = runExternal(workspace, fakeBin);
@@ -193,7 +484,7 @@ test("preflight accepts exact pinned Graphify version", () => {
 });
 
 test("preflight rejects substring version like 0.9.250", () => {
-  const workspace = workspaceWith(validMarker());
+  const workspace = workspaceWith();
   const fakeBin = fakeBinDir({ graphifyVersion: "0.9.250" });
   writeFileSync(join(fakeBin, "graphify"), `#!/bin/sh\necho "graphify 0.9.250"\n`, { mode: 0o755 });
   const result = runExternal(workspace, fakeBin);
@@ -202,7 +493,7 @@ test("preflight rejects substring version like 0.9.250", () => {
 });
 
 test("preflight rejects unavailable Graphify executable", () => {
-  const workspace = workspaceWith(validMarker());
+  const workspace = workspaceWith();
   const fakeBin = fakeBinDir();
   writeFileSync(join(fakeBin, "graphify"), `#!/bin/sh\nexit 1\n`, { mode: 0o755 });
   const result = runExternal(workspace, fakeBin);
@@ -211,7 +502,7 @@ test("preflight rejects unavailable Graphify executable", () => {
 });
 
 test("preflight rejects Graphify skill provenance mismatch", () => {
-  const workspace = workspaceWith(validMarker());
+  const workspace = workspaceWith();
   writeFileSync(join(workspace, ".pi/skills/graphify/SKILL.md"), "graphify 0.9.24\n", { mode: 0o644 });
   const fakeBin = fakeBinDir();
   writeFileSync(join(fakeBin, "graphify"), `#!/bin/sh\necho "graphify 0.9.25"\n`, { mode: 0o755 });

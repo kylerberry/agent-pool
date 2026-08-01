@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "pool-worker-execution-context.schema.json",
   "title": "Pool Worker Execution Context",
+  "description": "Launcher-owned per-attempt execution marker. Version 2 binds the workspace and makes the freshness expectation an explicit launcher-owned field instead of a preflight-hardcoded window. The supervisor is the only permitted issuer; the worker treats every field as untrusted until preflight validates it against this schema and against launcher-supplied expectations.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -9,23 +10,49 @@
     "actor",
     "node_id",
     "attempt_id",
+    "attempt_nonce",
     "issued_by",
     "issued_at",
+    "expires_at",
+    "max_age_seconds",
     "target_repo",
-    "target_branch"
+    "target_branch",
+    "workspace_path"
   ],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "const": 2 },
     "actor": { "const": "pool-worker" },
     "node_id": { "type": "string", "minLength": 1 },
     "attempt_id": { "type": "string", "minLength": 1 },
+    "attempt_nonce": {
+      "type": "string",
+      "description": "Single-use launcher-generated value. Reuse identifies a replayed launch context.",
+      "pattern": "^[0-9a-f]{32,128}$"
+    },
     "issued_by": { "const": "agent-pool-supervisor" },
     "issued_at": {
       "type": "string",
       "format": "date-time",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
     },
+    "expires_at": {
+      "type": "string",
+      "description": "Launcher-owned absolute expiry. Preflight rejects the attempt at or after this instant regardless of max_age_seconds.",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
+    "max_age_seconds": {
+      "type": "integer",
+      "description": "Launcher-owned freshness budget. The orchestrator specification fixes a five-minute ceiling; a launcher may be stricter and never laxer.",
+      "minimum": 1,
+      "maximum": 300
+    },
     "target_repo": { "type": "string", "minLength": 1 },
-    "target_branch": { "type": "string", "minLength": 1 }
+    "target_branch": { "type": "string", "minLength": 1 },
+    "workspace_path": {
+      "type": "string",
+      "description": "Absolute path of the ephemeral per-attempt workspace this context is bound to.",
+      "pattern": "^/(?!.*(?:^|/)\\.\\.(?:/|$)).*[^/]$"
+    }
   }
 }
