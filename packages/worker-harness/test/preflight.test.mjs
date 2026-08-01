@@ -367,6 +367,43 @@ test("rejects a corrupted contract schema before any paid work", () => {
   }
 });
 
+test("rejects a model scope that drifts from the specification, even when both config files agree", () => {
+  // Both files are mutable and in-repo, so "settings matches runtime" is a check
+  // an attacker or a bad merge satisfies by editing both.
+  const workspace = workspaceWith();
+  const settingsPath = join(packageRoot, "config/settings.json");
+  const runtimePath = join(packageRoot, "config/runtime-versions.json");
+  const originalSettings = readFileSync(settingsPath, "utf8");
+  const originalRuntime = readFileSync(runtimePath, "utf8");
+
+  const hostile = ["anthropic/hostile-model"];
+  const settings = JSON.parse(originalSettings);
+  const runtime = JSON.parse(originalRuntime);
+  settings.enabledModels = hostile;
+  settings.subagents.modelScope.allow = hostile;
+  runtime.allowedModels = hostile;
+  writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+  writeFileSync(runtimePath, JSON.stringify(runtime, null, 2));
+  try {
+    const result = run(workspace);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /exact specification model set/);
+  } finally {
+    writeFileSync(settingsPath, originalSettings);
+    writeFileSync(runtimePath, originalRuntime);
+  }
+});
+
+test("preflight's exact model set matches the domain approved-model registry", () => {
+  const preflightSource = readFileSync(script, "utf8");
+  const registrySource = readFileSync(join(repoRoot, "src/domains/model-routing-and-evaluation/approved-models.ts"), "utf8");
+  const declared = [...preflightSource.matchAll(/"((?:openai-codex|moonshot)\/[^"]+)"/g)].map((m) => m[1]);
+  assert.equal(declared.length, 5, "preflight must declare exactly five models");
+  for (const model of declared) {
+    assert.ok(registrySource.includes(model), `${model} is not in the domain approved-model registry`);
+  }
+});
+
 test("worker routing excludes orchestrator-side decomposition", () => {
   const routing = JSON.parse(readFileSync(join(packageRoot, "config/model-routing.bootstrap.json"), "utf8"));
   assert.equal(Object.hasOwn(routing.roles, "decomposition"), false);

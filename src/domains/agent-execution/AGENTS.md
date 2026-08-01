@@ -30,11 +30,13 @@
 - No worker-bound payload carries DAG topology at any nesting depth.
 - CRAFTS phases execute in the approved sequence and produce schema-valid artifacts; a phase artifact is forwarded only after validation.
 - A (`A`), Tighten (`T`), and Conceptualize (`C`) hold no write capability. Sharpen writes only into an owner-approved knowledge sink and never creates one.
-- Repository commands receive an allowlist-built environment and no provider or GitHub credential.
-- Backend fallback never leaves the attempt, never exceeds the approved model scope, is bounded at three backends, and accumulates cost and evidence from failed backends as well as the winner.
-- Transcript retention runs finalize → redact → hash → persist → verify → index before cleanup. The hash covers the redacted bytes actually persisted, and verification re-reads the durable object.
+- Repository commands receive an allowlist-built environment and no provider or GitHub credential — **including file-based ones**. The host `HOME` is never propagated; home-scoped variables and git's config paths are repointed inside a caller-supplied workspace home.
+- Startup validates the model scope against the exact five-model set fixed in the specification, held as a constant in the gate. Configuration files agreeing with each other is not evidence: both are mutable and in-repo.
+- Backend fallback never leaves the attempt, never exceeds the approved model scope, is bounded at three backends, and accumulates cost and evidence from failed backends as well as the winner. `amount` and `currency` are jointly present or jointly absent.
+- Transcript retention runs finalize → redact → hash → persist → verify → index before cleanup. The hash covers the redacted bytes actually persisted, and verification re-reads the stored **bytes** and rehashes them locally — store-reported metadata is not verification.
 - `transcript_path` is a transient workspace-relative locator only; the durable reference is `transcript_object_id`.
-- Cleanup has no indefinite-retention outcome: an unresolved or failed extraction is destroyed once the bounded quarantine expires, preserving the failure record.
+- Cleanup has no indefinite-retention outcome: an unresolved or failed extraction is destroyed once the bounded quarantine expires, preserving the failure record. `startedAt` must be finite, or the deadline comparison never fires.
+- `markAuditComplete()` requires the verified retention record for that attempt. Authorizing destruction is bound to evidence, not to a caller's assertion.
 
 ## Public interfaces
 
@@ -98,7 +100,11 @@ Implemented here is the ADR-032 baseline. The following remain approved roadmap 
 - Skipping artifact schema validation lets downstream phases consume garbage.
 - Hard-coding backend selection bypasses Model Routing and Evaluation policy.
 - Filtering a credential denylist instead of building from an allowlist fails open on the one variable nobody named.
+- Stripping credential *variables* while passing the host `HOME` is not credential isolation: `~/.git-credentials`, `~/.netrc`, `~/.npmrc`, `~/.config/gh/hosts.yml`, and `~/.aws/credentials` are all readable, and `gh auth token` will happily read them.
+- Checking that two mutable config files agree is not checking an exact model set; a bad merge or an attacker edits both.
 - Discarding failed-backend cost makes the controller enforce its budget ceiling against an under-count.
-- Hashing the raw transcript rather than the redacted bytes makes verification prove the wrong thing.
+- Accepting an `amount` with a null `currency` lets an unknown-currency charge be folded into a later currency's total.
+- Hashing the raw transcript rather than the redacted bytes makes verification prove the wrong thing; so does trusting store-reported metadata instead of rehashing the bytes the store returns.
 - Treating a nonce *format* check as replay protection is a false assurance.
-- Any cleanup path that can return "retain" forever reintroduces the ADR-032 failure mode.
+- Any cleanup path that can return "retain" forever reintroduces the ADR-032 failure mode — including a `NaN` deadline, which no `now >= deadline` comparison ever satisfies.
+- Advancing cleanup state without retention proof turns a gate into a formality.

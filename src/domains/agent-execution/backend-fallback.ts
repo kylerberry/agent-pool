@@ -86,6 +86,12 @@ function validateCost(value: unknown): ConsumedCost | ExecutionFailure {
   if (currency !== null && typeof currency !== 'string') {
     return createExecutionFailure('FALLBACK_COST_INVALID');
   }
+  // Amount and currency must be jointly present or jointly absent. An amount with
+  // no currency would otherwise be folded into a later backend's currency total
+  // and reported as if it had been denominated all along.
+  if ((amount === null) !== (currency === null)) {
+    return createExecutionFailure('FALLBACK_COST_INVALID');
+  }
   return Object.freeze({
     input_tokens: input_tokens as number,
     output_tokens: output_tokens as number,

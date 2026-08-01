@@ -12,8 +12,10 @@
  *
  * - The hash is taken over the redacted bytes that are actually persisted, so a
  *   verified object is provably the object that was reviewed for secrets.
- * - Verification re-reads the durable object's own metadata. Comparing the local
- *   buffer against itself would verify nothing.
+ * - Verification re-reads the durable object's bytes and hashes them here. Asking
+ *   the store for its own metadata lets a store that truncated or replaced the
+ *   object report the digest the caller expected; the store has to produce the
+ *   bytes, not vouch for them.
  *
  * `transcript_path` stays what the phase-artifact contract says it is: a
  * transient workspace-relative extraction locator, never a durable reference.
@@ -51,11 +53,6 @@ export type RedactionResult = {
   readonly redactionCount: number;
 };
 
-export type DurableObjectMetadata = {
-  readonly sha256: string;
-  readonly byteSize: number;
-};
-
 export interface TranscriptSource {
   /** Finalize and close the transcript, returning its complete bytes. */
   finalize(): Promise<string>;
@@ -68,8 +65,15 @@ export interface TranscriptRedactor {
 export interface TranscriptObjectStore {
   /** Persist bytes outside the attempt workspace and return the durable object id. */
   put(key: string, bytes: Buffer): Promise<string>;
-  /** Read back the stored object's own metadata; null when the object is absent. */
-  head(objectId: string): Promise<DurableObjectMetadata | null>;
+  /**
+   * Read the stored object's bytes back. Verification hashes what this returns.
+   *
+   * Metadata alone is not enough: a store that truncated or replaced the object
+   * during `put` can still report the size and digest the caller expected, and a
+   * metadata-only check would index the corrupt object as verified. Re-reading
+   * makes the store prove it holds the bytes rather than assert it.
+   */
+  get(objectId: string): Promise<Buffer | null>;
 }
 
 export interface TranscriptAuditIndex {
@@ -209,13 +213,19 @@ export async function retainTranscript(
   }
   completed.push('persist');
 
-  let stored: DurableObjectMetadata | null;
+  let storedBytes: Buffer | null;
   try {
-    stored = await input.objectStore.head(objectId);
+    storedBytes = await input.objectStore.get(objectId);
   } catch {
     return incomplete(input, 'verify', createExecutionFailure('TRANSCRIPT_VERIFY_FAILED'), completed);
   }
-  if (!stored || stored.sha256 !== sha256 || stored.byteSize !== byteSize) {
+  if (!Buffer.isBuffer(storedBytes)) {
+    return incomplete(input, 'verify', createExecutionFailure('TRANSCRIPT_VERIFY_FAILED'), completed);
+  }
+  // Hash what came back out of the store, then compare to the hash of what went
+  // in. The store is never asked to vouch for itself.
+  const storedSha256 = createHash('sha256').update(storedBytes).digest('hex');
+  if (storedSha256 !== sha256 || storedBytes.byteLength !== byteSize) {
     return incomplete(input, 'verify', createExecutionFailure('TRANSCRIPT_VERIFY_FAILED'), completed);
   }
   completed.push('verify');

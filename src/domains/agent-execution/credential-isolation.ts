@@ -28,16 +28,33 @@ export type EnvRecord = Readonly<Record<string, string>>;
  */
 export const REPOSITORY_COMMAND_ALLOWLIST: readonly string[] = Object.freeze([
   'PATH',
-  'HOME',
   'LANG',
   'LC_ALL',
   'TZ',
-  'TMPDIR',
   'SHELL',
   'TERM',
   'CI',
   'NODE_ENV',
   'NO_COLOR',
+]);
+
+/**
+ * `HOME` is deliberately absent from the allowlist above.
+ *
+ * Stripping credential *variables* while handing over the host's real home
+ * directory does not isolate credentials: `~/.git-credentials`, `~/.netrc`,
+ * `~/.npmrc`, `~/.config/gh/hosts.yml`, and `~/.aws/credentials` are all
+ * file-based provider and forge credentials, and `gh auth token` will read them
+ * happily. The caller therefore supplies a workspace-scoped home instead, and
+ * the git config paths are pinned inside it so git cannot fall back to a global
+ * config outside the workspace.
+ */
+const HOME_SCOPED_VARIABLES: readonly string[] = Object.freeze([
+  'HOME',
+  'XDG_CONFIG_HOME',
+  'XDG_CACHE_HOME',
+  'XDG_DATA_HOME',
+  'TMPDIR',
 ]);
 
 /** Name fragments that mark a variable as credential-bearing, matched case-insensitively. */
@@ -93,6 +110,12 @@ export function isCredentialVariableName(name: string): boolean {
 
 export type BuildRepositoryCommandEnvOptions = {
   /**
+   * Absolute path to a workspace-scoped home directory for this attempt. Required:
+   * without it there is no safe value for `HOME`, and defaulting to the host's
+   * home would reintroduce file-based credential access.
+   */
+  readonly workspaceHome: string;
+  /**
    * Extra variable names the attempt needs. Each is still checked against the
    * credential heuristics, so this cannot be used to smuggle a secret through.
    */
@@ -104,16 +127,28 @@ export type BuildRepositoryCommandEnvOptions = {
  * Returns a typed failure rather than a filtered environment when the caller
  * asks for a credential-shaped variable, so the mistake is visible instead of
  * silently dropped.
+ *
+ * The host's `HOME` is never propagated. Home-scoped variables are repointed at
+ * the caller-supplied workspace home, and git's config paths are pinned inside it
+ * so a repository command cannot reach `~/.gitconfig` or `~/.git-credentials`.
  */
 export function buildRepositoryCommandEnv(
   sourceEnv: Readonly<Record<string, string | undefined>>,
-  options: BuildRepositoryCommandEnvOptions = {},
+  options: BuildRepositoryCommandEnvOptions,
 ): EnvRecord | ExecutionFailure {
+  const workspaceHome = options?.workspaceHome;
+  if (typeof workspaceHome !== 'string' || !workspaceHome.startsWith('/') || workspaceHome.includes('/../')) {
+    return createExecutionFailure('CAPABILITY_DENIED', 'a workspace-scoped absolute home directory is required');
+  }
+
   const allowed = [...REPOSITORY_COMMAND_ALLOWLIST, ...(options.additionalAllowed ?? [])];
 
   for (const name of allowed) {
     if (isCredentialVariableName(name)) {
       return createExecutionFailure('CAPABILITY_DENIED', `credential-bearing variable requested: ${name}`);
+    }
+    if (HOME_SCOPED_VARIABLES.includes(name.toUpperCase())) {
+      return createExecutionFailure('CAPABILITY_DENIED', `home-scoped variable is not caller-supplied: ${name}`);
     }
   }
 
@@ -122,6 +157,16 @@ export function buildRepositoryCommandEnv(
     const value = sourceEnv[name];
     if (typeof value === 'string') env[name] = value;
   }
+
+  env.HOME = workspaceHome;
+  env.XDG_CONFIG_HOME = `${workspaceHome}/.config`;
+  env.XDG_CACHE_HOME = `${workspaceHome}/.cache`;
+  env.XDG_DATA_HOME = `${workspaceHome}/.local/share`;
+  env.TMPDIR = `${workspaceHome}/.tmp`;
+  // Git resolves these before falling back to $HOME/.gitconfig and /etc/gitconfig.
+  env.GIT_CONFIG_GLOBAL = `${workspaceHome}/.gitconfig`;
+  env.GIT_CONFIG_SYSTEM = '/dev/null';
+
   return deepFreeze(env) as EnvRecord;
 }
 
@@ -145,6 +190,7 @@ const TRUSTED_OPERATION_CREDENTIALS: Readonly<Record<TrustedOperation, readonly 
 export function buildTrustedOperationEnv(
   sourceEnv: Readonly<Record<string, string | undefined>>,
   operation: TrustedOperation,
+  options: BuildRepositoryCommandEnvOptions,
 ): EnvRecord | ExecutionFailure {
   // Own-property lookup only: an inherited name such as `toString` must fail
   // closed rather than resolve to a function and blow up mid-spawn.
@@ -153,7 +199,7 @@ export function buildTrustedOperationEnv(
   }
   const permitted = TRUSTED_OPERATION_CREDENTIALS[operation];
 
-  const base = buildRepositoryCommandEnv(sourceEnv);
+  const base = buildRepositoryCommandEnv(sourceEnv, options);
   if (isExecutionFailure(base)) return base;
 
   const env: Record<string, string> = Object.create(null) as Record<string, string>;

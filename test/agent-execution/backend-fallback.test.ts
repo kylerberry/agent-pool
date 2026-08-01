@@ -143,6 +143,10 @@ describe('same-attempt backend fallback', () => {
       { input_tokens: 1, output_tokens: 1, amount: -0.5, currency: 'USD' },
       { input_tokens: 1, output_tokens: 1 },
       { input_tokens: 1, output_tokens: 1, amount: null, currency: null, extra: true },
+      // amount without currency: would otherwise be folded into a later
+      // backend's currency and reported as if denominated all along.
+      { input_tokens: 1, output_tokens: 1, amount: 1, currency: null },
+      { input_tokens: 1, output_tokens: 1, amount: null, currency: 'USD' },
       null,
     ];
     for (const cost_ of malformed) {

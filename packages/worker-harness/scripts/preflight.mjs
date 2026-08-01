@@ -23,6 +23,23 @@ const skipExternal = process.env.AGENT_POOL_SKIP_EXTERNAL_CHECKS === "1";
 
 /** Absolute ceiling from the orchestrator specification; a launcher may be stricter, never laxer. */
 const FRESHNESS_CEILING_SECONDS = 300;
+
+/**
+ * The exact model set fixed by `docs/raw/specs/orchestrator-spec.md` §12.
+ *
+ * This is a constant in the gate, not a value read from configuration. Checking
+ * only that `settings.json` and `runtime-versions.json` agree with each other
+ * verifies nothing an attacker or a bad merge cannot satisfy by editing both:
+ * "exact models" has to mean exact, against a reference the configuration cannot
+ * move. `test/preflight.test.mjs` asserts this list matches the domain registry.
+ */
+const REQUIRED_MODELS = Object.freeze([
+  "openai-codex/gpt-5.6-luna",
+  "openai-codex/gpt-5.6-terra",
+  "openai-codex/gpt-5.6-sol",
+  "moonshot/kimi-k2.7-code",
+  "moonshot/kimi-k3",
+]);
 /** Tolerance for launcher/worker clock skew on a not-yet-valid marker. */
 const CLOCK_SKEW_TOLERANCE_MS = 30_000;
 
@@ -228,6 +245,13 @@ if (settings?.subagents?.modelScope?.enforce !== true || !Array.isArray(allowed)
 }
 if (runtime.actor !== "pool-worker") fail("runtime baseline actor is not pool-worker");
 if (JSON.stringify(allowed) !== JSON.stringify(runtime.allowedModels)) fail("settings/runtime model scopes differ");
+// Both files agreeing is necessary but not sufficient; both are mutable and in-repo.
+if (JSON.stringify(allowed) !== JSON.stringify(REQUIRED_MODELS)) {
+  fail("configured model scope does not match the exact specification model set");
+}
+if (JSON.stringify(settings.enabledModels) !== JSON.stringify(REQUIRED_MODELS)) {
+  fail("enabled models do not match the exact specification model set");
+}
 
 for (const [role, config] of Object.entries(routing.roles || {})) {
   if (!allowed.includes(config.primary)) fail(`${role} primary model is outside scope`);

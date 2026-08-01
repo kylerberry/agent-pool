@@ -6,6 +6,7 @@ import {
   createAttemptWorkspaceLifecycle,
   isExecutionFailure,
   type AttemptWorkspaceLifecycle,
+  type TranscriptAuditRecord,
 } from '../../src/domains/agent-execution/index.ts';
 
 const START = Date.parse('2026-07-31T12:00:00Z');
@@ -14,6 +15,28 @@ function lifecycle(quarantineMs?: number): AttemptWorkspaceLifecycle {
   const created = createAttemptWorkspaceLifecycle({ attemptId: 'attempt-1', startedAt: START, quarantineMs });
   assert.ok(!isExecutionFailure(created));
   return created;
+}
+
+/** A verified retention record, as retainTranscript() would return on success. */
+function proof(overrides: Partial<TranscriptAuditRecord> = {}): TranscriptAuditRecord {
+  return {
+    node_id: 'node-1',
+    attempt_id: 'attempt-1',
+    phase: 'R',
+    transcript_object_id: 'obj-1',
+    sha256: 'a'.repeat(64),
+    byte_size: 10,
+    media_type: 'text/plain',
+    schema_version: 1,
+    redaction_policy_version: 'redaction-policy-v1',
+    redaction_status: 'redacted',
+    redaction_count: 1,
+    created_at: '2026-07-31T12:00:00Z',
+    retention_status: 'retained',
+    access_classification: 'authorized-human-only',
+    extraction_status: 'audit_complete',
+    ...overrides,
+  } as TranscriptAuditRecord;
 }
 
 describe('attempt workspace cleanup states', () => {
@@ -31,7 +54,7 @@ describe('attempt workspace cleanup states', () => {
   it('authorizes destruction once the transcript audit is complete', () => {
     const workspace = lifecycle();
     workspace.beginExtraction();
-    workspace.markAuditComplete();
+    workspace.markAuditComplete(proof());
 
     const decision = workspace.evaluateCleanup(START + 1_000);
     assert.equal(decision.decision, 'destroy');
@@ -88,13 +111,13 @@ describe('attempt workspace cleanup states', () => {
 
   it('rejects out-of-order state transitions', () => {
     const workspace = lifecycle();
-    assert.ok(isExecutionFailure(workspace.markAuditComplete()));
+    assert.ok(isExecutionFailure(workspace.markAuditComplete(proof())));
     assert.ok(isExecutionFailure(workspace.markAuditIncomplete('x')));
 
     workspace.beginExtraction();
     assert.ok(isExecutionFailure(workspace.beginExtraction()));
 
-    workspace.markAuditComplete();
+    workspace.markAuditComplete(proof());
     assert.ok(isExecutionFailure(workspace.markAuditIncomplete('x')));
     assert.equal(workspace.state(), 'audit_complete');
   });
@@ -120,5 +143,34 @@ describe('attempt workspace cleanup states', () => {
     workspace.beginExtraction();
     workspace.markAuditIncomplete('TRANSCRIPT_PERSIST_FAILED');
     assert.equal(workspace.evaluateCleanup(START).decision, 'destroy');
+  });
+
+  it('refuses to complete the audit without a verified retention record', () => {
+    // Authorizing destruction is the point of no return for the transcript, so a
+    // caller that skipped retainTranscript() must not be able to assert success.
+    const cases: Array<[string, unknown]> = [
+      ['no proof at all', undefined],
+      ['wrong attempt', proof({ attempt_id: 'attempt-9' })],
+      ['unverified extraction', proof({ extraction_status: 'audit_incomplete' as never })],
+      ['unredacted', proof({ redaction_status: 'raw' as never })],
+      ['no durable object id', proof({ transcript_object_id: '  ' })],
+    ];
+    for (const [label, bad] of cases) {
+      const workspace = lifecycle();
+      workspace.beginExtraction();
+      const result = workspace.markAuditComplete(bad as TranscriptAuditRecord);
+      assert.ok(isExecutionFailure(result), `${label} must be rejected`);
+      assert.equal(workspace.state(), 'extracting');
+      assert.equal(workspace.evaluateCleanup(START + 1_000).decision, 'wait');
+    }
+  });
+
+  it('rejects a non-finite start time that would defeat the quarantine bound', () => {
+    // NaN >= NaN is false forever, so an unvalidated startedAt is indefinite
+    // retention wearing a bounded-quarantine costume.
+    for (const startedAt of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      const rejected = createAttemptWorkspaceLifecycle({ attemptId: 'attempt-1', startedAt, quarantineMs: 1_000 });
+      assert.ok(isExecutionFailure(rejected), `${startedAt} must be rejected`);
+    }
   });
 });

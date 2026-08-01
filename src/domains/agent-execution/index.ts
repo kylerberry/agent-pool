@@ -59,7 +59,6 @@ export type {
 export { MAX_BACKENDS_PER_ATTEMPT, createBackendFallbackLedger } from './backend-fallback.ts';
 
 export type {
-  DurableObjectMetadata,
   RedactionResult,
   RetainTranscriptInput,
   TranscriptAuditIndex,

@@ -32,6 +32,30 @@ preflight hardening plus the `src/domains/agent-execution` implementation.
   exclusion, credential isolation, phase capability grants, same-attempt backend fallback,
   transcript retention, and bounded workspace cleanup.
 
+## Independent review round
+
+The CRAFTS Assess phase originally ran on the same model as Render, which does not satisfy the
+builder/evaluator diversity guarantee. A second Assess was run on an independent model
+(GPT-5.x via Codex) and found six defects the same-model pass missed — five High, one Medium.
+All six were valid and are fixed:
+
+1. Repository commands inherited the host `HOME`, exposing file-based provider and forge
+   credentials (`~/.git-credentials`, `~/.netrc`, `~/.npmrc`, `~/.config/gh/hosts.yml`). The
+   original test asserted `HOME` was *retained*, so it misencoded the criterion.
+2. `startedAt` was unvalidated; a `NaN` start time makes every `now >= deadline` comparison
+   false, so an `audit_incomplete` workspace would be retained forever.
+3. `markAuditComplete()` took no argument, so any caller could authorize destruction without
+   having run the retention pipeline.
+4. Verification read store-reported metadata rather than the stored bytes, so a store that
+   truncated the object during `put` could still report the expected digest.
+5. Preflight checked only that two mutable config files agreed, not that they held the exact
+   five-model set from the specification.
+6. Cost validation allowed `amount` without `currency`, letting an unknown-currency charge be
+   summed into a later backend's currency total.
+
+**Process lesson:** same-model Assess found none of these. The independence requirement is
+load-bearing, not ceremony.
+
 ## Decisions worth remembering
 
 - Credential isolation is an **allowlist**, built from an empty base. A denylist fails open

@@ -5,7 +5,6 @@ import {
   TRANSCRIPT_RETENTION_ORDER,
   isWorkspaceRelativeLocator,
   retainTranscript,
-  type DurableObjectMetadata,
   type RetainTranscriptInput,
   type TranscriptAuditRecord,
 } from '../../src/domains/agent-execution/index.ts';
@@ -17,8 +16,8 @@ type Recorder = { steps: string[] };
 
 function fakeStore(recorder: Recorder, overrides: {
   putThrows?: boolean;
-  headThrows?: boolean;
-  headResult?: DurableObjectMetadata | null;
+  getThrows?: boolean;
+  getResult?: Buffer | null;
   objectId?: string;
 } = {}) {
   const stored = new Map<string, Buffer>();
@@ -30,13 +29,11 @@ function fakeStore(recorder: Recorder, overrides: {
       stored.set(objectId, bytes);
       return objectId;
     },
-    async head(objectId: string): Promise<DurableObjectMetadata | null> {
+    async get(objectId: string): Promise<Buffer | null> {
       recorder.steps.push('verify');
-      if (overrides.headThrows) throw new Error('object store unavailable');
-      if (overrides.headResult !== undefined) return overrides.headResult;
-      const bytes = stored.get(objectId);
-      if (!bytes) return null;
-      return { sha256: createHash('sha256').update(bytes).digest('hex'), byteSize: bytes.byteLength };
+      if (overrides.getThrows) throw new Error('object store unavailable');
+      if (overrides.getResult !== undefined) return overrides.getResult;
+      return stored.get(objectId) ?? null;
     },
   };
 }
@@ -130,7 +127,9 @@ describe('transcript retention pipeline', () => {
 
   it('records audit_incomplete when the stored object fails verification', async () => {
     const recorder: Recorder = { steps: [] };
-    const tampered = fakeStore(recorder, { headResult: { sha256: 'deadbeef', byteSize: 1 } });
+    // A store that returns different bytes than it was given must not verify,
+    // even if it would happily report the expected digest as metadata.
+    const tampered = fakeStore(recorder, { getResult: Buffer.from('truncated', 'utf8') });
     const outcome = await retainTranscript(input(recorder, { objectStore: tampered }));
 
     assert.equal(outcome.status, 'audit_incomplete');
@@ -142,7 +141,7 @@ describe('transcript retention pipeline', () => {
 
   it('records audit_incomplete when the durable object is missing after persist', async () => {
     const recorder: Recorder = { steps: [] };
-    const outcome = await retainTranscript(input(recorder, { objectStore: fakeStore(recorder, { headResult: null }) }));
+    const outcome = await retainTranscript(input(recorder, { objectStore: fakeStore(recorder, { getResult: null }) }));
     assert.equal(outcome.status, 'audit_incomplete');
     assert.ok('failedStep' in outcome);
     assert.equal(outcome.failedStep, 'verify');
@@ -251,10 +250,9 @@ describe('transcript retention pipeline', () => {
         keys.push(key);
         return 'obj-1';
       },
-      async head(): Promise<DurableObjectMetadata> {
+      async get(): Promise<Buffer> {
         recorder.steps.push('verify');
-        const bytes = Buffer.from(REDACTED, 'utf8');
-        return { sha256: createHash('sha256').update(bytes).digest('hex'), byteSize: bytes.byteLength };
+        return Buffer.from(REDACTED, 'utf8');
       },
     };
     await retainTranscript(
@@ -273,7 +271,7 @@ describe('transcript retention pipeline', () => {
 
   it('never throws, so a failed extraction cannot strand the workspace', async () => {
     const recorder: Recorder = { steps: [] };
-    const outcome = await retainTranscript(input(recorder, { objectStore: fakeStore(recorder, { headThrows: true }) }));
+    const outcome = await retainTranscript(input(recorder, { objectStore: fakeStore(recorder, { getThrows: true }) }));
     assert.equal(outcome.status, 'audit_incomplete');
     assert.ok('node_id' in outcome);
     assert.equal(outcome.node_id, 'node-1');

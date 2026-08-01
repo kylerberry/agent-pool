@@ -18,6 +18,7 @@ import {
   type CleanupState,
   type ExecutionFailure,
 } from './contracts.ts';
+import type { TranscriptAuditRecord } from './transcript-retention.ts';
 
 /** Default bounded quarantine for retry/diagnosis of a failed extraction. */
 export const DEFAULT_QUARANTINE_MS = 15 * 60 * 1000;
@@ -38,7 +39,11 @@ export interface AttemptWorkspaceLifecycle {
   state(): CleanupState;
   /** Move from `ready` into `extracting` when transcript retention begins. */
   beginExtraction(): CleanupState | ExecutionFailure;
-  markAuditComplete(): CleanupState | ExecutionFailure;
+  /**
+   * Complete the audit. Requires the verified retention record, so the state
+   * cannot be advanced by a caller that never ran the retention pipeline.
+   */
+  markAuditComplete(proof: TranscriptAuditRecord): CleanupState | ExecutionFailure;
   markAuditIncomplete(failureReason: string): CleanupState | ExecutionFailure;
   /** The recorded extraction-failure reason, preserved across destruction. */
   failureReason(): string | null;
@@ -53,6 +58,12 @@ export function createAttemptWorkspaceLifecycle(init: {
   const quarantineMs = init.quarantineMs ?? DEFAULT_QUARANTINE_MS;
   if (!Number.isFinite(quarantineMs) || quarantineMs < 0 || quarantineMs > MAX_QUARANTINE_MS) {
     return createExecutionFailure('CLEANUP_BLOCKED_PENDING_EXTRACTION', 'quarantine bound is out of range');
+  }
+  // A non-finite start time yields a NaN deadline, and every `now >= deadline`
+  // comparison against NaN is false — which is indefinite retention wearing a
+  // bounded-quarantine costume. Reject it at construction.
+  if (!Number.isFinite(init.startedAt)) {
+    return createExecutionFailure('CLEANUP_BLOCKED_PENDING_EXTRACTION', 'attempt start time is not finite');
   }
   const deadline = init.startedAt + quarantineMs;
 
@@ -69,9 +80,25 @@ export function createAttemptWorkspaceLifecycle(init: {
       state = 'extracting';
       return state;
     },
-    markAuditComplete() {
+    markAuditComplete(proof: TranscriptAuditRecord) {
       if (state !== 'extracting') {
         return createExecutionFailure('TRANSCRIPT_STEP_OUT_OF_ORDER', `cannot complete audit from ${state}`);
+      }
+      // Authorizing destruction is the point of no return for the transcript, so
+      // it is bound to evidence that retention actually succeeded rather than to
+      // a caller's assertion that it did.
+      if (
+        !proof ||
+        proof.extraction_status !== 'audit_complete' ||
+        proof.attempt_id !== init.attemptId ||
+        typeof proof.transcript_object_id !== 'string' ||
+        proof.transcript_object_id.trim() === '' ||
+        proof.redaction_status !== 'redacted'
+      ) {
+        return createExecutionFailure(
+          'CLEANUP_BLOCKED_PENDING_EXTRACTION',
+          'audit completion requires a verified transcript retention record for this attempt',
+        );
       }
       state = 'audit_complete';
       return state;
