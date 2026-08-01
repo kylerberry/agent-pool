@@ -18,8 +18,27 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const UNIT_FIELD_SET: ReadonlySet<string> = new Set(UNIT_FIELDS);
 const SUBMISSION_FIELD_SET: ReadonlySet<string> = new Set(SUBMISSION_FIELDS);
 
+/**
+ * A plain data object, and nothing dressed up as one.
+ *
+ * The prototype check matters: `Object.create({repo, branch, unit})` has no own
+ * keys, so an unknown-field scan sees nothing while property reads still
+ * resolve through the prototype chain — every field would arrive "valid" and
+ * unexamined. `JSON.parse` cannot produce such a value, but this boundary is
+ * also called directly by in-process callers, so it does not rely on that.
+ */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * Read a field only when the object genuinely owns it, so nothing inherited
+ * from a prototype is mistaken for caller-supplied data.
+ */
+function own(record: Record<string, unknown>, key: string): unknown {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
 }
 
 /**
@@ -46,8 +65,15 @@ function ownKeys(record: Record<string, unknown>): string[] {
  * relied upon downstream. Integration and Delivery may narrow them further —
  * it must not have to widen them.
  */
-const REPO_PATTERN = /^(?!.*\.\.)(?!-)[A-Za-z0-9._-]+\/(?!-)[A-Za-z0-9._-]+$/;
-const BRANCH_PATTERN = /^(?!-)(?!.*\.\.)[A-Za-z0-9._\/-]+$/;
+// The dot-only guard must end at a component boundary, not just end of string,
+// or `./repo` and `a/./b` slip through on their trailing components.
+const REPO_SEGMENT = String.raw`(?!-)(?!\.+(?:/|$))[A-Za-z0-9._-]+`;
+const REPO_PATTERN = new RegExp(`^(?!.*\\.\\.)${REPO_SEGMENT}/${REPO_SEGMENT}$`);
+
+// Git rejects empty path components, so a branch may not contain `//` or begin
+// or end with `/`; dot-only components are excluded for the same reason.
+const BRANCH_COMPONENT = String.raw`(?!\.+(?:/|$))[A-Za-z0-9._-]+`;
+const BRANCH_PATTERN = new RegExp(`^(?!-)(?!.*\\.\\.)${BRANCH_COMPONENT}(?:/${BRANCH_COMPONENT})*$`);
 
 function checkTargetFormat(
   value: string,
@@ -65,15 +91,25 @@ function checkTargetFormat(
 }
 
 /**
+ * Cap on how many violations a single rejection reports. A body carrying a
+ * million unknown keys would otherwise produce a million violations and a
+ * response far larger than the request that caused it.
+ */
+const MAX_REPORTED_VIOLATIONS = 100;
+
+/**
  * Violations are sorted into a stable order so two identical payloads always
- * yield byte-identical rejections, independent of check ordering.
+ * yield byte-identical rejections, independent of check ordering, then capped.
+ * Sorting before capping keeps the retained subset deterministic too.
  */
 function sortViolations(violations: IntakeViolation[]): IntakeViolation[] {
-  return [...violations].sort((a, b) => {
-    if (a.path !== b.path) return a.path < b.path ? -1 : 1;
-    if (a.code !== b.code) return a.code < b.code ? -1 : 1;
-    return a.message < b.message ? -1 : a.message > b.message ? 1 : 0;
-  });
+  return [...violations]
+    .sort((a, b) => {
+      if (a.path !== b.path) return a.path < b.path ? -1 : 1;
+      if (a.code !== b.code) return a.code < b.code ? -1 : 1;
+      return a.message < b.message ? -1 : a.message > b.message ? 1 : 0;
+    })
+    .slice(0, MAX_REPORTED_VIOLATIONS);
 }
 
 function checkString(
@@ -128,7 +164,8 @@ function validateUnitShape(raw: unknown, path: string, violations: IntakeViolati
     return;
   }
 
-  const unitId = typeof raw['id'] === 'string' ? raw['id'] : undefined;
+  const rawId = own(raw, 'id');
+  const unitId = typeof rawId === 'string' ? rawId : undefined;
 
   for (const key of ownKeys(raw)) {
     if (FORBIDDEN_KEYS.has(key) || !UNIT_FIELD_SET.has(key)) {
@@ -141,18 +178,23 @@ function validateUnitShape(raw: unknown, path: string, violations: IntakeViolati
     }
   }
 
-  checkString(raw['id'], `${path}.id`, INTAKE_LIMITS.maxIdLength, violations, unitId);
-  checkString(raw['intent'], `${path}.intent`, INTAKE_LIMITS.maxIntentLength, violations, unitId);
+  checkString(rawId, `${path}.id`, INTAKE_LIMITS.maxIdLength, violations, unitId);
+  checkString(own(raw, 'intent'), `${path}.intent`, INTAKE_LIMITS.maxIntentLength, violations, unitId);
   checkString(
-    raw['change_spec'],
+    own(raw, 'change_spec'),
     `${path}.change_spec`,
     INTAKE_LIMITS.maxChangeSpecLength,
     violations,
     unitId,
   );
 
-  validateAcceptanceCriteria(raw['acceptance_criteria'], `${path}.acceptance_criteria`, violations, unitId);
-  validateDependsOn(raw['depends_on'], `${path}.depends_on`, violations, unitId);
+  validateAcceptanceCriteria(
+    own(raw, 'acceptance_criteria'),
+    `${path}.acceptance_criteria`,
+    violations,
+    unitId,
+  );
+  validateDependsOn(own(raw, 'depends_on'), `${path}.depends_on`, violations, unitId);
 }
 
 function validateAcceptanceCriteria(
@@ -372,15 +414,19 @@ export function validateSubmission(body: unknown): SubmissionValidation {
     }
   }
 
-  if (checkString(body['repo'], '$.repo', INTAKE_LIMITS.maxRepoLength, violations)) {
-    checkTargetFormat(body['repo'] as string, '$.repo', REPO_PATTERN, violations);
+  const rawRepo = own(body, 'repo');
+  const rawBranch = own(body, 'branch');
+  if (checkString(rawRepo, '$.repo', INTAKE_LIMITS.maxRepoLength, violations)) {
+    checkTargetFormat(rawRepo as string, '$.repo', REPO_PATTERN, violations);
   }
-  if (checkString(body['branch'], '$.branch', INTAKE_LIMITS.maxBranchLength, violations)) {
-    checkTargetFormat(body['branch'] as string, '$.branch', BRANCH_PATTERN, violations);
+  if (checkString(rawBranch, '$.branch', INTAKE_LIMITS.maxBranchLength, violations)) {
+    checkTargetFormat(rawBranch as string, '$.branch', BRANCH_PATTERN, violations);
   }
 
-  const hasUnit = body['unit'] !== undefined;
-  const hasUnits = body['units'] !== undefined;
+  const rawUnit = own(body, 'unit');
+  const rawUnitArray = own(body, 'units');
+  const hasUnit = rawUnit !== undefined;
+  const hasUnits = rawUnitArray !== undefined;
 
   if (hasUnit && hasUnits) {
     violations.push({
@@ -403,20 +449,22 @@ export function validateSubmission(body: unknown): SubmissionValidation {
   let rawUnits: unknown[];
 
   if (hasUnit) {
-    rawUnits = [body['unit']];
-    validateUnitShape(body['unit'], '$.unit', violations);
-    const single = body['unit'];
+    rawUnits = [rawUnit];
+    validateUnitShape(rawUnit, '$.unit', violations);
     // A one-unit submission has nothing to depend on; a non-empty edge list
     // here is always a dangling reference, so reject it as a shape error.
-    if (isPlainObject(single) && Array.isArray(single['depends_on']) && single['depends_on'].length > 0) {
-      violations.push({
-        code: 'SINGLE_UNIT_HAS_DEPENDENCIES',
-        path: '$.unit.depends_on',
-        message: 'a single-unit submission cannot declare dependencies; use units for a DAG',
-      });
+    if (isPlainObject(rawUnit)) {
+      const edges = own(rawUnit, 'depends_on');
+      if (Array.isArray(edges) && edges.length > 0) {
+        violations.push({
+          code: 'SINGLE_UNIT_HAS_DEPENDENCIES',
+          path: '$.unit.depends_on',
+          message: 'a single-unit submission cannot declare dependencies; use units for a DAG',
+        });
+      }
     }
   } else {
-    const candidate = body['units'];
+    const candidate = rawUnitArray;
     if (!Array.isArray(candidate)) {
       violations.push({
         code: 'INVALID_FIELD_TYPE',
@@ -494,7 +542,9 @@ export function validateSubmission(body: unknown): SubmissionValidation {
     violations.push({
       code: 'DEPENDENCY_CYCLE',
       path: basePath,
-      message: `dependency cycle among units: ${unorderable.join(', ')}`,
+      // Kahn's leaves both the cycle members and everything downstream of them
+      // unordered, so this names the affected set, not the cycle exactly.
+      message: `dependency cycle reaches these units: ${unorderable.join(', ')}`,
     });
     return { ok: false, violations: sortViolations(violations) };
   }
@@ -502,8 +552,8 @@ export function validateSubmission(body: unknown): SubmissionValidation {
   return {
     ok: true,
     value: {
-      repo: body['repo'] as string,
-      branch: body['branch'] as string,
+      repo: rawRepo as string,
+      branch: rawBranch as string,
       units,
       shape,
     },

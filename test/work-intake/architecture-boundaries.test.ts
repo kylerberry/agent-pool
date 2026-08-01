@@ -66,6 +66,39 @@ describe('architecture boundaries', () => {
     }
   });
 
+  it('the whole module graph under direct-intake stays inside the domain', () => {
+    // Stronger than scanning one file for forbidden tokens: walk every module
+    // transitively reachable from the boundary and require each import to be
+    // either a Node builtin or another work-intake file. A model call cannot
+    // be reached from here under any name, renamed or fire-and-forget.
+    const visited = new Set<string>();
+    const queue = [join(domainSourceRoot, 'direct-intake.ts')];
+
+    while (queue.length > 0) {
+      const current = queue.pop() as string;
+      if (visited.has(current)) continue;
+      visited.add(current);
+
+      const content = readFileSync(current, 'utf8');
+      for (const match of content.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
+        const specifier = match[1] as string;
+        if (specifier.startsWith('node:')) continue;
+        assert.ok(
+          specifier.startsWith('./') || specifier.startsWith('../'),
+          `${current} reaches a non-builtin package: ${specifier}`,
+        );
+        const resolved = join(dirname(current), specifier);
+        assert.ok(
+          resolved.startsWith(domainSourceRoot),
+          `${current} reaches outside the work-intake domain: ${specifier}`,
+        );
+        queue.push(resolved);
+      }
+    }
+
+    assert.ok(visited.size >= 4, `expected to walk the domain graph, saw ${visited.size} modules`);
+  });
+
   it('domain index exports only the narrow direct-intake interface', () => {
     const content = readFileSync(join(domainSourceRoot, 'index.ts'), 'utf8');
     for (const expected of ['acceptDirectTasks', 'handleDirectTaskRequest', 'IdempotencyStore', 'DirectTaskUnit']) {

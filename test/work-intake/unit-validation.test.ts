@@ -275,6 +275,53 @@ describe('validateSubmission — malformed and hostile input', () => {
     assert.ok(codes(submission({ unit: unit({ acceptance_criteria: criteria }) })).includes('FIELD_TOO_LONG'));
   });
 
+  it('rejects an object whose fields are only reachable through its prototype', () => {
+    // No own keys, so an unknown-field scan sees nothing, yet every read
+    // resolves through the prototype chain.
+    const disguised = Object.create({ repo: 'owner/repo', branch: 'main', unit: unit() });
+    assert.ok(codes(disguised).includes('MALFORMED_BODY'));
+  });
+
+  it('rejects a unit whose fields are only inherited', () => {
+    const disguisedUnit = Object.create(unit());
+    assert.ok(codes(submission({ unit: disguisedUnit })).includes('INVALID_FIELD_TYPE'));
+  });
+
+  it('caps the number of reported violations', () => {
+    const hostile: Record<string, unknown> = { ...unit() };
+    for (let i = 0; i < 10_000; i += 1) hostile[`junk${i}`] = i;
+    const result = validateSubmission(submission({ unit: hostile }));
+    assert.equal(result.ok, false);
+    const count = result.ok ? 0 : result.violations.length;
+    assert.ok(count > 0 && count <= 100, `expected a capped violation list, got ${count}`);
+  });
+
+  it('caps deterministically — the same hostile payload yields the same subset', () => {
+    const build = () => {
+      const hostile: Record<string, unknown> = { ...unit() };
+      for (let i = 0; i < 500; i += 1) hostile[`junk${i}`] = i;
+      return validateSubmission(submission({ unit: hostile }));
+    };
+    const a = build();
+    const b = build();
+    assert.deepEqual(a.ok ? null : a.violations, b.ok ? null : (b as { violations: unknown }).violations);
+  });
+
+  it('rejects git-invalid branch and repo shapes', () => {
+    for (const branch of ['feature//x', '/leading', 'trailing/', 'a/./b', '.']) {
+      assert.ok(
+        codes(submission({ branch, unit: unit() })).includes('INVALID_FIELD_FORMAT'),
+        `branch ${JSON.stringify(branch)} must be rejected`,
+      );
+    }
+    for (const repo of ['./repo', 'owner/.', '../repo']) {
+      assert.ok(
+        codes(submission({ repo, unit: unit() })).includes('INVALID_FIELD_FORMAT'),
+        `repo ${JSON.stringify(repo)} must be rejected`,
+      );
+    }
+  });
+
   it('handles a deep dependency chain without stack overflow', () => {
     const units = Array.from({ length: 300 }, (_, i) =>
       unit({ id: `u${i}`, ...(i === 0 ? {} : { depends_on: [`u${i - 1}`] }) }),

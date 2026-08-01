@@ -125,10 +125,26 @@ describe('acceptDirectTasks — caller-scoped idempotency (AC4)', () => {
     const first = accepted(acceptDirectTasks(request, dependencies));
     const second = accepted(acceptDirectTasks({ ...request, body: body({ unit: unit() }) }, dependencies));
 
-    assert.equal(second.submission_id, first.submission_id);
     assert.equal(second.replayed, true);
     assert.equal(first.replayed, false);
-    assert.deepEqual(second.units, first.units);
+
+    // The replay must be the original result in every respect but the flag
+    // that marks it a replay — no field may be recomputed on the second call.
+    const { replayed: _first, ...firstRest } = first;
+    const { replayed: _second, ...secondRest } = second;
+    assert.deepEqual(secondRest, firstRest);
+  });
+
+  it('replays without consuming a new submission id', () => {
+    let generated = 0;
+    const dependencies = {
+      store: new InMemoryIdempotencyStore(),
+      generateSubmissionId: () => `sub-${++generated}`,
+    };
+    const request = { callerId: 'c', body: body({ unit: unit() }), idempotencyKey: 'k1' };
+    acceptDirectTasks(request, dependencies);
+    acceptDirectTasks(request, dependencies);
+    assert.equal(generated, 1, 'a replay must not mint a fresh submission id');
   });
 
   it('replays regardless of key ordering in the retried payload', () => {
