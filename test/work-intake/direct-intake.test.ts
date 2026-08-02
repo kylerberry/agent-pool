@@ -82,6 +82,36 @@ describe('acceptDirectTasks — criteria preservation and provenance (AC3)', () 
     assert.equal(provenance?.submission_id, result.submission_id);
   });
 
+  it('emits the canonical direct_task spelling, never the hyphenated form', () => {
+    // Locked from this side too: the worker attempt contract's criteria_origin
+    // enum accepts direct_task only, and drift should fail at both ends.
+    const result = accepted(acceptDirectTasks({ callerId: 'c', body: body({ unit: unit() }) }, deps()));
+    const origin = result.units[0]?.acceptance_criteria_provenance.origin;
+    assert.equal(origin, 'direct_task');
+    assert.notEqual(origin as string, 'direct-task');
+  });
+
+  it('supplies a non-empty caller-facing id for criteria_origin.source_id', () => {
+    // The worker contract requires source_id minLength 1; submission_id is the
+    // caller-facing value that maps there.
+    const result = accepted(acceptDirectTasks({ callerId: 'c', body: body({ unit: unit() }) }, deps()));
+    assert.ok(result.submission_id.trim().length > 0);
+    assert.equal(result.units[0]?.acceptance_criteria_provenance.submission_id, result.submission_id);
+  });
+
+  it('fails loudly when the injected id generator returns a blank id', () => {
+    for (const bad of ['', '   ']) {
+      assert.throws(
+        () =>
+          acceptDirectTasks(
+            { callerId: 'c', body: body({ unit: unit() }) },
+            { store: new InMemoryIdempotencyStore(), generateSubmissionId: () => bad },
+          ),
+        /non-empty caller-facing identifier/,
+      );
+    }
+  });
+
   it('records a null idempotency key when none was supplied', () => {
     const result = accepted(acceptDirectTasks({ callerId: 'c', body: body({ unit: unit() }) }, deps()));
     assert.equal(result.units[0]?.acceptance_criteria_provenance.idempotency_key, null);

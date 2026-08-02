@@ -146,10 +146,20 @@ export function acceptDirectTasks(
     }
   }
 
+  // The submission id is the caller-facing identifier the worker attempt
+  // contract carries as `criteria_origin.source_id`, which requires a non-empty
+  // string. A generator that returns a blank one is a composition bug, not
+  // caller error, so it fails loudly here rather than producing a record that
+  // only breaks later at the projection.
+  const submissionId = dependencies.generateSubmissionId();
+  if (typeof submissionId !== 'string' || submissionId.trim().length === 0) {
+    throw new TypeError('generateSubmissionId must return a non-empty caller-facing identifier');
+  }
+
   const provenanceBase: Omit<CriteriaProvenance, 'unit_id'> = {
     origin: 'direct_task',
     caller_id: callerId,
-    submission_id: dependencies.generateSubmissionId(),
+    submission_id: submissionId,
     idempotency_key: idempotencyKey,
   };
 

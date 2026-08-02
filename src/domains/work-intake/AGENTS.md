@@ -38,6 +38,24 @@
 
 Accepted units carry `acceptance_criteria_provenance` with `origin=direct_task`. Criteria are copied verbatim — no trimming, casing, reordering, or renumbering — because the CRAFTS C phase treats them as ground truth.
 
+`direct_task` is spelled with an underscore. The worker attempt contract's `criteria_origin.source` enum accepts that spelling only, and both sides carry a test that fails on the hyphenated form.
+
+### The projection seam (controller-owned, NOT this domain)
+
+Accepted units are **not** worker-facing. A controller-owned projection converts one unit into one worker attempt contract, and that is where the shapes diverge:
+
+| This domain emits | Worker attempt contract expects |
+| --- | --- |
+| `id` | `node_id`, plus `attempt_id` / `attempt_number` |
+| `acceptance_criteria: string[]` | `[{ id, text }]` with unique ids |
+| `acceptance_criteria_provenance.origin` | `criteria_origin.source` |
+| `acceptance_criteria_provenance.submission_id` | `criteria_origin.source_id` (caller-facing, non-empty) |
+| `depends_on` | absent — topology is stripped at dispatch |
+
+Do not build that projection here, and do not strip `depends_on` here: the controller needs the edges to compute the ready frontier. The worker independently rejects any payload containing topology keys, so a leaked edge fails loudly rather than silently.
+
+**Criterion ids must be stable across retries**, or a retried attempt cannot be matched against the previous attempt's `acceptance_criteria_status`. This domain preserves criteria order exactly, which is what makes an index-derived id viable; if the projection derives ids by position, that guarantee is load-bearing and must not be relaxed.
+
 ## Dependencies
 
 - Depends on Codebase Knowledge for decomposition context and approved documentation sources.
