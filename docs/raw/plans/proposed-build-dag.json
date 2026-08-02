@@ -203,7 +203,9 @@
         "Migrations and startup reconciliation are idempotent and tested against interrupted states.",
         "Retention is bounded and an encrypted off-host backup includes a consistent SQLite/WAL snapshot.",
         "A documented restore drill is executed successfully in a test environment.",
-        "Operations cover transcript-object access classification, bounded retention/deletion state, extraction alerts, WAL-safe backup and restore of audit metadata, and cleanup state that distinguishes complete from incomplete transcript extraction and audit."
+        "Operations cover transcript-object access classification, bounded retention/deletion state, extraction alerts, WAL-safe backup and restore of audit metadata, and cleanup state that distinguishes complete from incomplete transcript extraction and audit.",
+        "The single-host Compose topology builds and runs packages/orchestrator-harness as a dedicated orchestrator-control-plane decomposition service, using its own Dockerfile or dedicated image target, physically separate from Pool Worker containers and never loading craft-pool.",
+        "The decomposition service receives only required Pi, code-graph, and provider capabilities and secrets, uses private bounded runtime storage and resource limits, and is covered by service-specific health, readiness, and decomposition-queue connectivity checks."
       ],
       "depends_on": ["async-spec-intake-gate-one", "controller-failure-policy", "github-revision-webhooks", "builder-eval-harness"]
     },
@@ -224,7 +226,7 @@
   ],
   "approval": {
     "approved_by": "Kyler Berry",
-    "approved_at": "2026-07-25T01:59:23Z",
-    "notes": "Approved with the ADR-034 domain map and its API/webhook ownership resolutions. Execute ready nodes through fresh local CRAFTS slices; use isolated worktrees for parallel writers."
+    "approved_at": "2026-08-02T02:58:46Z",
+    "notes": "Approved with the ADR-034 domain map and its API/webhook ownership resolutions. Execute ready nodes through fresh local CRAFTS slices; use isolated worktrees for parallel writers. Amended by Kyler to require an explicit dedicated decomposer container/image target and service-level isolation/health coverage in single-host operations."
   }
 }

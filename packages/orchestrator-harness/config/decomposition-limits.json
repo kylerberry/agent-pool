@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "maxSerializedJobBytes": 262144,
+  "maxRawSpecBytes": 65536,
+  "maxBreadthUnits": 200,
+  "maxBreadthEdges": 500,
+  "maxPromptBytes": 524288,
+  "maxOutputTokens": 32768,
+  "maxResponseBytes": 1048576,
+  "maxNodes": 256,
+  "maxNodeIdLength": 256,
+  "maxNodeStringLength": 8192,
+  "maxNodeCollectionLength": 256,
+  "maxDiagnostics": 100,
+  "maxRepairContextBytes": 16384,
+  "maxCalls": 2,
+  "deadlineMs": 120000
+}

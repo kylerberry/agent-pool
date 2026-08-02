@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "node_id": "orchestrator-decomposition-harness",
+  "attempt_id": "orchestrator-decomposition-harness-attempt-2",
+  "phase": "C",
+  "status": "passed",
+  "model": "openai-codex/gpt-5.6-sol",
+  "started_at": "2026-08-01T16:40:00Z",
+  "completed_at": "2026-08-01T16:40:01Z",
+  "summary": "AFK full-flow retry plan limited to attempt-1 Tighten blockers: remove environment-controlled production mocks in favor of test-only dependency injection, enforce the router-selected provider-qualified model in the Pi process including approved Sol fallback, isolate configuration beneath a fresh canonical launcher-owned private parent, and make provenance identify and reverify the actual Pi executable. Existing validated decomposition, sanitization, bounded repair, package separation, and strict non-goals remain unchanged.",
+  "acceptance_criteria_status": [
+    {
+      "criterion": "The harness is physically separate from packages/worker-harness and never loads craft-pool.",
+      "status": "met",
+      "evidence": [
+        "Attempt-1 final T records this criterion as met based on packages/orchestrator-harness/package.json and test/work-intake/decomposition-architecture-boundaries.test.ts.",
+        "Attempt 2 includes preservation-only architecture regressions and no worker-harness or craft-pool changes."
+      ]
+    },
+    {
+      "criterion": "Its decomposer emits only id, intent, change_spec, acceptance_criteria, and depends_on for each node.",
+      "status": "met",
+      "evidence": [
+        "Attempt-1 final T confirms the active launcher reaches runDecomposition and its strict five-field projection.",
+        "Attempt 2 does not alter emission fields or downstream DAG semantics and retains exact-shape regression tests."
+      ]
+    },
+    {
+      "criterion": "Kimi K3 is the bootstrap decomposition model with only approved fail-closed fallback policy.",
+      "status": "unmet",
+      "evidence": [
+        "Attempt-1 final T found that pi-model-invoker.mjs does not pass invocation.model to Pi.",
+        "Attempt-1 final T found that preflight requires every allowed model to be available, preventing the approved Sol fallback when Kimi K3 is unavailable.",
+        "Attempt 2 plans direct argv/effective-model assertions for Kimi K3, approved Sol fallback, explicit-model failure, and no-candidate failure."
+      ]
+    },
+    {
+      "criterion": "The invocation records prompt, model, tool, package, and code-graph revision provenance.",
+      "status": "unmet",
+      "evidence": [
+        "Attempt-1 final T found that launcherIdentity() records launch.mjs while attaching the configured Pi executable digest.",
+        "Because the selected model is not enforced at spawn, recorded selectedModel can differ from the effective Pi model.",
+        "Attempt 2 plans provenance sourced from the verified actual Pi executable and assertions that recorded model, executable path, and digest match the effective spawn."
+      ]
+    },
+    {
+      "criterion": "Schema-invalid output is rejected or repaired only within an explicit bounded policy; the model cannot validate, persist, approve, or dispatch its own DAG.",
+      "status": "met",
+      "evidence": [
+        "Attempt-1 final T confirms strict validation, fixed limits, one repair maximum, invocation-wide deadline, and the read-only agent surface.",
+        "Attempt 2 preserves these controls and adds regressions ensuring test injection and launcher changes do not expose validation, persistence, approval, queue, Gate 1, or dispatch authority."
+      ]
+    }
+  ],
+  "changed_files": [],
+  "commands_run": [],
+  "cost": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "amount": null,
+    "currency": null
+  },
+  "risks": [
+    "There remains a narrow time-of-check/time-of-use interval between executable re-verification and operating-system spawn. Reverify the canonical regular-file path immediately before every initial or repair spawn and fail if identity changes.",
+    "Pi 0.81.1 model-selector semantics are an external runtime contract. Keep the explicit provider-qualified selector behind the adapter and test captured argv plus effective routing provenance for both Kimi K3 and Sol.",
+    "A fresh private runtime parent requires reliable cleanup without deleting evidence prematurely. Restrict cleanup to the launcher-created canonical subtree after the child exits and retain only sanitized invocation records.",
+    "Test dependency injection could become a bypass if selected through environment variables or production CLI inputs. Keep fakes in test modules or explicit in-process test constructors that the production launcher never imports or selects.",
+    "Previously documented residual risks remain: deterministic sanitization may miss novel secret encodings, and provider cancellation may lag the local timeout."
+  ],
+  "open_questions": [],
+  "recommended_next_step": "Run the mandatory supplemental plan-security checkpoint for the declared triggers. If it passes, execute Render with local-craft-builder and pair its later review with local-craft-evaluator on a different model whose capability is not lower; fail closed and escalate if that pairing cannot be enforced.",
+  "failure_context": null,
+  "transcript_path": null,
+  "phase_data": {
+    "complexity": "full",
+    "selected_flow": "C-R-A-F-T-S",
+    "scope": "AFK retry with no TODO(human) seam. Preserve the current orchestrator-side decomposition implementation and change only the four attempt-1 Tighten blockers. Remove AGENT_POOL_TEST_MODE, AGENT_POOL_MOCK_* and test-record environment behavior from every production-reachable launcher, decomposition entry, and Pi adapter path; tests must inject fake availability, breadth retrieval, model invocation, recording, and pre-spawn hooks only through test-local in-process dependencies. Continue using the existing actor-owned routing policy, but let validated live availability reach selectForRole so moonshot/kimi-k3 remains primary and openai-codex/gpt-5.6-sol is selected only when K3 is unavailable; pass that exact selected provider-qualified ID through the pinned Pi runtime's explicit model selector and remove or neutralize static agent defaults that could override or independently fallback from the router decision. Create HOME and XDG roots beneath a fresh atomically created, canonicalized, mode-private launcher-owned runtime parent rather than AGENT_POOL_WORKSPACE, validate ownership, type, permissions, realpath containment and non-symlink ancestry, and clean up only that launcher-created subtree after execution. Canonicalize and verify the actual Pi executable as a regular non-symlink file against the pinned version and digest, expose that exact immutable identity to runDecomposition provenance, and repeat the path/type/version/digest check immediately before every Pi spawn. Retain existing strict job and output validation, prompt sanitization, bounded retrieval, response limits, one repair maximum, deadline, code-graph revision binding, package separation, and read-only model authority.",
+    "non_goals": [
+      "Do not implement or modify controller lifecycle, queues, persistence, Gate 1 approval or amendment, DAG dispatch, retries, leases, ready-frontier logic, or delivery.",
+      "Do not modify packages/worker-harness, load craft-pool, add worker agents, or behave as a Pool Worker.",
+      "Do not change the five ADR-018 node fields, add model-authored provenance, or move deterministic validation or repair authority into the decomposer.",
+      "Do not add models, aliases, providers, provider-specific routing policy, eval-derived routing, or any fallback beyond the already approved openai-codex/gpt-5.6-sol fallback.",
+      "Do not add runtime-error or timeout-driven model fallback; routing remains a single deterministic availability decision before invocation.",
+      "Do not redesign sanitization, decomposition limits, breadth retrieval, emission validation, repair semantics, or the invocation-wide deadline except where a narrow interface adjustment is required to carry verified executable identity.",
+      "Do not derive trusted configuration state from the caller workspace, target repository, inherited HOME/XDG values, hostile PATH, ambient Pi configuration, plugins, or environment-selected test fixtures.",
+      "Do not introduce a general sandbox, secret service, controller-owned runtime manager, deployment system, or persistent provenance store."
+    ],
+    "test_strategy": [
+      "RED—add adversarial launcher tests setting AGENT_POOL_TEST_MODE, AGENT_POOL_MOCK_AVAILABILITY, AGENT_POOL_MOCK_BREADTH_RESULT, AGENT_POOL_MOCK_MODEL_RESPONSES and AGENT_POOL_TEST_RECORD_PATH; demonstrate the current environment combination can bypass live production dependencies. GREEN—remove all production recognition and forwarding of those controls and reject reserved test/mock variables at the launcher boundary before preflight or invocation. REFACTOR—centralize the production environment allowlist and reserved-variable rejection.",
+      "RED—replace current launcher tests that depend on environment mocks with a test-only dependency fixture located under packages/orchestrator-harness/test that directly injects fake availability, breadth and model ports into the deterministic service. GREEN—retain equivalent valid, invalid-output, secret-canary, timeout and one-repair coverage without any production CLI or environment switch. REFACTOR—share immutable fixtures only within test code and add a source scan proving production scripts do not import test helpers or reference mock controls.",
+      "RED—use a fake Pi executable that captures argv and fail because the current adapter omits invocation.model. GREEN—invoke Pi with the pinned runtime's explicit model selector and the exact router-selected moonshot/kimi-k3 ID. Assert prompt input, package paths and selected model are separate argv elements and hostile model-like prompt text cannot alter them. REFACTOR—centralize Pi argument construction as a pure function with exact-array tests.",
+      "RED—publish live availability containing only openai-codex/gpt-5.6-sol; show current preflight rejects the missing K3 model. GREEN—make preflight require a usable approved decomposition candidate rather than every allowed model, pass the validated snapshot to existing routing, select Sol with primaryAvailable=false and selectedFallbackIndex=0, and assert the Pi argv and provenance both contain Sol. Add adversarial cases for K3-only success, neither-candidate failure with zero model spawns, unavailable explicit K3 failure without fallback, malformed availability, duplicate entries and unapproved IDs.",
+      "RED—capture effective settings plus argv for the fallback case and show static K3 agent configuration can conflict with the router decision. GREEN—remove or neutralize per-agent model/fallback defaults so the adapter's explicit selected model is authoritative while modelScope continues to allow exactly K3 and Sol. Assert no Pi-internal fallback can silently diverge from routing evidence.",
+      "RED—prepopulate the caller workspace's .agent-pool/orchestrator-home and orchestrator-xdg paths, supply hostile inherited HOME/XDG values, and place symlinks or world-accessible ancestors around them. GREEN—create a random private parent atomically under a canonical runtime base, set restrictive permissions, canonicalize it, derive HOME and XDG only beneath it, and verify ownership, regular-directory type, mode and realpath containment before preflight and spawn. Assert caller-workspace contents are neither loaded nor overwritten.",
+      "RED—race or replace a derived configuration directory with a symlink between creation and verification. GREEN—fail closed on any identity, ancestry, ownership, mode or containment mismatch. Assert cleanup refuses paths outside the recorded launcher-created parent and removes only that subtree after child exit.",
+      "RED—assert provenance launcher.path currently names packages/orchestrator-harness/scripts/launch.mjs while launcher.digest names Pi bytes. GREEN—source the immutable provenance identity from the verified canonical Pi executable and assert path, pinned version and sha256 digest all identify the same file actually supplied to spawn.",
+      "RED—mutate, replace or symlink the fake Pi executable after preflight but before invocation through a test-only in-process hook. GREEN—repeat lstat, canonical-path, version and digest verification immediately before every initial or repair spawn and abort without executing changed bytes. Assert a stable executable spawns and its recorded digest equals a fresh hash of the captured executable.",
+      "RED—attempt to inject forged executable identity or selectedModel through the job, model output, inherited environment or test response. GREEN—construct both only in deterministic trusted code, deeply freeze the record and reject unknown output fields. Assert provenance selectedModel equals routing.selectedModel and the explicit model argv for initial and repair calls.",
+      "RED—run preservation fixtures for exact five-field emissions, sanitization canaries, oversized input/output, invalid output with one repair, timeout without repair, revision mismatch, architecture separation, read-only tools and absence of persistence, approval, queue, Gate 1 or dispatch symbols. GREEN—make no semantic changes to those controls. REFACTOR—keep new identity and model-binding interfaces narrow and provider-neutral.",
+      "Capture red-state evidence before implementation for the focused package and Work Intake tests. After green and refactor, run npm test --prefix packages/orchestrator-harness, node --experimental-strip-types --test test/work-intake/*.test.ts, npm test, npm run typecheck and npm run test:worker."
+    ],
+    "planned_files": [
+      "src/domains/work-intake/decomposition-contracts.ts",
+      "src/domains/work-intake/decomposition-harness.ts",
+      "test/work-intake/decomposition-harness.test.ts",
+      "test/work-intake/decomposition-harness-security.test.ts",
+      "test/work-intake/decomposition-architecture-boundaries.test.ts",
+      "packages/orchestrator-harness/config/settings.json",
+      "packages/orchestrator-harness/scripts/launch.mjs",
+      "packages/orchestrator-harness/scripts/preflight.mjs",
+      "packages/orchestrator-harness/scripts/run-decomposition.mjs",
+      "packages/orchestrator-harness/scripts/pi-model-invoker.mjs",
+      "packages/orchestrator-harness/test/helpers/decomposition-dependencies.mjs",
+      "packages/orchestrator-harness/test/launch.test.mjs",
+      "packages/orchestrator-harness/test/preflight.test.mjs",
+      "packages/orchestrator-harness/test/preflight-security.test.mjs",
+      "packages/orchestrator-harness/test/pi-model-invoker.test.mjs"
+    ],
+    "trust_boundaries": [
+      "Inherited process environment crosses into the production launcher. Treat every caller-set value as untrusted, reject test/mock and caller-controlled configuration-root controls, construct a minimal child environment, and provide no production switch capable of replacing availability, breadth retrieval, model output, recording, executable verification or pre-spawn behavior.",
+      "Test dependencies cross into deterministic service tests but must not cross the production composition boundary. Keep fakes and hooks in test-local modules, pass them only through direct in-process dependency injection, and prove production launch scripts neither import them nor select them from environment, files, job fields or CLI arguments.",
+      "The target workspace is untrusted repository state, not a configuration authority. Use it only for the existing job and codebase-knowledge inputs; create configuration roots under a fresh canonical launcher-owned private parent with restrictive ownership and permissions, verified realpath containment and non-symlink ancestry.",
+      "Pi model-registry output crosses from an external executable into routing. Bound and parse it deterministically, admit only approved decomposition candidates, allow Kimi K3 primary or the single configured Sol fallback, and fail closed on malformed data, explicit-model unavailability or no candidate.",
+      "The routing-to-adapter boundary carries an already-selected provider-qualified model. The adapter must not choose, alias or independently fallback; it must pass the exact selected ID through the pinned Pi runtime's explicit model selector and ensure static package settings cannot override it.",
+      "The launcher-to-Pi executable boundary permits file replacement between preflight and use. Bind a canonical absolute regular non-symlink path to the pinned version and digest, verify ownership and bytes, repeat verification immediately before every spawn, invoke only that absolute path, and fail before execution on any change.",
+      "Prompt and provider-response data cross the Pi process boundary. Preserve the existing exact sanitized prompt, output byte cap, invocation-wide deadline, abort behavior, bounded public errors and one schema-only repair; new argv construction must not interpolate prompt or model text into a shell command.",
+      "Invocation provenance crosses back to the trusted caller. Construct model and executable evidence outside the model from the effective routing decision and verified Pi file, ensure path/version/digest identify the same executable actually spawned, deeply freeze records, and retain no mock controls, ambient environment, raw secrets or provider errors.",
+      "The orchestrator and worker packages remain separate authority domains. Architecture checks must continue to reject worker-harness, craft-pool, persistence, approval, queue, Gate 1 and dispatch imports or capabilities while permitting only the existing read-only spec-decomposer surface."
+    ],
+    "security_triggers": [
+      "trust-boundary-change",
+      "untrusted-input",
+      "secrets-sensitive-data",
+      "external-integration",
+      "file-command-execution"
+    ],
+    "render_plan": [
+      "Write and run the focused adversarial tests first, preserving failing output for environment mock bypass, missing model argv, rejected Sol-only availability, workspace-derived configuration roots, mismatched provenance and executable replacement after preflight.",
+      "Delete all production environment-based mock and test-record branches from launch.mjs, run-decomposition.mjs and pi-model-invoker.mjs. Reject reserved test/mock controls at the outer launcher and move required fakes to a test-only dependency helper used through direct in-process injection.",
+      "Replace workspace-derived HOME/XDG creation with one fresh atomically created launcher-owned private runtime parent. Canonicalize and validate its ownership, mode, directory type and ancestry; derive HOME and XDG beneath it; pass them only in the isolated child environment; and clean up only the recorded subtree after the child exits.",
+      "Extract or centralize provider-neutral Pi executable verification so preflight and the adapter use the same pinned identity rules. Canonicalize the actual executable, reject symlinks and non-regular files, verify pinned version and sha256 bytes, and repeat the verification immediately before each initial or repair spawn.",
+      "Extend the narrow deterministic invocation contract only as needed to carry verified actual-Pi identity into provenance. Remove the static launch.mjs identity, keep the existing launcher record shape, and assert recorded path, version and digest match the executable accepted by the adapter.",
+      "Change preflight availability handling so it verifies registry access and at least one approved decomposition-policy candidate without requiring every allowed candidate. Keep the existing strict router authoritative for K3 primary, Sol fallback, explicit-model failure and no-candidate failure.",
+      "Pass routing.selectedModel to the pinned Pi runtime through its explicit provider-qualified model selector. Remove or neutralize conflicting static per-agent model/fallback settings while preserving exact K3/Sol modelScope enforcement, and add captured-argv assertions for initial and repair calls.",
+      "Verify end-to-end consistency: provenance selectedModel equals routing.selectedModel and the Pi model argument; fallback evidence reports K3 unavailable and Sol fallback index zero; executable provenance equals freshly verified spawned bytes; no model process runs after any failed verification.",
+      "Run focused Work Intake and orchestrator-harness suites, then root tests, typecheck and worker regressions. Refactor shared environment, argument and executable-identity helpers only after green and do not modify validated decomposition, sanitization, repair, deadline, package-separation or authority behavior.",
+      "Hand the completed diff to the different-model evaluator, then run Tighten against every declared trust boundary with explicit evidence for mock exclusion, test-only injection, model enforcement, fallback behavior, private roots, executable re-verification and provenance accuracy."
+    ]
+  }
+}

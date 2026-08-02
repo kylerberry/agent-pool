@@ -1,0 +1,13 @@
+{
+  "actor": "orchestrator-control-plane",
+  "node": "24.18.0",
+  "piCodingAgent": "0.81.1",
+  "launcherDigest": "sha256:eaaaf167d5b8c965564cccf734add94999b84a2f6f2c5c4be99b390ad86e7ea9",
+  "allowedModels": [
+    "moonshot/kimi-k3",
+    "openai-codex/gpt-5.6-sol"
+  ],
+  "packages": {
+    "pi-subagents": "0.35.1"
+  }
+}

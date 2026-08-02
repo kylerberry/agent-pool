@@ -1,0 +1,243 @@
+
+> agent-pool-orchestrator-harness@0.1.0 test
+> node --test ./test/*.test.mjs
+
+✔ launch runs preflight and runDecomposition when it passes (770.320083ms)
+✔ launch fails before spawning when launcher digest is wrong (712.312375ms)
+✔ launch rejects caller-controlled HOME (27.247709ms)
+✔ launch rejects caller-controlled XDG_CONFIG_HOME (28.454959ms)
+✔ launch rejects prepopulated derived HOME (27.100708ms)
+✔ launch disallows production availability skip (28.373333ms)
+✔ launch does not pass AGENT_POOL_JOB_PATH directly to spec-decomposer (785.103792ms)
+✔ secret job does not leak through harness (701.5305ms)
+✔ invalid job is rejected by deterministic harness (499.1905ms)
+✔ preflight rejects ambient repository .pi config (45.463ms)
+✔ preflight rejects inherited PI environment variables (37.623625ms)
+✔ preflight rejects global plugin directory (32.535875ms)
+✔ preflight rejects non-absolute HOME or XDG paths (29.953709ms)
+✔ preflight ensures isolated HOME and XDG roots exist under workspace (744.254583ms)
+✔ preflight verifies orchestrator actor in runtime-versions (698.842083ms)
+✔ preflight rejects worker-harness marker presence (29.1875ms)
+✔ preflight rejects production availability skip (31.306083ms)
+✔ preflight fails when configured models are unavailable (736.797667ms)
+✔ preflight accepts a valid orchestrator-control-plane launch context (472.146084ms)
+✔ preflight rejects Repository Builder actor (30.165917ms)
+✔ preflight rejects pool-worker actor (28.327ms)
+✔ preflight rejects production availability skip (29.781916ms)
+✔ preflight rejects HOME outside workspace (30.662875ms)
+✔ preflight rejects XDG_CONFIG_HOME outside workspace (35.73075ms)
+✔ preflight rejects relative launcher path (29.958417ms)
+✔ preflight rejects symlinked launcher (30.172584ms)
+✔ preflight rejects wrong launcher version (695.948083ms)
+✔ preflight rejects wrong launcher digest (704.717083ms)
+✔ preflight computes digest from launcher bytes, not self-reported --digest (389.914583ms)
+✔ preflight ignores hostile PATH when absolute launcher is given (606.234208ms)
+✔ required package files exist (0.207708ms)
+✔ settings model scope matches bootstrap routing (0.159875ms)
+✖ RED: production env mock bypasses are rejected (862.999375ms)
+✖ RED: exact router-selected model is passed to Pi argv (916.264917ms)
+✖ RED: Sol fallback is allowed when Kimi K3 is unavailable (801.482333ms)
+✖ RED: static model defaults cannot override router-selected Sol (598.614959ms)
+✖ RED: prompt artifacts are contained under launcher-owned private runtime parent (484.146334ms)
+✖ RED: whole runtime subtree is cleaned after success (406.715917ms)
+✖ RED: hostile PATH cannot control interpreter (190.375875ms)
+✖ RED: provenance records actual Pi executable path, version and digest (384.032ms)
+✖ RED: executable replacement after preflight aborts before spawn (188.570416ms)
+ℹ tests 41
+ℹ suites 0
+ℹ pass 32
+ℹ fail 9
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4893.988084
+
+✖ failing tests:
+
+test at test/render-blockers.test.mjs:115:1
+✖ RED: production env mock bypasses are rejected (862.999375ms)
+  AssertionError [ERR_ASSERTION]: launch must reject production mock env
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/packages/orchestrator-harness/test/render-blockers.test.mjs:122:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 0,
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/render-blockers.test.mjs:126:1
+✖ RED: exact router-selected model is passed to Pi argv (916.264917ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/packages/orchestrator-harness/test/render-blockers.test.mjs:132:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/render-blockers.test.mjs:138:1
+✖ RED: Sol fallback is allowed when Kimi K3 is unavailable (801.482333ms)
+  AssertionError [ERR_ASSERTION]: orchestrator-harness preflight failed: configured models unavailable: moonshot/kimi-k3
+  
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/packages/orchestrator-harness/test/render-blockers.test.mjs:151:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/render-blockers.test.mjs:156:1
+✖ RED: static model defaults cannot override router-selected Sol (598.614959ms)
+  AssertionError [ERR_ASSERTION]: orchestrator-harness preflight failed: configured models unavailable: moonshot/kimi-k3
+  
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/packages/orchestrator-harness/test/render-blockers.test.mjs:169:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/render-blockers.test.mjs:174:1
+✖ RED: prompt artifacts are contained under launcher-owned private runtime parent (484.146334ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/packages/orchestrator-harness/test/render-blockers.test.mjs:176:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/render-blockers.test.mjs:180:1
+✖ RED: whole runtime subtree is cleaned after success (406.715917ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/packages/orchestrator-harness/test/render-blockers.test.mjs:182:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/render-blockers.test.mjs:187:1
+✖ RED: hostile PATH cannot control interpreter (190.375875ms)
+  AssertionError [ERR_ASSERTION]: orchestrator-harness preflight failed: configured models unavailable: moonshot/kimi-k3, openai-codex/gpt-5.6-sol
+  
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/packages/orchestrator-harness/test/render-blockers.test.mjs:207:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/render-blockers.test.mjs:211:1
+✖ RED: provenance records actual Pi executable path, version and digest (384.032ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/packages/orchestrator-harness/test/render-blockers.test.mjs:214:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/render-blockers.test.mjs:223:1
+✖ RED: executable replacement after preflight aborts before spawn (188.570416ms)
+  AssertionError [ERR_ASSERTION]: orchestrator-harness preflight failed: configured models unavailable: moonshot/kimi-k3, openai-codex/gpt-5.6-sol
+  
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///Users/kylerberry/Projects/agent-pool/packages/orchestrator-harness/test/render-blockers.test.mjs:239:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

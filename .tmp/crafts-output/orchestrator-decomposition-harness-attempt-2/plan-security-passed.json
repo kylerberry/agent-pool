@@ -1,0 +1,9 @@
+{
+  "checkpoint": "plan-security",
+  "status": "passed",
+  "blockers": [],
+  "render_constraints": [
+    "Use canonical absolute trusted interpreter, absolute verified Pi path, and fixed noncaller PATH for version, registry, initial, and repair spawns.",
+    "Keep prompt-bearing artifacts beneath verified private launcher runtime parent; whole-subtree clean it on every controlled outcome."
+  ]
+}

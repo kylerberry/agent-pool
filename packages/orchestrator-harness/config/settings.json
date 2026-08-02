@@ -1,0 +1,18 @@
+{
+  "enabledModels": [
+    "moonshot/kimi-k3",
+    "openai-codex/gpt-5.6-sol"
+  ],
+  "packages": [
+    "npm:pi-subagents@0.35.1"
+  ],
+  "subagents": {
+    "modelScope": {
+      "enforce": true,
+      "allow": [
+        "moonshot/kimi-k3",
+        "openai-codex/gpt-5.6-sol"
+      ]
+    }
+  }
+}

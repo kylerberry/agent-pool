@@ -301,6 +301,72 @@ describe("GoalDispatcher", () => {
     dispatcher.init(); const active = dispatcher.start(); recordFull(dispatcher, active.node_id, active.attempt_id, { assessmentStatus: "needs_fix" });
     dispatcher.complete(active.node_id, active.attempt_id, "passed"); assert.deepEqual(dispatcher.status().completed, ["a"]);
   });
+  test("needs-fix Tighten routes through Fix and an immutable Tighten recheck", () => {
+    dispatcher.init(); const active = dispatcher.start();
+    dispatcher.recordPhase(active.node_id, active.attempt_id, "C", artifact("C", active.node_id, active.attempt_id));
+    dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id));
+    dispatcher.recordPhase(active.node_id, active.attempt_id, "A", artifact("A", active.node_id, active.attempt_id, { status: "needs_fix" }));
+    dispatcher.recordPhase(active.node_id, active.attempt_id, "F", artifact("F", active.node_id, active.attempt_id));
+    const firstT = artifact("T", active.node_id, active.attempt_id, { status: "needs_fix" });
+    firstT.summary = "first Tighten finding";
+    const firstTRecord = dispatcher.recordPhase(active.node_id, active.attempt_id, "T", firstT);
+    assert.equal(firstTRecord.path.endsWith("T.json"), true);
+
+    // Simulate an active ledger written before phase_history existed.
+    const legacyLedger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
+    delete legacyLedger.nodes.a.attempts[0].phase_history;
+    fs.writeFileSync(dispatcher.ledgerPath, JSON.stringify(legacyLedger, null, 2));
+    dispatcher = new GoalDispatcher({ rootDir: root, planPath });
+    assert.equal(dispatcher.resume().active_attempt.next_phase, "F");
+
+    const secondF = artifact("F", active.node_id, active.attempt_id); secondF.summary = "Tighten fix";
+    const secondFRecord = dispatcher.recordPhase(active.node_id, active.attempt_id, "F", secondF);
+    assert.equal(secondFRecord.path.endsWith("F-2.json"), true);
+    assert.equal(dispatcher.resume().active_attempt.next_phase, "T");
+
+    const secondT = artifact("T", active.node_id, active.attempt_id); secondT.summary = "Tighten passed";
+    const secondTRecord = dispatcher.recordPhase(active.node_id, active.attempt_id, "T", secondT);
+    assert.equal(secondTRecord.path.endsWith("T-2.json"), true);
+
+    // Simulate a partially migrated per-phase history missing the current T pointer.
+    const partialLedger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
+    partialLedger.nodes.a.attempts[0].phase_history.T = [partialLedger.nodes.a.attempts[0].phase_history.T[0]];
+    fs.writeFileSync(dispatcher.ledgerPath, JSON.stringify(partialLedger, null, 2));
+    dispatcher = new GoalDispatcher({ rootDir: root, planPath });
+    assert.equal(dispatcher.resume().active_attempt.next_phase, "S");
+    dispatcher.recordPhase(active.node_id, active.attempt_id, "S", artifact("S", active.node_id, active.attempt_id));
+    dispatcher.complete(active.node_id, active.attempt_id, "passed");
+
+    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
+    const attempt = ledger.nodes.a.attempts[0];
+    assert.deepEqual(Object.keys(attempt.phase_history).sort(), ["A", "C", "F", "R", "S", "T"]);
+    assert.equal(attempt.phase_history.F.length, 2);
+    assert.equal(attempt.phase_history.T.length, 2);
+    assert.equal(attempt.phases.T.status, "passed");
+    assert.equal(JSON.parse(fs.readFileSync(path.join(dispatcher.ledgerDir, firstTRecord.path))).status, "needs_fix");
+    assert.equal(JSON.parse(fs.readFileSync(path.join(dispatcher.ledgerDir, secondTRecord.path))).status, "passed");
+
+    const oldSnapshot = copyPlan(root, planPath, "plan-before-history-migration.json");
+    const newPath = makeMutatedPlan(root, planPath, (plan) => plan.nodes.find((node) => node.id === "b").acceptance_criteria.push("extra B"));
+    const approvalPath = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) });
+    const migration = migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath);
+    assert.equal(migration.replayed, false);
+    const manifest = JSON.parse(fs.readFileSync(path.join(dispatcher.ledgerDir, "migrations", "objects", migration.manifest_sha), "utf8"));
+    assert.equal(manifest.completed_evidence[0].phase_digests.length, 8);
+  });
+  test("explicit retry preserves a failed attempt and creates a new audited attempt", () => {
+    dispatcher.init(); const first = dispatcher.start(); dispatcher.complete(first.node_id, first.attempt_id, "failed");
+    const retried = dispatcher.retry({ nodeId: "a", approvedBy: "kyler", reason: "repair failed Tighten findings" });
+    assert.equal(retried.attempt_id, "a-attempt-2");
+    assert.equal(retried.retry_of, "a-attempt-1");
+    assert.deepEqual(dispatcher.status().inProgress, ["a"]);
+    assert.deepEqual(dispatcher.status().blocked, []);
+    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
+    assert.equal(ledger.nodes.a.attempts[0].final_status, "failed");
+    assert.deepEqual({ ...ledger.nodes.a.attempts[1].retry, authorized_at: undefined }, { retry_of: "a-attempt-1", approved_by: "kyler", reason: "repair failed Tighten findings", authorized_at: undefined });
+    assert.ok(!Number.isNaN(Date.parse(ledger.nodes.a.attempts[1].retry.authorized_at)));
+    assert.throws(() => dispatcher.retry({ nodeId: "a", approvedBy: "kyler", reason: "duplicate" }), /failed or escalated/);
+  });
   test("lite flow requires only R and S", () => {
     dispatcher.init(); const active = dispatcher.start({ flow: "R-S" });
     dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id, { flow: "R-S" }));

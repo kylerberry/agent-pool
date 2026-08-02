@@ -1,7 +1,23 @@
 # Agent Pool Orchestrator Harness
 
-Control-plane Pi assets for model checkpoints owned by the deterministic orchestrator. This boundary is separate from the DAG-unaware `packages/worker-harness/`.
+Control-plane Pi assets for the deterministic supervisor orchestrator.
 
-The bootstrap decomposition routing policy lives in `config/model-routing.bootstrap.json`. The approved build DAG node `orchestrator-decomposition-harness` will add the explicitly loaded Pi package, decomposer agent/skill, schema contract, preflight, and tests. Until that node passes, this directory is a routing-ownership scaffold and must not be treated as an executable harness.
+This package is physically separate from `packages/worker-harness` and never
+loads `craft-pool`. It owns the decomposition checkpoint: validated job intake,
+bounded codebase breadth retrieval, deterministic model routing, ADR-018 schema
+enforcement, optional one-repair retry, and immutable invocation provenance.
 
-Decomposition consumes jobs from the separate orchestrator queue, uses breadth-oriented Codebase Knowledge retrieval, emits ADR-018 node fields, and returns output to deterministic validation/persistence/Gate 1. It never loads `craft-pool` or dispatches Pool Workers directly.
+## Contents
+
+- `agents/spec-decomposer.md` — read-only decomposition agent.
+- `skills/decompose-spec/SKILL.md` — decomposition skill.
+- `contracts/` — job and emission JSON schemas.
+- `config/` — routing, limits, sanitization, settings, and runtime versions.
+- `scripts/` — preflight and launch wrappers.
+- `test/` — preflight and security tests.
+
+## Verification
+
+```bash
+npm test --prefix packages/orchestrator-harness
+```

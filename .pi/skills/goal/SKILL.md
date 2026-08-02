@@ -82,7 +82,7 @@ A template is at `docs/raw/specs/templates/domain-map-approval.json`. Kyler fill
 
 ## Ledger and dispatcher
 
-The local conductor uses `node .pi/scripts/goal-dispatcher.mjs` to durably track node lifecycles. The dispatcher stores its state under `.pi/goal-runs/<runId>/ledger.json` (which is gitignored) and exposes the commands `init`, `status`, `resume`, `start`, `record-phase`, `complete`, `emit-candidate`, and `migrate-plan`. It freezes the approved DAG SHA-256 on `init` and rejects any operation when the approved plan drifts.
+The local conductor uses `node .pi/scripts/goal-dispatcher.mjs` to durably track Repository Builder node lifecycles. This is local development bookkeeping, not Pool Worker runtime state or authority. The dispatcher stores its state under `.pi/goal-runs/<runId>/ledger.json` (which is gitignored) and exposes the commands `init`, `status`, `resume`, `start`, `retry`, `record-phase`, `complete`, `emit-candidate`, and `migrate-plan`. It freezes the approved DAG SHA-256 on `init` and rejects any operation when the approved plan drifts.
 
 Before the first dispatch, run:
 
@@ -108,13 +108,27 @@ A repeated `start` resumes the same active attempt instead of allocating another
 node .pi/scripts/goal-dispatcher.mjs record-phase <node-id> <attempt-id> <C|R|A|F|T|S> <artifact.json>
 ```
 
+A Tighten finding follows the CRAFTS repair loop without overwriting evidence:
+
+```text
+T needs_fix -> F -> T recheck
+```
+
+The dispatcher stores later F/T artifacts as immutable revisions (`F-2.json`, `T-2.json`, and so on), retains every revision in `phase_history`, and treats only the latest revision as the active gate result. It never advances to S while the latest T is non-passing.
+
 After all required phases pass:
 
 ```bash
 node .pi/scripts/goal-dispatcher.mjs complete <node-id> <attempt-id> passed
 ```
 
-`complete ... passed` fails unless the full selected flow has schema-valid persisted evidence. Failed or escalated attempts use the same command with `failed` or `escalated` and retain their phase artifacts.
+`complete ... passed` fails unless the full selected flow has schema-valid persisted evidence and the latest required gate revisions pass. Failed or escalated attempts use the same command with `failed` or `escalated` and retain their phase artifacts. After explicit human authorization, retry a terminal attempt with:
+
+```bash
+node .pi/scripts/goal-dispatcher.mjs retry <node-id> <approved-by> "<reason>"
+```
+
+Retry preserves the terminal attempt and completion record, records approver/reason/time, and creates the next numbered attempt. It is local Repository Builder workflow state only.
 
 ### Approved-plan migration (`migrate-plan`)
 

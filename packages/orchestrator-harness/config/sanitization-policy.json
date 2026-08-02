@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "patterns": [
+    {
+      "id": "openai-api-key",
+      "regex": "\\b(sk-[a-zA-Z0-9_-]{20,})\\b",
+      "flags": "g",
+      "replacement": "[REDACTED-SECRET]"
+    },
+    {
+      "id": "generic-api-key",
+      "regex": "(?:api[_-]?key|apikey)\\s*[:=]\\s*[\"']?([a-zA-Z0-9_\\-]{16,})[\"']?",
+      "flags": "gi",
+      "replacement": "[REDACTED-SECRET]"
+    },
+    {
+      "id": "password-assignment",
+      "regex": "(?:password|passwd|pwd)\\s*[:=]\\s*[\"']?([^\\s\"'\\n]{4,})[\"']?",
+      "flags": "gi",
+      "replacement": "[REDACTED-SECRET]"
+    },
+    {
+      "id": "jwt-token",
+      "regex": "\\b(eyJ[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]*\\.?[a-zA-Z0-9_-]*)\\b",
+      "flags": "g",
+      "replacement": "[REDACTED-SECRET]"
+    },
+    {
+      "id": "bearer-token",
+      "regex": "\\b(Bearer\\s+[a-zA-Z0-9_\\-\\.]{20,})\\b",
+      "flags": "gi",
+      "replacement": "[REDACTED-SECRET]"
+    },
+    {
+      "id": "private-key-block",
+      "regex": "-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\\s\\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
+      "flags": "g",
+      "replacement": "[REDACTED-SECRET]"
+    },
+    {
+      "id": "high-entropy-secret",
+      "regex": "(?:secret|token|credential)\\s*[:=]\\s*[\"']?([a-zA-Z0-9_\\-]{24,})[\"']?",
+      "flags": "gi",
+      "replacement": "[REDACTED-SECRET]"
+    }
+  ]
+}

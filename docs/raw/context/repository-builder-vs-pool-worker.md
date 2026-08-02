@@ -52,6 +52,19 @@ The marker is generated per attempt by the trusted supervisor, mounted or protec
 
 `craft-pool` fails closed when the marker, environment, or capability preflight is invalid. Without a valid marker, the session remains a Repository Builder by default.
 
+## Repository Builder ledger is not Pool Worker authority
+
+The project-local `/goal` skill and `.pi/scripts/goal-dispatcher.mjs` maintain a strict, gitignored ledger for Repository Builder development slices. The ledger freezes the human-approved local build DAG, records CRAFTS phase evidence, and prevents accidental phase or plan drift while this repository is being built.
+
+That ledger is development-harness bookkeeping only:
+
+- it does not mean the current session is a Pool Worker;
+- it does not apply Pool Worker model, tool, queue, or execution authority to the Repository Builder;
+- it does not represent the product runtime's future controller database;
+- it must not be used to infer that the supervisor or pool already exists.
+
+Local CRAFTS repair cycles retain immutable evidence: `A needs_fix` may route through F, while `T needs_fix` routes through F and a new T revision before S. A terminal local attempt may be retried only through an explicit, approver-attributed dispatcher action that preserves the failed attempt. These controls govern local build provenance, not product-runtime actors.
+
 ## Documentation classification
 
 Documentation may declare:

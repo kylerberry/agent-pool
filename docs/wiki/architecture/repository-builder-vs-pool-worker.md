@@ -19,6 +19,12 @@ This project has two Pi actors:
 
 Repository subject matter never determines actor identity. Without a valid supervisor-issued execution marker and successful worker preflight, the session is a Repository Builder.
 
+## Local builder ledger
+
+Project-local `/goal` and `.pi/scripts/goal-dispatcher.mjs` keep strict, gitignored evidence for Repository Builder slices: approved-DAG hash, attempts, immutable CRAFTS phase revisions, and completion state. This is development-harness bookkeeping—not Pool Worker authority, product-runtime controller state, or evidence that the supervisor/pool already exists.
+
+Local repair flow preserves failed evidence: `T needs_fix → F → T recheck`; S remains blocked until latest T passes. Explicit retries preserve the terminal attempt and create a separately attributed attempt.
+
 ## Enforcement
 
 - Runtime-only agents and skills are physically outside `.pi/`.

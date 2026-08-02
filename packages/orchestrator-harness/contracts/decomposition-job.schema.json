@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Decomposition Job",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobId", "spec", "targetRepository", "head", "indexRevision"],
+  "properties": {
+    "jobId": { "type": "string", "minLength": 1 },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intent", "acceptanceCriteria"],
+      "properties": {
+        "intent": { "type": "string", "minLength": 1 },
+        "acceptanceCriteria": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "constraints": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "rawSpec": { "type": "string" },
+    "targetRepository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "name"],
+      "properties": {
+        "owner": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "head": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "indexRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "head",
+        "graphifyVersion",
+        "indexSchemaVersion",
+        "sensitivePathPolicyVersion",
+        "manifestDigest",
+        "indexRevision",
+        "createdAt"
+      ],
+      "properties": {
+        "repository": {
+          "type": "object",
+          "required": ["owner", "name"],
+          "properties": {
+            "owner": { "type": "string" },
+            "name": { "type": "string" }
+          }
+        },
+        "head": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "graphifyVersion": { "type": "string" },
+        "indexSchemaVersion": { "type": "string" },
+        "sensitivePathPolicyVersion": { "type": "string" },
+        "manifestDigest": { "type": "string" },
+        "indexRevision": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

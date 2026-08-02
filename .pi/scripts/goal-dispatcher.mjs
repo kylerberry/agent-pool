@@ -259,16 +259,23 @@ function verifyCompletedEvidence(ledger, ledgerDir) {
       completed_at: attempt.completed_at,
       phases: attempt.phases,
     };
+    if (attempt.phase_history) expectedCompletion.phase_history = attempt.phase_history;
     if (canonical(parsedCompletion) !== canonical(expectedCompletion)) fail(`completed node ${id} completion does not match immutable attempt fields`);
     const phaseDigests = [];
-    for (const [phase, record] of Object.entries(attempt.phases || {})) {
-      const phaseArtifact = resolveLedgerArtifact(ledgerDir, record.path, `completed node ${id} phase ${phase}`);
+    const evidenceRecords = Object.fromEntries(Object.keys({ ...(attempt.phases || {}), ...(attempt.phase_history || {}) }).map((phase) => [
+      phase,
+      recordsIncludingLatest(attempt.phase_history?.[phase], attempt.phases?.[phase]),
+    ]));
+    for (const [phase, records] of Object.entries(evidenceRecords)) for (let index = 0; index < records.length; index += 1) {
+      const record = records[index];
+      const revision = index + 1;
+      const phaseArtifact = resolveLedgerArtifact(ledgerDir, record.path, `completed node ${id} phase ${phase} revision ${revision}`);
       const phaseBytes = phaseArtifact.bytes;
       const phaseSha = sha256(phaseBytes);
-      if (typeof record.bytes_sha256 === "string" && record.bytes_sha256 !== phaseSha) fail(`completed node ${id} phase ${phase} exact-byte digest mismatch`);
+      if (typeof record.bytes_sha256 === "string" && record.bytes_sha256 !== phaseSha) fail(`completed node ${id} phase ${phase} revision ${revision} exact-byte digest mismatch`);
       const parsedArtifact = JSON.parse(phaseBytes);
-      if (sha256(canonical(parsedArtifact)) !== record.sha256) fail(`completed node ${id} phase ${phase} canonical digest mismatch`);
-      phaseDigests.push({ phase, sha256: phaseSha });
+      if (sha256(canonical(parsedArtifact)) !== record.sha256) fail(`completed node ${id} phase ${phase} revision ${revision} canonical digest mismatch`);
+      phaseDigests.push({ phase, revision, sha256: phaseSha });
     }
     phaseDigests.sort((a, b) => a.phase.localeCompare(b.phase));
     result.push({ node_id: id, completion_path: completion.relative, completion_sha256: completionSha, phase_digests: phaseDigests });
@@ -508,16 +515,66 @@ class FileLock {
   }
 }
 
+function phaseRecords(attempt, phase) {
+  return recordsIncludingLatest(attempt.phase_history?.[phase], attempt.phases?.[phase]);
+}
+
+function latestPhase(attempt, phase) {
+  return phaseRecords(attempt, phase).at(-1) || null;
+}
+
+function phaseRecordMatches(left, right) {
+  return left?.path === right?.path && left?.sha256 === right?.sha256;
+}
+
+function recordsIncludingLatest(history, latest) {
+  const records = Array.isArray(history) ? [...history] : [];
+  if (latest && !records.some((record) => phaseRecordMatches(record, latest))) records.push(latest);
+  return records;
+}
+
+function ensurePhaseHistory(attempt) {
+  attempt.phase_history ||= {};
+  for (const [phase, record] of Object.entries(attempt.phases || {})) {
+    attempt.phase_history[phase] = recordsIncludingLatest(attempt.phase_history[phase], record);
+  }
+  return attempt.phase_history;
+}
+
 function nextPhase(attempt) {
-  const phases = attempt.phases;
-  if (attempt.flow === "R-S") return !phases.R ? "R" : !phases.S ? "S" : null;
-  if (!phases.C) return "C";
-  if (!phases.R) return "R";
-  if (!phases.A) return "A";
-  if (phases.A.status === "needs_fix" && !phases.F) return "F";
-  if (!phases.T) return "T";
-  if (!phases.S) return "S";
-  return null;
+  const r = latestPhase(attempt, "R");
+  if (attempt.flow === "R-S") {
+    if (!r) return "R";
+    if (r.status !== "passed") return null;
+    return latestPhase(attempt, "S") ? null : "S";
+  }
+
+  const c = latestPhase(attempt, "C");
+  if (!c) return "C";
+  if (c.status !== "passed") return null;
+  if (!r) return "R";
+  if (r.status !== "passed") return null;
+
+  const a = latestPhase(attempt, "A");
+  if (!a) return "A";
+  if (!["passed", "needs_fix"].includes(a.status)) return null;
+
+  const fixes = phaseRecords(attempt, "F");
+  const assessmentFixes = a.status === "needs_fix" ? 1 : 0;
+  if (fixes.length < assessmentFixes) return "F";
+  if (assessmentFixes && fixes.at(-1).status !== "passed") return null;
+
+  const tightens = phaseRecords(attempt, "T");
+  if (!tightens.length) return "T";
+  const tightenFixes = tightens.filter((record) => record.status === "needs_fix").length;
+  const requiredFixes = assessmentFixes + tightenFixes;
+  if (fixes.length < requiredFixes) return "F";
+  if (requiredFixes && fixes.at(-1).status !== "passed") return null;
+
+  const latestTighten = tightens.at(-1);
+  if (latestTighten.status === "needs_fix") return "T";
+  if (latestTighten.status !== "passed") return null;
+  return latestPhase(attempt, "S") ? null : "S";
 }
 
 export class GoalDispatcher {
@@ -664,9 +721,42 @@ export class GoalDispatcher {
       const attemptId = `${target}-attempt-${sequence}`;
       this._ensureWorkspaceGuard(target, attemptId);
       ledger.nodes[target].status = "in_progress";
-      ledger.nodes[target].attempts.push({ attempt_id: attemptId, sequence, flow, started_at: new Date().toISOString(), base_git: gitSnapshot(this.rootDir), phases: {}, final_status: null });
+      ledger.nodes[target].attempts.push({ attempt_id: attemptId, sequence, flow, started_at: new Date().toISOString(), base_git: gitSnapshot(this.rootDir), phases: {}, phase_history: {}, final_status: null });
       try { this._writeLedger(ledger); } catch (error) { this._releaseWorkspaceGuard(target, attemptId); throw error; }
       return { node_id: target, attempt_id: attemptId, flow, resumed: false };
+    });
+  }
+  retry({ nodeId, approvedBy, reason } = {}) {
+    safeSegment(nodeId, "retry node ID");
+    if (typeof approvedBy !== "string" || !approvedBy.trim() || approvedBy.length > MIGRATION_BOUNDS.max_approver_length) fail("retry approvedBy is invalid");
+    if (typeof reason !== "string" || !reason.trim() || reason.length > MIGRATION_BOUNDS.max_approval_context_length) fail("retry reason is invalid");
+    return this._withLock(() => {
+      const ledger = this._readLedger(); this._assertNoDrift(ledger);
+      const node = ledger.nodes[nodeId];
+      if (!node) fail(`unknown plan node: ${nodeId}`);
+      if (!["failed", "escalated"].includes(node.status)) fail("retry requires a failed or escalated node");
+      if (Object.values(ledger.nodes).some((candidate) => candidate.status === "in_progress")) fail("retry requires no active attempt");
+      if (node.depends_on.some((dependency) => ledger.nodes[dependency]?.status !== "passed")) fail("retry dependencies are not passed");
+      const previous = node.attempts.at(-1);
+      if (!previous?.final_status || !["failed", "escalated"].includes(previous.final_status)) fail("retry source attempt is not terminal");
+      const sequence = node.attempts.length + 1;
+      const attemptId = `${nodeId}-attempt-${sequence}`;
+      this._ensureWorkspaceGuard(nodeId, attemptId);
+      const authorizedAt = new Date().toISOString();
+      node.status = "in_progress";
+      node.attempts.push({
+        attempt_id: attemptId,
+        sequence,
+        flow: previous.flow,
+        started_at: authorizedAt,
+        base_git: gitSnapshot(this.rootDir),
+        phases: {},
+        phase_history: {},
+        retry: { retry_of: previous.attempt_id, approved_by: approvedBy.trim(), reason: reason.trim(), authorized_at: authorizedAt },
+        final_status: null,
+      });
+      try { this._writeLedger(ledger); } catch (error) { this._releaseWorkspaceGuard(nodeId, attemptId); throw error; }
+      return { node_id: nodeId, attempt_id: attemptId, flow: previous.flow, retry_of: previous.attempt_id, resumed: false };
     });
   }
   recordPhase(nodeId, attemptId, phase, artifact) {
@@ -681,15 +771,22 @@ export class GoalDispatcher {
       if (!attempt) fail(`unknown node or attempt: ${nodeId}/${attemptId}`);
       if (node.status !== "in_progress" || attempt.final_status !== null) fail("phase artifacts can be recorded only for an active attempt");
       const digest = sha256(canonical(artifact));
-      const existing = attempt.phases[phase];
-      if (existing) { if (existing.sha256 === digest) return { path: existing.path, sha256: digest, replayed: true }; fail(`conflicting replay for phase ${phase}`); }
+      const existing = latestPhase(attempt, phase);
+      if (existing?.sha256 === digest) return { path: existing.path, sha256: digest, replayed: true };
       const expected = nextPhase(attempt);
+      if (existing && expected !== phase) fail(`conflicting replay for phase ${phase}`);
       if (expected !== phase) fail(`phase order violation: expected ${expected}, got ${phase}`);
       if (phase === "C" && artifact.phase_data.selected_flow !== attempt.flow) fail("C selected_flow does not match reserved attempt flow");
-      const relativePath = path.join("phases", nodeId, attemptId, `${phase}.json`);
+      ensurePhaseHistory(attempt);
+      const previousRecords = phaseRecords(attempt, phase);
+      const revision = previousRecords.length + 1;
+      const fileName = revision === 1 ? `${phase}.json` : `${phase}-${revision}.json`;
+      const relativePath = path.join("phases", nodeId, attemptId, fileName);
       assertNoSymlinkAncestors(this.rootDir, path.dirname(path.join(this.ledgerDir, relativePath)));
       atomicWriteJson(path.join(this.ledgerDir, relativePath), artifact);
-      attempt.phases[phase] = { path: relativePath, sha256: digest, status: artifact.status, recorded_at: new Date().toISOString() };
+      const record = { path: relativePath, sha256: digest, status: artifact.status, recorded_at: new Date().toISOString() };
+      attempt.phase_history[phase] = [...previousRecords, record];
+      attempt.phases[phase] = record;
       this._writeLedger(ledger);
       return { path: relativePath, sha256: digest, replayed: false };
     });
@@ -708,7 +805,8 @@ export class GoalDispatcher {
         }
       }
       node.status = status; attempt.final_status = status; attempt.completed_at = new Date().toISOString();
-      const summary = { schema_version: 1, node_id: nodeId, attempt_id: attemptId, status, flow: attempt.flow, completed_at: attempt.completed_at, phases: attempt.phases };
+      ensurePhaseHistory(attempt);
+      const summary = { schema_version: 1, node_id: nodeId, attempt_id: attemptId, status, flow: attempt.flow, completed_at: attempt.completed_at, phases: attempt.phases, phase_history: attempt.phase_history };
       const relativePath = path.join("nodes", nodeId, attemptId, "completion.json");
       assertNoSymlinkAncestors(this.rootDir, path.dirname(path.join(this.ledgerDir, relativePath)));
       atomicWriteJson(path.join(this.ledgerDir, relativePath), summary); attempt.completion_path = relativePath;
@@ -916,11 +1014,12 @@ function main(argv) {
     else if (command === "status") print(dispatcher.status());
     else if (command === "resume") print(dispatcher.resume());
     else if (command === "start") print(dispatcher.start({ nodeId: argv[3] || undefined, flow: argv[4] || "C-R-A-F-T-S" }));
+    else if (command === "retry") { const [nodeId, approvedBy, ...reasonParts] = argv.slice(3); const reason = reasonParts.join(" "); if (!reason) fail("usage: retry <node> <approved-by> <reason>"); print(dispatcher.retry({ nodeId, approvedBy, reason })); }
     else if (command === "record-phase") { const [nodeId, attemptId, phase, artifactPath] = argv.slice(3); if (!artifactPath) fail("usage: record-phase <node> <attempt> <phase> <artifact.json>"); print(dispatcher.recordPhase(nodeId, attemptId, phase, readIncomingArtifact(dispatcher, artifactPath))); }
     else if (command === "complete") { const [nodeId, attemptId, status] = argv.slice(3); if (!status) fail("usage: complete <node> <attempt> <passed|failed|escalated>"); print(dispatcher.complete(nodeId, attemptId, status)); }
     else if (command === "emit-candidate") { const [nodeId, attemptId] = argv.slice(3); if (!attemptId) fail("usage: emit-candidate <node> <attempt>"); print(dispatcher.emitCandidate(nodeId, attemptId)); }
     else if (command === "migrate-plan") { const [oldPlan, newPlan, approval] = argv.slice(3); if (!approval) fail("usage: migrate-plan <old-plan.json> <new-plan.json> <approval.json>"); print(dispatcher.migratePlan({ oldPlanPath: oldPlan, newPlanPath: newPlan, approvalPath: approval })); }
-    else fail("usage: goal-dispatcher.mjs <init|status|resume|start|record-phase|complete|emit-candidate|migrate-plan>");
+    else fail("usage: goal-dispatcher.mjs <init|status|resume|start|retry|record-phase|complete|emit-candidate|migrate-plan>");
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) main(process.argv);

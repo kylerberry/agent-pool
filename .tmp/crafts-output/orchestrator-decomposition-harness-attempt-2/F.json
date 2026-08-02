@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "node_id": "orchestrator-decomposition-harness",
+  "attempt_id": "orchestrator-decomposition-harness-attempt-2",
+  "phase": "F",
+  "status": "passed",
+  "model": "moonshot/kimi-k2.7-code",
+  "started_at": "2026-08-01T20:00:00Z",
+  "completed_at": "2026-08-01T20:45:00Z",
+  "summary": "Fixed all attempt-2 A blockers with adversarial tests. Hardened Pi identity verification order, runtime/prompt containment against symlink races, whole-subtree cleanup for every controlled launcher outcome, and Sol fallback model enforcement. All focused, root, typecheck, and worker verification passes.",
+  "acceptance_criteria_status": [
+    {
+      "criterion": "The harness is physically separate from packages/worker-harness and never loads craft-pool.",
+      "status": "met",
+      "evidence": [
+        "packages/orchestrator-harness/package.json remains a pi-package with only orchestrator agents/skills.",
+        "test/work-intake/decomposition-architecture-boundaries.test.ts passes (64 work-intake tests pass).",
+        "No worker-harness or craft-pool imports were added in the F-phase diff."
+      ]
+    },
+    {
+      "criterion": "Its decomposer emits only id, intent, change_spec, acceptance_criteria, and depends_on for each node.",
+      "status": "met",
+      "evidence": [
+        "src/domains/work-intake/decomposition-harness.ts validateCandidate() unchanged; exact-shape regression tests pass.",
+        "test/work-intake/decomposition-harness.test.ts rejects unknown top-level and node fields."
+      ]
+    },
+    {
+      "criterion": "Kimi K3 is the bootstrap decomposition model with only approved fail-closed fallback policy.",
+      "status": "met",
+      "evidence": [
+        "packages/orchestrator-harness/config/settings.json has no subagents.defaultModel or fallbackModels.",
+        "packages/orchestrator-harness/scripts/pi-model-invoker.mjs passes invocation.model via --model argv.",
+        "test/f-blockers.test.mjs 'invoker passes exact Sol fallback model in Pi argv' proves Sol is the effective argv model.",
+        "test/work-intake/decomposition-harness.test.ts 'falls back to Sol when Kimi K3 is unavailable' proves routing selects fallback index 0."
+      ]
+    },
+    {
+      "criterion": "The invocation records prompt, model, tool, package, and code-graph revision provenance.",
+      "status": "met",
+      "evidence": [
+        "src/domains/work-intake/decomposition-harness.ts records piExecutable path/version/digest from the verified Pi executable.",
+        "test/work-intake/decomposition-harness.test.ts 'provenance records actual Pi executable identity' verifies the immutable Pi identity in the record.",
+        "test/f-blockers.test.mjs 'Pi digest is checked before --version executes' and 'run-decomposition verifies Pi identity before --list-models' prove pinned-digest verification precedes any Pi execution."
+      ]
+    },
+    {
+      "criterion": "Schema-invalid output is rejected or repaired only within an explicit bounded policy; the model cannot validate, persist, approve, or dispatch its own DAG.",
+      "status": "met",
+      "evidence": [
+        "src/domains/work-intake/decomposition-harness.ts retains strict validation, response/node limits, one repair maximum, and invocation-wide deadline.",
+        "No persistence, approval, queue, Gate 1 or dispatch symbols introduced in F-phase changes."
+      ]
+    }
+  ],
+  "changed_files": [
+    "packages/orchestrator-harness/scripts/launch.mjs",
+    "packages/orchestrator-harness/scripts/pi-model-invoker.mjs",
+    "packages/orchestrator-harness/test/f-blockers.test.mjs",
+    "docs/wiki/log/entries/2026-08-01-orchestrator-decomposition-harness-f-fix.md"
+  ],
+  "commands_run": [
+    {
+      "command": "npm test --prefix packages/orchestrator-harness",
+      "exit_code": 0,
+      "output_artifact": ".tmp/crafts-output/orchestrator-decomposition-harness-attempt-2/green-f-orchestrator-harness.txt"
+    },
+    {
+      "command": "node --experimental-strip-types --test test/work-intake/*.test.ts",
+      "exit_code": 0,
+      "output_artifact": ".tmp/crafts-output/orchestrator-decomposition-harness-attempt-2/green-f-work-intake.txt"
+    },
+    {
+      "command": "npm test",
+      "exit_code": 0,
+      "output_artifact": ".tmp/crafts-output/orchestrator-decomposition-harness-attempt-2/green-f-full.txt"
+    },
+    {
+      "command": "npm run typecheck",
+      "exit_code": 0,
+      "output_artifact": ".tmp/crafts-output/orchestrator-decomposition-harness-attempt-2/green-f-typecheck.txt"
+    },
+    {
+      "command": "npm run test:worker",
+      "exit_code": 0,
+      "output_artifact": ".tmp/crafts-output/orchestrator-decomposition-harness-attempt-2/green-f-worker.txt"
+    }
+  ],
+  "cost": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "amount": null,
+    "currency": null
+  },
+  "risks": [
+    "A narrow time-of-check/time-of-use interval remains between executable re-verification and operating-system spawn; the implementation re-verifies immediately before every initial or repair spawn and fails on any identity change.",
+    "Whole-subtree cleanup is best-effort in-process; uncatchable process termination can still leave the runtime parent behind.",
+    "Pi 0.81.1 model-selector semantics are an external runtime contract; the adapter uses --model with the provider-qualified ID.",
+    "The runtime-versions.json launcherDigest currently matches the Node.js test fake used in this repository; a production deployment must pin the digest of the actual Pi executable.",
+    "Previously documented residual risks remain: deterministic sanitization may miss novel secret encodings, and provider cancellation may lag the local timeout."
+  ],
+  "open_questions": [],
+  "recommended_next_step": "Hand to local-craft-evaluator on a different, not-lower-capability model for A/F/T review; if evaluator pairing cannot be enforced, fail closed and escalate.",
+  "failure_context": null,
+  "transcript_path": null,
+  "phase_data": {
+    "findings_addressed": [
+      "Critical: Pi bytes are executed before pinned identity is established, and the post-preflight process re-baselines an unpinned replacement. Addressed by verifying that pi-identity.mjs hashes bytes and checks the pinned digest before executing --version; f-blockers tests prove the --version marker is NOT written on digest mismatch and that run-decomposition verifies identity before --list-models; pi-model-invoker.mjs re-verifies identity immediately before every spawn.",
+      "High: The private runtime and prompt containment boundary remains caller-influenced and symlink-raceable. Addressed by runtime-parent.mjs hardcoding /tmp and validating ownership/mode/sticky-bit/directory-type/containment; f-blockers tests cover hostile TMPDIR/TEMP/TMP, lexical prefix collision, symlinked runtime parent, prompt directory symlink swap, and runtime parent symlink swap; pi-model-invoker.mjs revalidates runtime parent and prompt directory on every invoke.",
+      "Medium: Whole-subtree cleanup is not guaranteed for all controlled launcher outcomes, and the integration assertion does not inspect the actual runtime subtree. Addressed by converting launch.mjs preflight to async spawn with a tracked active child and cleanupAndExit on SIGINT/SIGTERM/child exit/child error/preflight failure; f-blockers tests assert the actual /tmp runtime subtree is absent after SIGTERM and after preflight digest failure; pi-model-invoker.mjs removes the whole prompt temporary directory.",
+      "Medium: Exact effective model selection is not demonstrated while a static Kimi default remains active. Addressed by removing subagents.defaultModel and fallbackModels from settings.json; f-blockers test asserts their absence and proves Sol is passed via explicit --model argv; work-intake tests prove routing selects Sol fallback index 0 and the invoker is bound to Sol."
+    ],
+    "documented_disagreements": [],
+    "green_evidence": {
+      "commit_sha": "25316247111dc8106f5db7da474badfc6039ad03",
+      "suite_path": "packages/orchestrator-harness/test",
+      "suite_hash": "3fbadf73e128c44813cc05787a29372aec12801ebd565ddc73bce0e033e7fc9e",
+      "command": "npm test --prefix packages/orchestrator-harness",
+      "exit_code": 0,
+      "image_digest": "node-v24.18.0",
+      "output_artifact": ".tmp/crafts-output/orchestrator-decomposition-harness-attempt-2/green-f-orchestrator-harness.txt"
+    },
+    "patch_path": null
+  }
+}
