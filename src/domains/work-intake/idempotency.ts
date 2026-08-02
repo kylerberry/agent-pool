@@ -48,14 +48,44 @@ export function idempotencyScopeKey(callerId: string, route: string, key: string
   return [callerId, route, key].map((part) => `${part.length}:${part}`).join('|');
 }
 
+/** Default ceiling on retained records for the in-memory store. */
+export const DEFAULT_MAX_IDEMPOTENCY_RECORDS = 10_000;
+
+/**
+ * Reference store for tests and single-process use.
+ *
+ * It is deliberately **bounded and fail-closed**. Evicting a record would be
+ * the more available choice, but it silently breaks the guarantee the store
+ * exists to provide: a replay after eviction re-executes as a fresh
+ * submission. Refusing new records instead keeps every retained key honest and
+ * makes exhaustion visible rather than silently incorrect.
+ *
+ * The durable controller-side store must not evict either; it should persist
+ * to SQLite under a unique constraint on the scope key.
+ */
+export class IdempotencyCapacityExceededError extends Error {
+  constructor(limit: number) {
+    super(`idempotency store is full (${limit} records); a durable store is required`);
+    this.name = 'IdempotencyCapacityExceededError';
+  }
+}
+
 export class InMemoryIdempotencyStore implements IdempotencyStore {
   readonly #records = new Map<string, IdempotencyRecord>();
+  readonly #limit: number;
+
+  constructor(limit: number = DEFAULT_MAX_IDEMPOTENCY_RECORDS) {
+    this.#limit = limit;
+  }
 
   get(scopeKey: string): IdempotencyRecord | undefined {
     return this.#records.get(scopeKey);
   }
 
   put(scopeKey: string, record: IdempotencyRecord): void {
+    if (!this.#records.has(scopeKey) && this.#records.size >= this.#limit) {
+      throw new IdempotencyCapacityExceededError(this.#limit);
+    }
     this.#records.set(scopeKey, record);
   }
 

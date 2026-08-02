@@ -97,6 +97,7 @@ export const INTAKE_ERROR_CODES = [
   'INVALID_FIELD_TYPE',
   'INVALID_FIELD_FORMAT',
   'FIELD_TOO_LONG',
+  'PAYLOAD_TOO_LARGE',
   'TOO_MANY_UNITS',
   'AMBIGUOUS_SUBMISSION_SHAPE',
   'EMPTY_SUBMISSION',
@@ -142,6 +143,16 @@ export function isAcceptance(result: DirectTaskResult): result is DirectTaskAcce
  * cap memory and keep cycle detection linear on adversarial payloads.
  */
 export const INTAKE_LIMITS = {
+  /**
+   * Aggregate ceiling across every caller-supplied string in a submission.
+   *
+   * The per-field limits below multiply: 500 units x 100 criteria x 4,000
+   * characters is a ~200MB submission that satisfies all of them individually.
+   * That payload is then canonicalized (a full copy), hashed, deep-frozen, and
+   * retained under its idempotency key. This cap is what actually bounds the
+   * boundary's memory; the per-field limits only shape it.
+   */
+  maxTotalContentChars: 1_000_000,
   maxUnits: 500,
   maxIdLength: 200,
   maxIntentLength: 2_000,

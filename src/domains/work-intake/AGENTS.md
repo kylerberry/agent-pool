@@ -73,4 +73,6 @@ Accepted units carry `acceptance_criteria_provenance` with `origin=direct_task`.
 - Recording an idempotency key for a *rejected* payload burns the key and blocks the caller's corrected retry.
 - Concatenating idempotency scope components without length prefixes lets crafted caller ids and keys collide.
 - Adding a field to `UNIT_FIELDS` silently widens the accepted contract; ADR-018 deliberately excludes runtime state, `required_role`, and `complexity`.
+- Per-field limits multiply. Raising `maxUnits`, `maxCriteriaPerUnit`, or `maxCriterionLength` without checking `maxTotalContentChars` reopens a ~200MB-submission memory amplification.
+- Making the idempotency store evict trades a visible failure for a silent one: a replay after eviction re-executes as a fresh submission. It fails closed on purpose.
 - Source-scanning architecture tests must strip comments first — prose describing a forbidden construct is not that construct.

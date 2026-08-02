@@ -247,6 +247,33 @@ describe('acceptDirectTasks — caller-scoped idempotency (AC4)', () => {
     assert.equal(retried.replayed, false);
   });
 
+  it('fails closed when the store is full rather than evicting a record', () => {
+    // Eviction would silently break the replay guarantee: a retry after
+    // eviction would re-execute as a fresh submission.
+    const dependencies = {
+      store: new InMemoryIdempotencyStore(1),
+      generateSubmissionId: (() => {
+        let n = 0;
+        return () => `sub-${++n}`;
+      })(),
+    };
+    acceptDirectTasks({ callerId: 'c', body: body({ unit: unit() }), idempotencyKey: 'k1' }, dependencies);
+    assert.throws(
+      () =>
+        acceptDirectTasks(
+          { callerId: 'c', body: body({ unit: unit({ id: 'b' }) }), idempotencyKey: 'k2' },
+          dependencies,
+        ),
+      /idempotency store is full/,
+    );
+    // The already-recorded key still replays correctly.
+    const replay = acceptDirectTasks(
+      { callerId: 'c', body: body({ unit: unit() }), idempotencyKey: 'k1' },
+      dependencies,
+    );
+    assert.equal(isRejection(replay), false);
+  });
+
   it('rejects a malformed idempotency key', () => {
     for (const key of ['', ' ', 'has space', 'has\ttab', 'x'.repeat(256)]) {
       const result = acceptDirectTasks(

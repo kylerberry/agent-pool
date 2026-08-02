@@ -378,6 +378,17 @@ export function findUnorderableUnits(units: readonly DirectTaskUnit[]): readonly
     .sort();
 }
 
+/** Total caller-supplied string content, the quantity the memory cap governs. */
+function measureContent(units: readonly DirectTaskUnit[], body: Record<string, unknown>): number {
+  let total = String(own(body, 'repo') ?? '').length + String(own(body, 'branch') ?? '').length;
+  for (const unit of units) {
+    total += unit.id.length + unit.intent.length + unit.change_spec.length;
+    for (const criterion of unit.acceptance_criteria) total += criterion.length;
+    for (const dependency of unit.depends_on ?? []) total += dependency.length;
+  }
+  return total;
+}
+
 export type ValidatedSubmission = {
   readonly repo: string;
   readonly branch: string;
@@ -496,6 +507,22 @@ export function validateSubmission(body: unknown): SubmissionValidation {
   }
 
   const units = rawUnits as DirectTaskUnit[];
+
+  // Every string is known well-formed by now, so the aggregate is meaningful.
+  // Checked before canonicalization so an oversized payload is never copied.
+  const totalContent = measureContent(units, body);
+  if (totalContent > INTAKE_LIMITS.maxTotalContentChars) {
+    return {
+      ok: false,
+      violations: [
+        {
+          code: 'PAYLOAD_TOO_LARGE',
+          path: '$',
+          message: `submission content exceeds ${INTAKE_LIMITS.maxTotalContentChars} characters`,
+        },
+      ],
+    };
+  }
   const basePath = shape === 'single_unit' ? '$.unit' : '$.units';
 
   const seenIds = new Set<string>();

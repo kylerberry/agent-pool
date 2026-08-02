@@ -25,7 +25,9 @@ export { acceptDirectTasks } from './direct-intake.ts';
 
 export type { IdempotencyRecord, IdempotencyStore } from './idempotency.ts';
 export {
+  DEFAULT_MAX_IDEMPOTENCY_RECORDS,
   DIRECT_TASK_ROUTE,
+  IdempotencyCapacityExceededError,
   InMemoryIdempotencyStore,
   idempotencyScopeKey,
   isValidIdempotencyKey,

@@ -322,6 +322,24 @@ describe('validateSubmission — malformed and hostile input', () => {
     }
   });
 
+  it('rejects an aggregate payload that satisfies every per-field limit', () => {
+    // ~200MB is reachable within maxUnits x maxCriteriaPerUnit x maxCriterionLength.
+    // Built small-but-over-budget here so the test stays fast.
+    const criterion = 'x'.repeat(INTAKE_LIMITS.maxCriterionLength);
+    const perUnit = Array.from({ length: 60 }, () => criterion);
+    const units = Array.from({ length: 6 }, (_, i) =>
+      unit({ id: `u${i}`, acceptance_criteria: perUnit }),
+    );
+    const total = 6 * 60 * INTAKE_LIMITS.maxCriterionLength;
+    assert.ok(total > INTAKE_LIMITS.maxTotalContentChars, 'fixture must exceed the aggregate cap');
+    assert.ok(codes(submission({ units })).includes('PAYLOAD_TOO_LARGE'));
+  });
+
+  it('accepts a payload comfortably under the aggregate cap', () => {
+    const units = Array.from({ length: 20 }, (_, i) => unit({ id: `u${i}` }));
+    assert.equal(validateSubmission(submission({ units })).ok, true);
+  });
+
   it('handles a deep dependency chain without stack overflow', () => {
     const units = Array.from({ length: 300 }, (_, i) =>
       unit({ id: `u${i}`, ...(i === 0 ? {} : { depends_on: [`u${i - 1}`] }) }),
