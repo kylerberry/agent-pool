@@ -63,7 +63,8 @@ load-bearing, not ceremony.
 - Backend fallback accumulates cost from **failed** backends. Discarding it would make the
   controller enforce its per-node budget against an under-count.
 - The transcript hash covers the **redacted bytes that are persisted**, and verification
-  re-reads the durable object's own metadata rather than the local buffer.
+  re-reads and locally rehashes the durable object's stored bytes rather than trusting
+  store-reported metadata or the local buffer.
 - Workspace cleanup has no terminal "retain" decision. After the bounded quarantine the
   answer is `destroy` whatever the audit state, with the failure record preserved.
 
