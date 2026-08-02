@@ -27,7 +27,10 @@
 
 - Commands and queries for run status and escalation inspection.
 - The five governed resolution actions exposed to authorized operators.
-- Emits **attempt requests** to Agent Execution.
+- Emits **attempt requests** to Agent Execution, conforming to
+  `docs/raw/specs/schemas/pool-worker-attempt-contract.schema.json`. This domain owns the
+  projection from a node record (which holds dependency edges) to that payload (which must
+  hold none) — see `controller-ready-frontier` acceptance criterion 3.
 - Consumes **attempt results** and **verdicts** from Agent Execution and Verification.
 
 ## Dependencies
@@ -56,8 +59,31 @@
 - `docs/raw/adr/orchestrator/`
 - `docs/raw/specs/orchestrator-spec.md`
 
+## Attempt-payload projection
+
+Dependency edges are read twice — to compute the ready frontier before dispatch, and again at
+PR assembly (ADR-015 connected components). They are never handed to a worker. The projection
+that drops them is this domain's, and it is not a pass-through: field names and the criteria
+shape change across the boundary.
+
+| Node record (ADR-018 emission) | Attempt contract |
+|---|---|
+| `id` | `node_id`, plus `attempt_id` and `attempt_number` |
+| `acceptance_criteria` as strings | `[{ id, text }]`, ids unique and stable |
+| `criteria_origin.source` | `"decomposition"` or `"direct_task"` (underscore) |
+| `depends_on` | absent |
+| — | `prior_failure_context[]` (ADR-026 retry payload) |
+
+Criteria carry stable ids so the phase-artifact contract's `acceptance_criteria_status` can
+reference each one. The worker validates this schema strictly and aborts preflight on any
+mismatch or extra field, so a drifted payload fails at launch rather than mid-attempt.
+
 ## Footguns
 
 - Allowing Agent Execution to write node status directly bypasses Orchestration's lifecycle invariants.
 - Reclaiming a lease without idempotency checks can duplicate attempts.
 - Mixing audit-query policy with runtime dispatch policy can create hidden coupling.
+- Passing a node record straight through as an attempt payload leaks dependency edges to a
+  DAG-unaware worker; the worker's topology sweep will abort the launch, but the defect is here.
+- Inventing an attempt-payload shape instead of conforming to the attempt-contract schema
+  produces a launch-time preflight abort with no useful diagnosis at the worker end.

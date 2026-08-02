@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pool-worker-attempt-contract.schema.json",
+  "title": "Pool Worker Attempt Contract",
+  "description": "The single unit payload a DAG-unaware Pool Worker executes for one attempt (ADR-010). It carries the node's own work and criteria provenance only. DAG topology — dependency edges, sibling nodes, ready frontier, scheduling data — is deliberately absent: `additionalProperties: false` rejects it structurally and the harness additionally scans nested values for topology keys.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "node_id",
+    "attempt_id",
+    "attempt_number",
+    "intent",
+    "change_spec",
+    "acceptance_criteria",
+    "criteria_origin",
+    "target_repo",
+    "target_branch",
+    "prior_failure_context"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "node_id": { "type": "string", "minLength": 1 },
+    "attempt_id": { "type": "string", "minLength": 1 },
+    "attempt_number": { "type": "integer", "minimum": 1 },
+    "intent": { "type": "string", "minLength": 1 },
+    "change_spec": { "type": "string", "minLength": 1 },
+    "acceptance_criteria": {
+      "type": "array",
+      "description": "Immutable ground truth. C never re-authors these.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "text": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "criteria_origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "source_id"],
+      "properties": {
+        "source": { "enum": ["decomposition", "direct_task"] },
+        "source_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "target_repo": { "type": "string", "minLength": 1 },
+    "target_branch": { "type": "string", "minLength": 1 },
+    "prior_failure_context": {
+      "type": "array",
+      "description": "ADR-026 failure-context artifacts from prior attempts of this node, so a retry never starts blind. Never transcripts.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["attempt_id", "phase", "attempted", "failure_reason", "discoveries", "dead_ends"],
+        "properties": {
+          "attempt_id": { "type": "string", "minLength": 1 },
+          "phase": { "enum": ["C", "R", "A", "F", "T", "S"] },
+          "attempted": { "type": "array", "items": { "type": "string" } },
+          "failure_reason": { "type": "string" },
+          "discoveries": { "type": "array", "items": { "type": "string" } },
+          "dead_ends": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test test/codebase-knowledge/*.test.ts test/model-routing-and-evaluation/*.test.ts test/work-intake/*.test.ts",
+    "test": "node --experimental-strip-types --test test/agent-execution/*.test.ts test/codebase-knowledge/*.test.ts test/model-routing-and-evaluation/*.test.ts test/work-intake/*.test.ts",
     "test:worker": "cd packages/worker-harness && npm test"
   },
   "devDependencies": {
