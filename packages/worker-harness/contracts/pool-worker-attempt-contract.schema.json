@@ -44,7 +44,7 @@
       "additionalProperties": false,
       "required": ["source", "source_id"],
       "properties": {
-        "source": { "enum": ["decomposition", "direct-task"] },
+        "source": { "enum": ["decomposition", "direct_task"] },
         "source_id": { "type": "string", "minLength": 1 }
       }
     },

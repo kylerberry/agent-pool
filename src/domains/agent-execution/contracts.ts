@@ -39,7 +39,7 @@ export type AcceptanceCriterion = {
 };
 
 export type CriteriaOrigin = {
-  readonly source: 'decomposition' | 'direct-task';
+  readonly source: 'decomposition' | 'direct_task';
   readonly source_id: string;
 };
 

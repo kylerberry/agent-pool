@@ -37,7 +37,7 @@ const REQUIRED_FIELDS = Object.freeze([
 ]);
 
 const REQUIRED_FIELD_SET = new Set<string>(REQUIRED_FIELDS);
-const CRITERIA_SOURCES = new Set(['decomposition', 'direct-task']);
+const CRITERIA_SOURCES = new Set(['decomposition', 'direct_task']);
 const PHASES = new Set<CraftsPhase>(['C', 'R', 'A', 'F', 'T', 'S']);
 
 function isNonEmptyString(value: unknown): value is string {

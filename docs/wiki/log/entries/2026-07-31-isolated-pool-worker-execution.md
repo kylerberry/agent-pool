@@ -67,12 +67,19 @@ load-bearing, not ceremony.
 - Workspace cleanup has no terminal "retain" decision. After the bounded quarantine the
   answer is `destroy` whatever the audit state, with the failure record preserved.
 
-## Contract seams flagged for integration review
+## Contract seams — integration owner decisions (2026-08-01)
 
-- `pool-worker-execution-context.schema.json` moved to `schema_version: 2` and is a
-  breaking change for any launcher emitting v1.
-- `pool-worker-attempt-contract.schema.json` overlaps the `work-contracts-direct-intake`
-  slice; only the worker-side consumption boundary is defined here.
+- **Criteria-provenance vocabulary: resolved.** The canonical value is `direct_task`,
+  matching the `work-contracts-direct-intake` node's own acceptance criterion. The
+  worker-side enum was `direct-task` and has been corrected. `criteria_origin` remains the
+  field name.
+- **Execution context v2: accepted.** `pool-worker-execution-context.schema.json` stays at
+  `schema_version: 2`. It is a breaking change for any launcher emitting v1, but no launcher
+  exists yet, so the change was taken at its cheapest point.
+- **Work-contract → attempt-contract projection: open.** Both upstream producers legitimately
+  carry `depends_on`; the worker must never see it. The transform that strips topology and
+  hands down exactly one unit is owned by neither adjacent slice. Under discussion; the
+  worker-side receiving assertion (`findDagTopology`) is in place either way.
 - Cross-launch nonce replay detection, the durable transcript object store, and the audit
   index remain controller-owned and are injected interfaces here.
 

@@ -124,7 +124,33 @@ describe('attempt contract', () => {
       'CONTRACT_INVALID_FIELD',
     );
     assert.equal(
-      codeOf(validateAttemptContracts([contract({ criteria_origin: { source: 'direct-task' } })], expectations)),
+      codeOf(validateAttemptContracts([contract({ criteria_origin: { source: 'direct_task' } })], expectations)),
+      'CONTRACT_INVALID_FIELD',
+    );
+  });
+
+  it('accepts both canonical criteria-origin sources', () => {
+    for (const source of ['decomposition', 'direct_task']) {
+      const result = validateAttemptContracts(
+        [contract({ criteria_origin: { source, source_id: 'src-1' } })],
+        expectations,
+      );
+      assert.equal(isExecutionFailure(result), false, `${source} must be accepted`);
+      assert.ok('contract' in result);
+      assert.equal(result.contract.criteria_origin.source, source);
+    }
+  });
+
+  it('rejects the hyphenated spelling that the intake path does not emit', () => {
+    // Canonical vocabulary is `direct_task`; a near-miss must fail loudly at the
+    // boundary rather than silently mismatch between producer and worker.
+    assert.equal(
+      codeOf(
+        validateAttemptContracts(
+          [contract({ criteria_origin: { source: 'direct-task', source_id: 'src-1' } })],
+          expectations,
+        ),
+      ),
       'CONTRACT_INVALID_FIELD',
     );
   });

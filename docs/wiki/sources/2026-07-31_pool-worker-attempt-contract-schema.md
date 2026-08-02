@@ -26,7 +26,7 @@ selecting one.
   an otherwise-permitted field.
 - `acceptance_criteria` is immutable ground truth with at least one entry and unique
   ids. C never re-authors it.
-- `criteria_origin` records provenance (`decomposition` or `direct-task`) plus a source
+- `criteria_origin` records provenance (`decomposition` or `direct_task`) plus a source
   id, satisfying the orchestrator specification's criteria-provenance binding.
 - `prior_failure_context` carries ADR-026 failure artifacts from earlier attempts so a
   retry never starts blind. It holds artifacts, never transcripts.
