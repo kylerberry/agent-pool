@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "node_id": "controller-ready-frontier",
+  "attempt_id": "controller-ready-frontier-attempt-1",
+  "phase": "F",
+  "status": "passed",
+  "model": "pi/local-craft-builder",
+  "started_at": "2026-01-03T00:00:00Z",
+  "completed_at": "2026-01-03T00:00:00Z",
+  "summary": "Tighten repair F-3: hardened orchestration isPlainObject to reject prototype-bearing objects (class instances, Date, RegExp, attacker prototypes) while accepting ordinary Object.prototype and null-prototype own-data records; added hostile boundary tests for ApprovedWork, PredictedTouchEvidence, and nested overlaps proving rejection with no persistence, scheduling decisions, or baseline mutation.",
+  "acceptance_criteria_status": [
+    {
+      "criterion": "criterion-1: Implement the requested change without widening scope",
+      "status": "met",
+      "evidence": [
+        "src/domains/orchestration/contracts.ts: isPlainObject now checks Object.getPrototypeOf(value) is Object.prototype or null",
+        "test/orchestration/controller-ready-frontier.test.ts: added plain-object boundary tests and hostile ApprovedWork/PredictedTouchEvidence/nested-overlap tests",
+        "F-3-orchestration-tests.log: 112 tests pass, 0 fail",
+        "F-3-npm-test.log: 552 tests pass, 0 fail",
+        "F-3-typecheck.log: tsc --noEmit exit 0",
+        "F-3-test-worker.log: 41 worker tests pass, 0 fail"
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/domains/orchestration/contracts.ts",
+    "test/orchestration/controller-ready-frontier.test.ts"
+  ],
+  "commands_run": [
+    {
+      "command": "node --experimental-strip-types --test test/orchestration/*.test.ts",
+      "exit_code": 0,
+      "output_artifact": ".tmp/crafts-output/controller-ready-frontier-attempt-1/F-3-orchestration-tests.log"
+    },
+    {
+      "command": "npm run typecheck",
+      "exit_code": 0,
+      "output_artifact": ".tmp/crafts-output/controller-ready-frontier-attempt-1/F-3-typecheck.log"
+    },
+    {
+      "command": "npm test",
+      "exit_code": 0,
+      "output_artifact": ".tmp/crafts-output/controller-ready-frontier-attempt-1/F-3-npm-test.log"
+    },
+    {
+      "command": "npm run test:worker",
+      "exit_code": 0,
+      "output_artifact": ".tmp/crafts-output/controller-ready-frontier-attempt-1/F-3-test-worker.log"
+    }
+  ],
+  "cost": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "amount": null,
+    "currency": null
+  },
+  "risks": [
+    "none"
+  ],
+  "open_questions": [],
+  "recommended_next_step": "Tighten review (T-3) to confirm the plain-object boundary defect is fully closed and no inherited-field bypass remains.",
+  "failure_context": null,
+  "transcript_path": null,
+  "phase_data": {
+    "findings_addressed": [
+      "shared plain-object boundary defect in orchestration isPlainObject accepted class/Date/attacker-prototype objects",
+      "exact-field validators could implicitly read inherited fields from prototype-bearing objects"
+    ],
+    "documented_disagreements": [],
+    "green_evidence": {
+      "commit_sha": "c8e9d853e6a1d89353d0b99592f908d182a24fe4",
+      "suite_path": "test/orchestration/controller-ready-frontier.test.ts",
+      "suite_hash": "0a02780ccfaa762cfb961a98b54442b4ef8563446693032a8a507d0a8b80e727",
+      "command": "node --experimental-strip-types --test test/orchestration/*.test.ts",
+      "exit_code": 0,
+      "image_digest": "host/node-local",
+      "output_artifact": ".tmp/crafts-output/controller-ready-frontier-attempt-1/F-3-orchestration-tests.log"
+    },
+    "patch_path": null
+  }
+}

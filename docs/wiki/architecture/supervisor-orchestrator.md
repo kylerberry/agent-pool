@@ -3,7 +3,7 @@ title: Supervisor Orchestrator
 type: architecture
 tags: [orchestrator, dag, agents]
 created: 2026-07-22
-updated: 2026-07-27
+updated: 2026-08-03
 sources:
   - docs/raw/specs/orchestrator-spec.md
   - docs/raw/adr/orchestrator/
@@ -21,7 +21,8 @@ The supervisor orchestrator accepts a free-form feature spec, decomposes it into
 - The pool receives flat, atomic queue jobs and does not need DAG awareness.
 - Each node launches a fresh Pool Worker Pi session with the explicitly loaded `packages/worker-harness/`; it conducts CRAFTS through sequential `pi-subagents` phase calls.
 - Codebase knowledge is target-repository scoped: bounded controller caches hold regenerable graph data, while prose knowledge is read from the target repository's own docs or approved provider. Missing wiki/docs are non-blocking; Agent Pool product docs are not exposed as knowledge for another target.
-- v1 delivery uses stable attempt IDs, idempotent results, CAS transitions, leases, and startup reconciliation.
+- Orchestration is the sole SQLite writer. It derives deterministic attempt and job IDs, sends identifier-only queue envelopes, rehydrates and deep-freezes one topology-free worker contract at consumption, and uses CAS lifecycle transitions, lease generation/token fencing, idempotent result acceptance, and startup reconciliation to recover interrupted windows.
+- SQLite startup is gated on an owner-only private runtime path, no symlink or non-regular database target, foreign keys/WAL, and fail-closed versioned migrations. Gate-1-bound, versioned controller-owned predicted-touch evidence may serialize confident likely overlaps without changing approved DAG edges; stale, unavailable, mismatched, or low-confidence evidence uses optimistic concurrency and records its decision.
 - Failed nodes freeze only their dependent branch; unrelated ready branches continue.
 
 ## Gating and evidence

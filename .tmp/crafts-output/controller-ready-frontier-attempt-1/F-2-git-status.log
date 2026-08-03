@@ -1,0 +1,16 @@
+ M CLAUDE.md
+ M package.json
+?? .tmp/crafts-output/controller-ready-frontier-attempt-1/
+?? src/domains/orchestration/attempt-dispatch.ts
+?? src/domains/orchestration/contracts.ts
+?? src/domains/orchestration/dispatch-service.ts
+?? src/domains/orchestration/index.ts
+?? src/domains/orchestration/lifecycle.ts
+?? src/domains/orchestration/ready-frontier.ts
+?? src/domains/orchestration/reconciliation.ts
+?? src/domains/orchestration/sqlite-store.ts
+?? test/orchestration/
+---
+ CLAUDE.md    | 63 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ package.json |  2 +-
+ 2 files changed, 64 insertions(+), 1 deletion(-)

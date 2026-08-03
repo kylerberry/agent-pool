@@ -14,12 +14,17 @@
 - DAG topology, node contracts, and dependency edges.
 - Attempt records, retry counters, failure-class counters, and budgets.
 - Leases, lease expiration timers, and reconciliation checkpoints.
+- SQLite persistence, schema migrations, audit events, deterministic attempt/job identifiers, and scheduling-decision provenance.
 - Escalation/resolution decisions and audit state.
 
 ## Invariants
 
 - A node is leased to at most one agent session at a time.
 - A node enters the ready frontier only after all its dependencies succeed.
+- Orchestration is the sole SQLite writer; lifecycle completion uses expected-version compare-and-set transitions.
+- Queue messages contain deterministic identifiers only. The consumer rehydrates SQLite state and projects one deeply immutable, topology-free worker contract.
+- Lease generation and token digests fence stale workers and results. Identical result delivery is an audited no-op; conflicting delivery is rejected.
+- Predicted-touch serialization is advisory and never rewrites approved dependency edges.
 - Retry counters and failure-class counters are monotonic and budget-bounded.
 - Governed resolutions are one of the five approved actions and are auditable.
 
@@ -31,6 +36,8 @@
   `docs/raw/specs/schemas/pool-worker-attempt-contract.schema.json`. This domain owns the
   projection from a node record (which holds dependency edges) to that payload (which must
   hold none) — see `controller-ready-frontier` acceptance criterion 3.
+- Queue consumption validates an identifier-only envelope, rehydrates the stored attempt,
+  and projects exactly one immutable, topology-free worker contract.
 - Consumes **attempt results** and **verdicts** from Agent Execution and Verification.
 
 ## Dependencies
@@ -46,6 +53,8 @@
 - Only Orchestration mutates node lifecycle state; no other domain writes orchestration state.
 - Webhook or caller inputs never drive resolution actions directly.
 - Lease expiry must be defensive: a lost lease can be reclaimed without agent cooperation.
+- Startup fails closed for database paths outside the owner-only private runtime root, symlink or non-regular targets, unsafe permissions, failed migrations, and unsupported future schemas.
+- Predicted-touch evidence is controller-owned, Gate-1-bound, versioned, and durably recorded. Missing, stale, mismatched, unsupported, or below-policy evidence falls back to optimistic concurrency.
 
 ## Verification guidance
 
@@ -87,3 +96,4 @@ mismatch or extra field, so a drifted payload fails at launch rather than mid-at
   DAG-unaware worker; the worker's topology sweep will abort the launch, but the defect is here.
 - Inventing an attempt-payload shape instead of conforming to the attempt-contract schema
   produces a launch-time preflight abort with no useful diagnosis at the worker end.
+- Strict boundary validators must require own data properties for every accepted required or optional field. Inherited values, class instances, and attacker-controlled prototype chains must not satisfy validation; null-prototype records with own data fields remain valid.

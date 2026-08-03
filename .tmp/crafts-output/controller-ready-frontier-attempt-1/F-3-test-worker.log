@@ -1,0 +1,57 @@
+
+> agent-pool@0.1.0 test:worker
+> cd packages/worker-harness && npm test
+
+
+> agent-pool-worker-harness@0.1.0 test
+> node --test ./test/*.test.mjs
+
+✔ accepts a valid pool-worker launch context (31.976583ms)
+✔ rejects missing execution context (27.785458ms)
+✔ rejects Repository Builder environment (25.293667ms)
+✔ rejects malformed or expanded marker (27.760833ms)
+✔ rejects a version 1 marker that carries no launcher-owned freshness (26.935584ms)
+✔ rejects marker identity that differs from launcher expectations (28.429458ms)
+✔ rejects repository or branch that differs from launcher expectations (27.972833ms)
+✔ rejects an untrusted issuer (26.565833ms)
+✔ rejects non-RFC-3339 timestamps (26.034417ms)
+✔ rejects impossible calendar dates (27.46525ms)
+✔ accepts canonical UTC timestamps with fractional seconds (27.121292ms)
+✔ rejects stale markers (28.614667ms)
+✔ rejects a marker whose expiry has already passed (26.759833ms)
+✔ rejects a marker issued too far in the future (26.955791ms)
+✔ rejects a freshness budget above the five-minute ceiling (28.14425ms)
+✔ rejects an expiry that outruns the marker's own freshness budget (28.407542ms)
+✔ rejects a marker bound to a different workspace (27.945417ms)
+✔ rejects a marker whose workspace_path does not exist (28.808833ms)
+✔ rejects a reused workspace carrying prior-attempt residue (27.513208ms)
+✔ rejects an oversized marker field before pattern matching (25.860417ms)
+✔ rejects a symlinked control directory (27.279375ms)
+✔ rejects a missing attempt contract (26.566666ms)
+✔ rejects an attempt contract carrying DAG topology (27.646959ms)
+✔ rejects DAG topology nested inside an allowed contract field (27.234916ms)
+✔ rejects an attempt contract for a different attempt (27.714625ms)
+✔ rejects an attempt contract with no acceptance criteria (25.931709ms)
+✔ rejects a missing bundled contract schema (27.177959ms)
+✔ rejects a corrupted contract schema before any paid work (26.742583ms)
+✔ rejects a model scope that drifts from the specification, even when both config files agree (27.187625ms)
+✔ preflight's exact model set matches the domain approved-model registry (0.213667ms)
+✔ worker routing excludes orchestrator-side decomposition (0.102417ms)
+✔ runtime resources are not locally auto-discovered (1.004375ms)
+✔ bundled contract schemas match their canonical sources (0.18975ms)
+✔ every bundled contract schema passes the integrity check (1.115708ms)
+✔ schema subset validator enforces the keywords the contracts rely on (0.28225ms)
+✔ schema integrity rejects an unresolvable reference and an unsupported keyword (0.074916ms)
+✔ topology sweep finds DAG keys at any depth and tolerates cycles (0.090208ms)
+✔ preflight accepts exact pinned Graphify version (267.117083ms)
+✔ preflight rejects substring version like 0.9.250 (264.506625ms)
+✔ preflight rejects unavailable Graphify executable (257.254209ms)
+✔ preflight rejects Graphify skill provenance mismatch (256.834958ms)
+ℹ tests 41
+ℹ suites 0
+ℹ pass 41
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1898.631708
