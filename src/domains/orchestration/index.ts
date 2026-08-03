@@ -10,6 +10,7 @@ export type {
   PredictedTouchEvidence,
   PredictedTouchImport,
   QueueEnvelope,
+  ResolvedBuilderRouting,
   SchedulingDecision,
   SchedulingPolicy,
   WorkerResult,
@@ -19,9 +20,12 @@ export type {
 } from './contracts.ts';
 export type {
   AttemptRecord,
+  AttemptBuilderRoutingRecord,
   LeaseRecord,
   NodeRecord,
   OrchestrationStore,
+  PhaseArtifactInput,
+  PhaseArtifactRecord,
 } from './sqlite-store.ts';
 export { createSqliteStore } from './sqlite-store.ts';
 export { computeReadyFrontier } from './ready-frontier.ts';
@@ -34,5 +38,13 @@ export {
   projectAttemptContract,
 } from './attempt-dispatch.ts';
 export { dispatchReadyFrontier, consumeQueueEnvelope } from './dispatch-service.ts';
+export type { BuilderRoutingResolver, DispatchSkippedNode } from './dispatch-service.ts';
 export { reconcile } from './reconciliation.ts';
-export { makeEmpiricalSchedulingPolicy, validateQueueEnvelope, validateLeaseCommand, ORCHESTRATION_LIMITS } from './contracts.ts';
+export {
+  makeEmpiricalSchedulingPolicy,
+  validateQueueEnvelope,
+  validateLeaseCommand,
+  isResolvedBuilderRouting,
+  isSafeArtifactLocator,
+  ORCHESTRATION_LIMITS,
+} from './contracts.ts';

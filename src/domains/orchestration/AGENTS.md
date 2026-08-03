@@ -7,6 +7,9 @@
 - **Attempt**: A single execution instance of a node contract, tracked with retry and failure-class counters.
 - **Lease**: A time-bounded claim granting one agent session the exclusive right to execute an attempt.
 - **Governed resolution**: One of five explicit actions (retry, escalate, amend, skip, abort) applied to a failed or stuck node.
+- **Attempt provenance**: Append-only builder-routing facts selected for an attempt plus the revision history of phase artifacts. Distinct from lifecycle state, which is mutable.
+- **Builder routing resolver**: An injected function supplying the selected builder model for an attempt. Orchestration consumes it as data; it only uses Model Routing's registry validator, never its selection logic.
+- **Revision**: A store-assigned monotonic counter per `(attempt_id, phase)`. A phase legitimately repeats within one attempt; each occurrence is a new revision, never an overwrite.
 
 ## Owned state
 
@@ -15,6 +18,7 @@
 - Attempt records, retry counters, failure-class counters, and budgets.
 - Leases, lease expiration timers, and reconciliation checkpoints.
 - SQLite persistence, schema migrations, audit events, deterministic attempt/job identifiers, and scheduling-decision provenance.
+- Append-only attempt provenance: `attempt_routing_decisions` (one row per attempt, written at dispatch) and `phase_artifacts` (keyed `(attempt_id, phase, revision)`).
 - Escalation/resolution decisions and audit state.
 
 ## Invariants
@@ -27,6 +31,10 @@
 - Predicted-touch serialization is advisory and never rewrites approved dependency edges.
 - Retry counters and failure-class counters are monotonic and budget-bounded.
 - Governed resolutions are one of the five approved actions and are auditable.
+- An attempt cannot exist without canonical builder routing; its routing row is written in the same transaction. Absent or malformed routing rolls the attempt back.
+- `attempt_routing_decisions` and `phase_artifacts` are append-only: no row is ever updated or deleted. This is enforced in the schema, not by the absence of a store method.
+- Revision is allocated inside the INSERT statement, never by an application-level read-modify-write, so concurrent writers cannot observe the same maximum.
+- Orchestration persists only the builder selected for dispatch. Evaluator-execution provenance and Tier-2 independence are deferred to grading and must be recorded at actual evaluator invocation, never inferred from builder dispatch.
 
 ## Public interfaces
 
@@ -39,6 +47,9 @@
 - Queue consumption validates an identifier-only envelope, rehydrates the stored attempt,
   and projects exactly one immutable, topology-free worker contract.
 - Consumes **attempt results** and **verdicts** from Agent Execution and Verification.
+- `createAttempt(..., builderRouting)` requires `ResolvedBuilderRouting`. `dispatchReadyFrontier(..., resolveBuilderRouting)` requires a `BuilderRoutingResolver` supplied by the composition root that owns the validated availability snapshot. Resolver outages, invalid routing, and attempt-creation failures return bounded typed skipped outcomes.
+- `getBuilderRoutingByAttemptId` returns the persisted builder routing or `null`. Evaluator-execution provenance has no generic attempt-creation field; grading must record it when an evaluator actually runs.
+- `recordPhaseArtifact`, `getLatestPhaseArtifact`, and `getPhaseArtifactRevisions` manage C/R/A/F/T/S history with `passed|needs_fix|failed|blocked` outcomes. An artifact must reference a real attempt; deletion is restricted rather than cascaded.
 
 ## Dependencies
 
@@ -55,12 +66,17 @@
 - Lease expiry must be defensive: a lost lease can be reclaimed without agent cooperation.
 - Startup fails closed for database paths outside the owner-only private runtime root, symlink or non-regular targets, unsafe permissions, failed migrations, and unsupported future schemas.
 - Predicted-touch evidence is controller-owned, Gate-1-bound, versioned, and durably recorded. Missing, stale, mismatched, unsupported, or below-policy evidence falls back to optimistic concurrency.
+- Builder provenance is controller-written at dispatch and is never writable from a phase artifact, result submission, or queue envelope. Evaluator independence is deferred until grading has a separate record written at evaluator invocation; it must not be inferred from an agent-authored artifact or builder dispatch.
+- `artifact_path` is agent-authored. It is stored as a validated workspace-relative locator and is never opened by this domain. Percent-encoded traversal is accepted at storage, so consumers must resolve with realpath containment and must not decode first.
 
 ## Verification guidance
 
 - Model ready-frontier calculation, retry policies, and budget exhaustion with property tests.
 - Verify lease exclusivity and reconciliation behavior under simulated agent loss.
 - Confirm the five resolution actions are exhaustive and mutually exclusive in state transitions.
+- Mutation-test append-only and allocation guarantees: remove the mechanism, and the test that claims to protect it must fail. Two real defects in this domain were found this way and none by reading.
+- Probe append-only tables from a connection using SQLite's default pragmas, not one this store opened.
+- Run `node --experimental-strip-types --test test/orchestration/*.test.ts`, then `npm test`, `npm run typecheck`, and `npm run test:worker`.
 
 ## Relevant sources
 
@@ -96,4 +112,9 @@ mismatch or extra field, so a drifted payload fails at launch rather than mid-at
   DAG-unaware worker; the worker's topology sweep will abort the launch, but the defect is here.
 - Inventing an attempt-payload shape instead of conforming to the attempt-contract schema
   produces a launch-time preflight abort with no useful diagnosis at the worker end.
+- `BEFORE UPDATE` and `BEFORE DELETE` triggers alone do **not** make a SQLite table append-only. `INSERT OR REPLACE` resolves a conflict by deleting the existing row, and SQLite fires `BEFORE DELETE` for that implicit delete only when `recursive_triggers` is on — which is off by default. Without a `BEFORE INSERT` conflict guard, `INSERT OR REPLACE` rewrites a recorded row straight through both triggers.
+- `PRAGMA recursive_triggers` cannot carry a persistence guarantee: it is per-connection, so it constrains only connections this store opens while every other writer inherits the default. Any invariant that must hold against all writers belongs in the schema.
+- Allocating a revision with `SELECT MAX(...)` followed by a separate `INSERT` is a read-modify-write race. Allocate inside the INSERT (`INSERT ... SELECT COALESCE(MAX(revision), 0) + 1 ...`) so the invariant does not depend on transaction-mode discipline that no in-process test can constrain.
+- A `Promise.all` over store methods does not test concurrency. `node:sqlite` is synchronous and these methods contain no `await`, so the calls serialize and such a test passes even with the mechanism removed.
+- Importing Model Routing to select or reorder a decision inverts the dependency. Take an injected resolver instead; Orchestration may only validate supplied IDs against the canonical registry, so a missing wiring yields a typed skipped result rather than fabricated runtime evidence.
 - Strict boundary validators must require own data properties for every accepted required or optional field. Inherited values, class instances, and attacker-controlled prototype chains must not satisfy validation; null-prototype records with own data fields remain valid.

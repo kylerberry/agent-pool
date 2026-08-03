@@ -28,6 +28,7 @@ import {
   type PredictedTouchEvidence,
   type PredictedTouchImport,
   type SchedulingPolicy,
+  type ResolvedBuilderRouting,
 } from '../../src/domains/orchestration/index.ts';
 import { isPlainObject } from '../../src/domains/orchestration/contracts.ts';
 import { validateAttemptContracts } from '../../src/domains/agent-execution/index.ts';
@@ -118,11 +119,18 @@ async function readyNode(store: OrchestrationStore, workId: string, nodeId: stri
   }
 }
 
+/** Fixed builder routing standing in for a composition root. */
+function testBuilderRouting(): ResolvedBuilderRouting {
+  return { builder: 'openai-codex/gpt-5.6-luna', policyVersion: 1 };
+}
+
+const testBuilderRoutingResolver = async () => testBuilderRouting();
+
 async function createReadyAttempt(store: OrchestrationStore, workId: string, nodeId: string, attemptNumber = 1) {
   await readyNode(store, workId, nodeId);
   const attemptId = deriveAttemptId(workId, nodeId, attemptNumber);
   const jobId = deriveJobId(attemptId);
-  const attempt = await store.createAttempt(workId, nodeId, attemptId, attemptNumber, jobId);
+  const attempt = await store.createAttempt(workId, nodeId, attemptId, attemptNumber, jobId, testBuilderRouting());
   if ('error' in attempt) throw new Error(`createAttempt error: ${JSON.stringify(attempt.error)}`);
   return { attemptId, jobId };
 }
@@ -513,7 +521,7 @@ describe('dispatch service', () => {
     const store = await openStore(root);
     const queue = createQueue();
     await store.importApprovedWork(approvedWork());
-    const result = await dispatchReadyFrontier(store, queue, 'work-1', 'owner/repo', 'main', new Map());
+    const result = await dispatchReadyFrontier(store, queue, 'work-1', 'owner/repo', 'main', new Map(), testBuilderRoutingResolver);
     assert.equal(result.dispatched.length, 1);
     const [{ attempt_id, job_id }] = result.dispatched;
     assert.equal(attempt_id, deriveAttemptId('work-1', 'a', 1));
@@ -525,8 +533,8 @@ describe('dispatch service', () => {
     const store = await openStore(root);
     const queue = createQueue();
     await store.importApprovedWork(approvedWork());
-    const first = await dispatchReadyFrontier(store, queue, 'work-1', 'owner/repo', 'main', new Map());
-    const second = await dispatchReadyFrontier(store, queue, 'work-1', 'owner/repo', 'main', new Map());
+    const first = await dispatchReadyFrontier(store, queue, 'work-1', 'owner/repo', 'main', new Map(), testBuilderRoutingResolver);
+    const second = await dispatchReadyFrontier(store, queue, 'work-1', 'owner/repo', 'main', new Map(), testBuilderRoutingResolver);
     assert.equal(first.dispatched.length, 1);
     assert.deepEqual(second.dispatched, first.dispatched);
     assert.equal(queue.jobs.size, 1);
@@ -537,7 +545,7 @@ describe('dispatch service', () => {
     const queue = createQueue();
     await store.importApprovedWork(approvedWork({ nodes: [node('a'), node('b')] }));
     const blockers = new Map([['b', 'a']]);
-    const result = await dispatchReadyFrontier(store, queue, 'work-1', 'owner/repo', 'main', blockers);
+    const result = await dispatchReadyFrontier(store, queue, 'work-1', 'owner/repo', 'main', blockers, testBuilderRoutingResolver);
     assert.deepEqual(result.dispatched.map((d) => deriveAttemptId('work-1', 'a', 1)), [deriveAttemptId('work-1', 'a', 1)]);
   });
 });
@@ -894,7 +902,7 @@ describe('reconciliation', () => {
     await readyNode(store, 'work-1', 'a');
     const attemptId = deriveAttemptId('work-1', 'a', 1);
     const jobId = deriveJobId(attemptId);
-    await store.createAttempt('work-1', 'a', attemptId, 1, jobId);
+    await store.createAttempt('work-1', 'a', attemptId, 1, jobId, testBuilderRouting());
     assert.equal((await store.getAttempt(attemptId))?.job_id, jobId);
     queue.removed.add(jobId);
     queue.jobs.delete(jobId);
@@ -1078,7 +1086,7 @@ describe('migration safety', () => {
     const store = await createSqliteStore({ runtimeRoot: root, dbLocation: relative(root, path), backupHook: async () => { backedUp = true; } });
     await store.close();
     assert.ok(backedUp);
-    assert.equal(getSchemaVersion(path), 2);
+    assert.equal(getSchemaVersion(path), 5);
   });
 
   it('fails closed when the backup hook rejects', async () => {
@@ -1119,7 +1127,7 @@ describe('migration safety', () => {
     } catch {}
     const store = await createSqliteStore({ runtimeRoot: root, dbLocation: relative(root, path), backupHook: async () => {} });
     await store.close();
-    assert.equal(getSchemaVersion(path), 2);
+    assert.equal(getSchemaVersion(path), 5);
   });
 
   it('rolls back a failed migration and keeps the prior schema version', async () => {

@@ -6,6 +6,7 @@
  * and contracts; no SQLite internals leak across boundaries.
  */
 
+import { isApprovedModelId, type ApprovedModelId } from '../model-routing-and-evaluation/approved-models.ts';
 import type { AcceptedUnit } from '../work-intake/contracts.ts';
 
 /** Canonical node lifecycle states. */
@@ -182,6 +183,43 @@ export const ORCHESTRATION_LIMITS = {
   maxSharedSurfacesPerOverlap: 200,
 } as const;
 
+/**
+ * Builder routing resolved by the composition root that owns the validated
+ * availability snapshot. It records the model selected for the work that this
+ * attempt will actually run.
+ *
+ * Orchestration consumes the canonical registry validator but never selects,
+ * reorders, or substitutes models. Evaluator-execution provenance belongs to
+ * grading, where it can be recorded when that evaluator actually runs.
+ */
+export type ResolvedBuilderRouting = {
+  readonly builder: ApprovedModelId;
+  readonly policyVersion: number;
+};
+
+export function isResolvedBuilderRouting(value: unknown): value is ResolvedBuilderRouting {
+  if (!isPlainObject(value)) return false;
+  if (!hasExactKeys(value, new Set(['builder', 'policyVersion']))) return false;
+  return (
+    isApprovedModelId(value.builder) &&
+    Number.isInteger(value.policyVersion) &&
+    (value.policyVersion as number) >= 0
+  );
+}
+
+/**
+ * `artifact_path` originates in agent-authored phase output. It is persisted as
+ * a workspace-relative locator and is never opened by this domain, so the only
+ * defence that matters is refusing to make a traversal primitive durable.
+ */
+export function isSafeArtifactLocator(value: unknown): value is string {
+  if (!isNonEmptyString(value, ORCHESTRATION_LIMITS.maxPathLength)) return false;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f]/.test(value)) return false;
+  if (value.startsWith('/') || /^[A-Za-z]:/.test(value) || value.startsWith('\\')) return false;
+  return !value.split(/[/\\]/).includes('..');
+}
+
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return false;
@@ -197,7 +235,13 @@ function isNonEmptyString(value: unknown, max = Infinity): value is string {
 }
 
 function hasExactKeys(value: unknown, allowed: ReadonlySet<string>): value is Record<string, unknown> {
-  return isPlainObject(value) && Object.keys(value).every((k) => allowed.has(k));
+  if (!isPlainObject(value)) return false;
+  const ownKeys = Object.keys(value);
+  return (
+    ownKeys.length === allowed.size &&
+    ownKeys.every((key) => allowed.has(key)) &&
+    [...allowed].every((key) => Object.hasOwn(value, key))
+  );
 }
 
 /**

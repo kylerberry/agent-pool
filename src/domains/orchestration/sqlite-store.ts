@@ -31,18 +31,21 @@ import type {
   OrchestrationError,
   PredictedTouchEvidence,
   PredictedTouchImport,
+  ResolvedBuilderRouting,
   SchedulingPolicy,
   WorkerResult,
 } from './contracts.ts';
 import {
   isPlainObject,
+  isResolvedBuilderRouting,
+  isSafeArtifactLocator,
   ORCHESTRATION_LIMITS,
   validateLeaseCommand,
   type NodeState,
 } from './contracts.ts';
 import { isValidTransition } from './lifecycle.ts';
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 5;
 
 const MIGRATIONS: readonly string[] = [
   `
@@ -179,6 +182,156 @@ const MIGRATIONS: readonly string[] = [
   ALTER TABLE works ADD COLUMN frozen_evidence_id TEXT;
   ALTER TABLE works ADD COLUMN frozen_at TEXT;
   `,
+  // v3: append-only attempt provenance.
+  //
+  // Both tables are insert-only and enforce that in the database, not merely by
+  // the absence of a store method. A future migration that must rewrite either
+  // one has to DROP the trigger, apply the change, and recreate the trigger
+  // inside that migration's single transaction; that is the only sanctioned
+  // mutation path.
+  //
+  // Neither table cascades from attempts: provenance outlives attempt-row
+  // cleanup, which is the whole point of recording it.
+  `
+  CREATE TABLE IF NOT EXISTS attempt_routing_decisions (
+    attempt_id TEXT PRIMARY KEY,
+    builder_model TEXT NOT NULL,
+    evaluator_model TEXT NOT NULL,
+    policy_version INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS phase_artifacts (
+    attempt_id TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    artifact_path TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (attempt_id, phase, revision)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_phase_artifacts_attempt ON phase_artifacts(attempt_id, phase, revision);
+
+  CREATE TRIGGER IF NOT EXISTS trg_phase_artifacts_no_update
+  BEFORE UPDATE ON phase_artifacts
+  BEGIN SELECT RAISE(ABORT, 'phase_artifacts is append-only'); END;
+
+  CREATE TRIGGER IF NOT EXISTS trg_phase_artifacts_no_delete
+  BEFORE DELETE ON phase_artifacts
+  BEGIN SELECT RAISE(ABORT, 'phase_artifacts is append-only'); END;
+
+  CREATE TRIGGER IF NOT EXISTS trg_attempt_routing_no_update
+  BEFORE UPDATE ON attempt_routing_decisions
+  BEGIN SELECT RAISE(ABORT, 'attempt_routing_decisions is append-only'); END;
+
+  CREATE TRIGGER IF NOT EXISTS trg_attempt_routing_no_delete
+  BEFORE DELETE ON attempt_routing_decisions
+  BEGIN SELECT RAISE(ABORT, 'attempt_routing_decisions is append-only'); END;
+  `,
+  // v4: close the INSERT OR REPLACE bypass.
+  //
+  // REPLACE resolves a conflict by deleting the existing row, and SQLite only
+  // fires BEFORE DELETE for that implicit delete when recursive_triggers is ON.
+  // That pragma is per-connection, so relying on it protects only connections
+  // this store opens — any other writer inherits the default of OFF and can
+  // rewrite a recorded grading outcome straight through both triggers.
+  //
+  // A BEFORE INSERT conflict guard always fires, because REPLACE is still an
+  // INSERT, so the guarantee holds regardless of who opened the connection.
+  `
+  CREATE TRIGGER IF NOT EXISTS trg_phase_artifacts_no_replace
+  BEFORE INSERT ON phase_artifacts
+  WHEN EXISTS (
+    SELECT 1 FROM phase_artifacts
+    WHERE attempt_id = NEW.attempt_id AND phase = NEW.phase AND revision = NEW.revision
+  )
+  BEGIN SELECT RAISE(ABORT, 'phase_artifacts is append-only'); END;
+
+  CREATE TRIGGER IF NOT EXISTS trg_attempt_routing_no_replace
+  BEFORE INSERT ON attempt_routing_decisions
+  WHEN EXISTS (SELECT 1 FROM attempt_routing_decisions WHERE attempt_id = NEW.attempt_id)
+  BEGIN SELECT RAISE(ABORT, 'attempt_routing_decisions is append-only'); END;
+  `,
+  // v5: attempt provenance records only the builder selected at dispatch.
+  // Evaluator execution evidence is deferred to grading, where it can be
+  // recorded at invocation rather than inferred from builder dispatch. Phase
+  // artifacts must always refer to an existing attempt, but restrict deletion
+  // rather than cascading away history.
+  `
+  DROP TRIGGER IF EXISTS trg_phase_artifacts_no_update;
+  DROP TRIGGER IF EXISTS trg_phase_artifacts_no_delete;
+  DROP TRIGGER IF EXISTS trg_phase_artifacts_no_replace;
+  DROP TRIGGER IF EXISTS trg_attempt_routing_no_update;
+  DROP TRIGGER IF EXISTS trg_attempt_routing_no_delete;
+  DROP TRIGGER IF EXISTS trg_attempt_routing_no_replace;
+  DROP INDEX IF EXISTS idx_phase_artifacts_attempt;
+
+  ALTER TABLE attempt_routing_decisions RENAME TO attempt_routing_decisions_v4;
+  ALTER TABLE phase_artifacts RENAME TO phase_artifacts_v4;
+
+  CREATE TABLE attempt_routing_decisions (
+    attempt_id TEXT PRIMARY KEY,
+    builder_model TEXT NOT NULL,
+    policy_version INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE phase_artifacts (
+    attempt_id TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    artifact_path TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (attempt_id, phase, revision),
+    FOREIGN KEY (attempt_id) REFERENCES attempts(attempt_id) ON DELETE RESTRICT
+  );
+
+  INSERT INTO attempt_routing_decisions (attempt_id, builder_model, policy_version, created_at)
+  SELECT attempt_id, builder_model, policy_version, created_at
+  FROM attempt_routing_decisions_v4;
+
+  INSERT INTO phase_artifacts (attempt_id, phase, revision, status, content_hash, artifact_path, created_at)
+  SELECT attempt_id, phase, revision, status, content_hash, artifact_path, created_at
+  FROM phase_artifacts_v4;
+
+  DROP TABLE attempt_routing_decisions_v4;
+  DROP TABLE phase_artifacts_v4;
+
+  CREATE INDEX idx_phase_artifacts_attempt ON phase_artifacts(attempt_id, phase, revision);
+
+  CREATE TRIGGER trg_phase_artifacts_no_update
+  BEFORE UPDATE ON phase_artifacts
+  BEGIN SELECT RAISE(ABORT, 'phase_artifacts is append-only'); END;
+
+  CREATE TRIGGER trg_phase_artifacts_no_delete
+  BEFORE DELETE ON phase_artifacts
+  BEGIN SELECT RAISE(ABORT, 'phase_artifacts is append-only'); END;
+
+  CREATE TRIGGER trg_phase_artifacts_no_replace
+  BEFORE INSERT ON phase_artifacts
+  WHEN EXISTS (
+    SELECT 1 FROM phase_artifacts
+    WHERE attempt_id = NEW.attempt_id AND phase = NEW.phase AND revision = NEW.revision
+  )
+  BEGIN SELECT RAISE(ABORT, 'phase_artifacts is append-only'); END;
+
+  CREATE TRIGGER trg_attempt_routing_no_update
+  BEFORE UPDATE ON attempt_routing_decisions
+  BEGIN SELECT RAISE(ABORT, 'attempt_routing_decisions is append-only'); END;
+
+  CREATE TRIGGER trg_attempt_routing_no_delete
+  BEFORE DELETE ON attempt_routing_decisions
+  BEGIN SELECT RAISE(ABORT, 'attempt_routing_decisions is append-only'); END;
+
+  CREATE TRIGGER trg_attempt_routing_no_replace
+  BEFORE INSERT ON attempt_routing_decisions
+  WHEN EXISTS (SELECT 1 FROM attempt_routing_decisions WHERE attempt_id = NEW.attempt_id)
+  BEGIN SELECT RAISE(ABORT, 'attempt_routing_decisions is append-only'); END;
+  `,
 ];
 
 export type NodeRecord = {
@@ -234,6 +387,37 @@ export type WorkRecord = {
 
 type WorkOrigin = 'decomposition' | 'direct_task';
 
+/** Append-only builder routing provenance for one attempt. */
+export type AttemptBuilderRoutingRecord = {
+  readonly attempt_id: string;
+  readonly builder_model: string;
+  readonly policy_version: number;
+  readonly created_at: string;
+};
+
+/** One immutable revision of one phase's artifact within one attempt. */
+export type PhaseArtifactRecord = {
+  readonly attempt_id: string;
+  readonly phase: string;
+  readonly revision: number;
+  readonly status: string;
+  readonly content_hash: string;
+  readonly artifact_path: string;
+  readonly created_at: string;
+};
+
+/**
+ * `revision` is never accepted from the caller; the store allocates it inside
+ * the insert transaction.
+ */
+export type PhaseArtifactInput = {
+  readonly attempt_id: string;
+  readonly phase: string;
+  readonly status: string;
+  readonly content_hash: string;
+  readonly artifact_path: string;
+};
+
 export type OrchestrationStore = {
   readonly importApprovedWork: (work: ApprovedWork) => Promise<ImportedWork | { readonly error: OrchestrationError }>;
   readonly getImportedWork: (workId: string) => Promise<ImportedWork | null>;
@@ -241,7 +425,18 @@ export type OrchestrationStore = {
   readonly getApprovedNode: (workId: string, nodeId: string) => Promise<ApprovedNode | null>;
   readonly listNodes: (workId: string) => Promise<readonly NodeRecord[]>;
   readonly transitionNode: (workId: string, nodeId: string, expectedVersion: number, newState: NodeState) => Promise<NodeRecord | { readonly error: OrchestrationError }>;
-  readonly createAttempt: (workId: string, nodeId: string, attemptId: string, attemptNumber: number, jobId: string) => Promise<AttemptRecord | { readonly error: OrchestrationError }>;
+  readonly createAttempt: (
+    workId: string,
+    nodeId: string,
+    attemptId: string,
+    attemptNumber: number,
+    jobId: string,
+    builderRouting: ResolvedBuilderRouting,
+  ) => Promise<AttemptRecord | { readonly error: OrchestrationError }>;
+  readonly getBuilderRoutingByAttemptId: (attemptId: string) => Promise<AttemptBuilderRoutingRecord | null>;
+  readonly recordPhaseArtifact: (input: PhaseArtifactInput) => Promise<PhaseArtifactRecord | { readonly error: OrchestrationError }>;
+  readonly getLatestPhaseArtifact: (attemptId: string, phase: string) => Promise<PhaseArtifactRecord | null>;
+  readonly getPhaseArtifactRevisions: (attemptId: string, phase: string) => Promise<readonly PhaseArtifactRecord[]>;
   readonly getAttempt: (attemptId: string) => Promise<AttemptRecord | null>;
   readonly getAttemptByJob: (jobId: string) => Promise<AttemptRecord | null>;
   readonly getActiveAttemptForNode: (workId: string, nodeId: string) => Promise<AttemptRecord | null>;
@@ -272,6 +467,17 @@ function isNonEmptyString(value: unknown, max = Infinity): value is string {
 
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1;
+}
+
+const CRAFTS_PHASES = new Set(['C', 'R', 'A', 'F', 'T', 'S']);
+const PHASE_ARTIFACT_STATUSES = new Set(['passed', 'needs_fix', 'failed', 'blocked']);
+
+function isCraftsPhase(value: unknown): value is string {
+  return typeof value === 'string' && CRAFTS_PHASES.has(value);
+}
+
+function isPhaseArtifactStatus(value: unknown): value is string {
+  return typeof value === 'string' && PHASE_ARTIFACT_STATUSES.has(value);
 }
 
 function isOptionalString(value: unknown, max = Infinity): boolean {
@@ -706,6 +912,12 @@ export async function createSqliteStore(config: {
   try {
     db.exec('PRAGMA foreign_keys = ON;');
     db.exec('PRAGMA journal_mode = WAL;');
+    // Defence in depth only. recursive_triggers is per-connection, so it stops
+    // this connection from bypassing BEFORE DELETE via REPLACE but does nothing
+    // about a connection opened elsewhere with SQLite's default of OFF. The
+    // guarantee that actually holds is the schema-level BEFORE INSERT conflict
+    // guard added in migration v4.
+    db.exec('PRAGMA recursive_triggers = ON;');
     await runMigrations(db, config.backupHook, targetPath);
   } catch (e) {
     db.close();
@@ -836,12 +1048,18 @@ export async function createSqliteStore(config: {
       }
     },
 
-    async createAttempt(workId, nodeId, attemptId, attemptNumber, jobId) {
+    async createAttempt(workId, nodeId, attemptId, attemptNumber, jobId, builderRouting) {
       if (!isNonEmptyString(attemptId, ORCHESTRATION_LIMITS.maxIdLength) || !isNonEmptyString(jobId, ORCHESTRATION_LIMITS.maxIdLength)) {
         return err('INVALID_RESULT', 'invalid attempt or job id');
       }
       if (!isPositiveInteger(attemptNumber)) {
         return err('INVALID_RESULT', 'invalid attempt number');
+      }
+      // Builder provenance is a precondition of the attempt existing at all.
+      // Evaluator-execution provenance is deferred until grading actually runs
+      // an evaluator; this store must not infer it from builder dispatch.
+      if (!isResolvedBuilderRouting(builderRouting)) {
+        return err('INVALID_RESULT', 'attempt requires resolved builder routing');
       }
       db.exec('BEGIN IMMEDIATE;');
       try {
@@ -859,9 +1077,15 @@ export async function createSqliteStore(config: {
           db.exec('COMMIT;');
           return (await store.getAttempt(attemptId))!;
         }
+        const createdAt = new Date().toISOString();
         db.prepare(
           'INSERT INTO attempts (attempt_id, work_id, node_id, attempt_number, state, job_id, created_at, lease_generation) VALUES (?, ?, ?, ?, ?, ?, ?, ?);',
-        ).run(attemptId, workId, nodeId, attemptNumber, 'created', jobId, new Date().toISOString(), 0);
+        ).run(attemptId, workId, nodeId, attemptNumber, 'created', jobId, createdAt, 0);
+        // Same transaction as the attempts row: no attempt can exist without
+        // the builder provenance that governed it.
+        db.prepare(
+          'INSERT INTO attempt_routing_decisions (attempt_id, builder_model, policy_version, created_at) VALUES (?, ?, ?, ?);',
+        ).run(attemptId, builderRouting.builder, builderRouting.policyVersion, createdAt);
         db.exec('COMMIT;');
         audit('attempt_created', { attempt_id: attemptId, attempt_number: attemptNumber, job_id: jobId }, { workId, nodeId, attemptId });
         return (await store.getAttempt(attemptId))!;
@@ -873,6 +1097,75 @@ export async function createSqliteStore(config: {
 
     async getAttempt(attemptId) {
       return (db.prepare('SELECT * FROM attempts WHERE attempt_id = ?').get(attemptId) as AttemptRecord | undefined) ?? null;
+    },
+
+    async getBuilderRoutingByAttemptId(attemptId) {
+      if (!isNonEmptyString(attemptId, ORCHESTRATION_LIMITS.maxIdLength)) return null;
+      return (
+        (db
+          .prepare('SELECT * FROM attempt_routing_decisions WHERE attempt_id = ?')
+          .get(attemptId) as AttemptBuilderRoutingRecord | undefined) ?? null
+      );
+    },
+
+    async recordPhaseArtifact(input) {
+      if (!isPlainObject(input)) return err('INVALID_RESULT', 'phase artifact input must be an object');
+      const { attempt_id: attemptId, phase, status, content_hash: contentHash, artifact_path: artifactPath } = input;
+      if (!isNonEmptyString(attemptId, ORCHESTRATION_LIMITS.maxIdLength)) return err('INVALID_RESULT', 'invalid attempt id');
+      if (!isCraftsPhase(phase)) return err('INVALID_RESULT', 'invalid phase');
+      if (!isPhaseArtifactStatus(status)) return err('INVALID_RESULT', 'invalid status');
+      if (!isNonEmptyString(contentHash, ORCHESTRATION_LIMITS.maxDigestLength)) return err('INVALID_RESULT', 'invalid content hash');
+      // Persisted as a locator only; this domain never opens it.
+      if (!isSafeArtifactLocator(artifactPath)) return err('INVALID_RESULT', 'artifact_path is not a safe workspace-relative locator');
+
+      // BEGIN IMMEDIATE is inside the try: when another writer holds the
+      // RESERVED lock it raises SQLITE_BUSY, and the declared return type
+      // promises a typed error rather than a thrown one. A failure here means
+      // no transaction was opened, so there is nothing to roll back.
+      try {
+        db.exec('BEGIN IMMEDIATE;');
+      } catch (e) {
+        return err('DATABASE_UNREACHABLE', `could not begin write transaction: ${(e as Error).message}`);
+      }
+      try {
+        // Revision is allocated by the INSERT itself, not by a read-modify-write
+        // in application code. MAX and INSERT are one statement under one write
+        // lock, so two writers cannot both observe the same maximum regardless
+        // of the surrounding transaction mode. This removes the race by
+        // construction rather than resting on lock discipline that no in-process
+        // test can constrain; UNIQUE remains as the backstop.
+        const createdAt = new Date().toISOString();
+        db.prepare(
+          `INSERT INTO phase_artifacts (attempt_id, phase, revision, status, content_hash, artifact_path, created_at)
+           SELECT ?, ?, COALESCE(MAX(revision), 0) + 1, ?, ?, ?, ?
+           FROM phase_artifacts WHERE attempt_id = ? AND phase = ?;`,
+        ).run(attemptId, phase, status, contentHash, artifactPath, createdAt, attemptId, phase);
+        const next = (
+          db
+            .prepare('SELECT MAX(revision) AS revision FROM phase_artifacts WHERE attempt_id = ? AND phase = ?')
+            .get(attemptId, phase) as { revision: number }
+        ).revision;
+        db.exec('COMMIT;');
+        audit('phase_artifact_recorded', { phase, revision: next, status }, { attemptId });
+        return { attempt_id: attemptId, phase, revision: next, status, content_hash: contentHash, artifact_path: artifactPath, created_at: createdAt };
+      } catch (e) {
+        db.exec('ROLLBACK;');
+        return err('INVALID_RESULT', (e as Error).message);
+      }
+    },
+
+    async getLatestPhaseArtifact(attemptId, phase) {
+      return (
+        (db
+          .prepare('SELECT * FROM phase_artifacts WHERE attempt_id = ? AND phase = ? ORDER BY revision DESC LIMIT 1')
+          .get(attemptId, phase) as PhaseArtifactRecord | undefined) ?? null
+      );
+    },
+
+    async getPhaseArtifactRevisions(attemptId, phase) {
+      return db
+        .prepare('SELECT * FROM phase_artifacts WHERE attempt_id = ? AND phase = ? ORDER BY revision ASC')
+        .all(attemptId, phase) as PhaseArtifactRecord[];
     },
 
     async getAttemptByJob(jobId) {
