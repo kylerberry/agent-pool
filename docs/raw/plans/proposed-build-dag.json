@@ -127,6 +127,19 @@
       "depends_on": ["model-routing-foundation", "codebase-knowledge-foundation"]
     },
     {
+      "id": "attempt-provenance-store",
+      "intent": "Persist attempt-scoped routing decisions and revision-keyed phase artifacts before any grading depends on them",
+      "change_spec": "Add append-only attempt-scoped persistence in the orchestration domain: an attempt_routing_decisions table written at attempt dispatch that binds attempt_id to the selected builder and evaluator model identifiers, and a phase-artifact store keyed by (attempt_id, phase, revision) with a store-assigned monotonic revision allocated inside the insert transaction. Expose a reader interface that Tier 2 evaluator-independence assessment can consult without reading any agent-authored artifact.",
+      "acceptance_criteria": [
+        "The builder and evaluator model identifiers selected for an attempt are persisted at dispatch, before any phase executes, and are never written or amended by a phase artifact or any agent-authored input.",
+        "A reader resolves the persisted builder/evaluator pair by attempt_id against real stored rows; no test fake is required for the runtime path, and a missing row is distinguishable from an equal-model pair.",
+        "The phase-artifact store accepts repeated phases within one attempt, keyed by (attempt_id, phase, revision) with a store-assigned monotonic revision allocated inside the insert transaction; a needs_fix T and its subsequent passing T both persist.",
+        "Immutability is enforced as no revision is ever updated or deleted; concurrent inserts for the same (attempt_id, phase) cannot allocate duplicate revisions.",
+        "Persisted routing decisions and phase artifacts are append-only and survive process restart, and existing orchestration reads continue to resolve the latest revision by default."
+      ],
+      "depends_on": ["model-routing-foundation", "isolated-pool-worker-execution"]
+    },
+    {
       "id": "crafts-grading-flow",
       "intent": "Deliver schema-valid CRAFTS execution and independent tiered grading",
       "change_spec": "Implement CRAFTS phase sequencing, immutable criteria plumbing, phase artifact persistence, red-before-green evidence, deterministic Tier 1, independent Tier 2, and retry context transport.",
@@ -138,7 +151,7 @@
         "Failure artifacts survive compaction and are supplied to retries while transcripts remain indexed escape hatches.",
         "S persists durable learnings only to an owner-approved target-repository knowledge sink; when no sink exists, it emits a structured proposal and does not create a documentation convention automatically."
       ],
-      "depends_on": ["isolated-pool-worker-execution"]
+      "depends_on": ["isolated-pool-worker-execution", "attempt-provenance-store"]
     },
     {
       "id": "integration-reverification",
@@ -226,7 +239,7 @@
   ],
   "approval": {
     "approved_by": "Kyler Berry",
-    "approved_at": "2026-08-02T02:58:46Z",
-    "notes": "Approved with the ADR-034 domain map and its API/webhook ownership resolutions. Execute ready nodes through fresh local CRAFTS slices; use isolated worktrees for parallel writers. Amended by Kyler to require an explicit dedicated decomposer container/image target and service-level isolation/health coverage in single-host operations."
+    "approved_at": "2026-08-03T00:00:00Z",
+    "notes": "Approved with the ADR-034 domain map and its API/webhook ownership resolutions. Execute ready nodes through fresh local CRAFTS slices; use isolated worktrees for parallel writers. Amended by Kyler to require an explicit dedicated decomposer container/image target and service-level isolation/health coverage in single-host operations. Amended by Kyler after the crafts-grading-flow attempt-1 stop-and-rescope decision to split attempt-scoped routing-decision persistence and the revision-keyed phase-artifact store into the upstream attempt-provenance-store node, which crafts-grading-flow now depends on."
   }
 }
