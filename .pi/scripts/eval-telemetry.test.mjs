@@ -26,7 +26,7 @@ function fixture(root, { agent = "local-craft-planner", phases = {}, flow = "C-R
   const frozen = crypto.createHash("sha256").update(fs.readFileSync(planPath)).digest("hex");
   const runDir = path.join(root, ".pi/goal-runs/default");
   fs.mkdirSync(runDir, { recursive: true });
-  fs.writeFileSync(path.join(root, ".pi/goal-runs/workspace-writer.json"), JSON.stringify({ run_id: "default", node_id: "a", attempt_id: "a-attempt-1", workspace: fs.realpathSync(root) }));
+  fs.writeFileSync(path.join(root, ".pi/goal-runs/workspace-writer.json"), JSON.stringify({ run_id: "default", node_id: "a", attempt_id: "a-attempt-1", workspace: fs.realpathSync(root), next_action: { phase: agent === "local-craft-planner" ? "C" : "R" } }));
   const attempt = { attempt_id: "a-attempt-1", flow, phases, final_status: null };
   const ledger = { frozen_plan_sha: frozen, plan_path: "docs/raw/plans/proposed-build-dag.json", nodes: { a: { status: "in_progress", depends_on: [], attempts: [attempt] } } };
   fs.writeFileSync(path.join(runDir, "ledger.json"), JSON.stringify(ledger));

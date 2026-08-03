@@ -3,7 +3,7 @@ title: Repository Builder vs Pool Worker
 type: architecture
 tags: [agents, pi, harness, runtime]
 created: 2026-04-13
-updated: 2026-04-13
+updated: 2026-08-03
 audience: both
 subject: development-harness
 sources:
@@ -23,7 +23,9 @@ Repository subject matter never determines actor identity. Without a valid super
 
 Project-local `/goal` and `.pi/scripts/goal-dispatcher.mjs` keep strict, gitignored evidence for Repository Builder slices: approved-DAG hash, attempts, immutable CRAFTS phase revisions, and completion state. This is development-harness bookkeeping—not Pool Worker authority, product-runtime controller state, or evidence that the supervisor/pool already exists.
 
-Local repair flow preserves failed evidence: `T needs_fix → F → T recheck`; S remains blocked until latest T passes. Explicit retries preserve the terminal attempt and create a separately attributed attempt.
+Triggered work persists a plan-security checkpoint before Render and allows one C repair plus one re-review; a second critical/high result permits only `stop-and-rescope`. Assess and Tighten each allow one bounded `review → F → re-review` cycle. Further non-security findings require one review-hash-bound, human-attributed decision to defer within existing criteria or stop and rescope.
+
+Explicit retries preserve terminal attempts. Existing v1 journals upgrade through an exact-byte backup, while materially changed approved plans archive the old run and start a fresh journal. These are development-harness controls only—not supervisor or Pool Worker behavior.
 
 ## Enforcement
 

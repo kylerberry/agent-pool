@@ -98,10 +98,11 @@ Use the Pi `subagent` tool with `agent: "local-craft-evaluator"` for this phase 
 - Verify type safety if applicable.
 - Verify the HITL seam integrates cleanly with the surrounding agent-scaffolded code.
 - Flag anything that should be fixed before proceeding.
+- The local journal bounds the A→F→A loop to one Fix plus one re-Assessment. A second blocking Assessment requires a persisted human decision.
 
 ### F — Fix
 
-Address blocking issues from Assess. Re-run quality checks.
+Address blocking issues from Assess or Tighten. Re-run quality checks.
 
 Use the Pi `subagent` tool with `agent: "local-craft-builder"` for this phase when available. Pass only the blocking findings and relevant context so fixes remain minimal and scoped.
 
@@ -118,6 +119,7 @@ Use the Pi `subagent` tool with `agent: "local-craft-security"` for this phase w
 - Verify boundary enforcement where applicable.
 - Pay special attention to the HITL seam: does the human-owned logic introduce any trust boundary issues?
 - Use `security-and-hardening` proportionately. For triggered work, account for every C trust boundary and return blocking findings to F before repeating T.
+- The local journal bounds the T→F→T loop to one Fix plus one re-Tighten. A second blocking Tighten requires a persisted human decision.
 
 ### S — Sharpen
 

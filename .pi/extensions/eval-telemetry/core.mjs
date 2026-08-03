@@ -93,18 +93,6 @@ function sanitizeError(error) {
   return { code: code.replace(/[^a-z0-9_.-]/gi, "_").slice(0, 80) || "telemetry_error" };
 }
 
-function nextPhase(attempt) {
-  const phases = attempt.phases ?? {};
-  if (attempt.flow === "R-S") return !phases.R ? "R" : !phases.S ? "S" : null;
-  if (!phases.C) return "C";
-  if (!phases.R) return "R";
-  if (!phases.A) return "A";
-  if (phases.A.status === "needs_fix" && !phases.F) return "F";
-  if (!phases.T) return "T";
-  if (!phases.S) return "S";
-  return null;
-}
-
 export function resolveAssociation(rootDir, env = process.env) {
   if (env.PI_SUBAGENT_CHILD !== "1") return { associated: false, reason: "not_subagent_child" };
   const agent = env.PI_SUBAGENT_CHILD_AGENT;
@@ -125,8 +113,8 @@ export function resolveAssociation(rootDir, env = process.env) {
   const node = ledger.nodes?.[nodeId];
   const attempt = node?.attempts?.find((candidate) => candidate.attempt_id === attemptId);
   if (!attempt || node.status !== "in_progress" || attempt.final_status !== null) fail("workspace guard does not reference an active attempt", "association_mismatch");
-  const phase = nextPhase(attempt);
-  if (!phase) fail("active attempt has no next phase", "association_mismatch");
+  const phase = guard.next_action?.phase;
+  if (!phase) fail("workspace guard has no dispatcher-written next phase", "association_mismatch");
   if (PHASE_AGENT[phase] !== agent) fail(`child agent ${agent} does not match phase ${phase}`, "association_mismatch");
   const planPath = path.join(root, ledger.plan_path);
   assertNoSymlinkAncestors(root, planPath);

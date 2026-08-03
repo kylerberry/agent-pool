@@ -126,10 +126,11 @@ Use the Pi `subagent` tool with `agent: "local-craft-evaluator"` and `context: "
 - Check for duplicated logic, missed edge cases, unclear naming.
 - Verify type safety if applicable.
 - Flag anything that should be fixed before proceeding.
+- The local journal bounds the A→F→A loop to one Fix plus one re-Assessment. A second blocking Assessment requires a persisted human decision (`defer-and-proceed` within existing criteria, or `stop-and-rescope`).
 
 ### F — Fix
 
-Address blocking issues from Assess. Re-run quality checks.
+Address blocking issues from Assess or Tighten. Re-run quality checks.
 
 Use the Pi `subagent` tool with `agent: "local-craft-builder"` and `context: "fresh"` for this phase. Pass only the blocking findings and relevant context so fixes remain minimal and scoped. The fresh local builder child edits the assigned workspace and returns the F-phase artifact; the conductor validates and forwards.
 
@@ -145,6 +146,7 @@ Use the Pi `subagent` tool with `agent: "local-craft-security"` and `context: "f
 - Apply the skill proportionately to the changed surface, not as a generic scan.
 - For triggered work, account for every C trust boundary and record evidence, finding, or explicit non-applicability for each.
 - Return blocking findings to F, then repeat T after the fix.
+- The local journal bounds the T→F→T loop to one Fix plus one re-Tighten. A second blocking Tighten requires a persisted human decision (`defer-and-proceed` within existing criteria, or `stop-and-rescope`).
 
 ### S — Sharpen
 

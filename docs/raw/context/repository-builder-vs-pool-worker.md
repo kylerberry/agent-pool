@@ -63,7 +63,9 @@ That ledger is development-harness bookkeeping only:
 - it does not represent the product runtime's future controller database;
 - it must not be used to infer that the supervisor or pool already exists.
 
-Local CRAFTS repair cycles retain immutable evidence: `A needs_fix` may route through F, while `T needs_fix` routes through F and a new T revision before S. A terminal local attempt may be retried only through an explicit, approver-attributed dispatcher action that preserves the failed attempt. These controls govern local build provenance, not product-runtime actors.
+Local CRAFTS repair cycles retain immutable evidence. Triggered work persists an independent plan-security checkpoint before Render and allows one C repair plus one re-review; a second critical/high result permits only `stop-and-rescope`. Assess and Tighten each allow one bounded `review → F → re-review` cycle. Further non-security findings stop at one review-hash-bound, human-attributed decision: `defer-and-proceed` within the existing criteria or `stop-and-rescope`.
+
+A terminal local attempt may be retried only through an explicit, approver-attributed action that preserves the failed attempt. Existing v1 journals use a backup-first `upgrade-ledger` path; materially changed approved plans use an approver-attributed `archive-reset` rather than in-place migration. These controls govern local build provenance only and grant no Pool Worker or product-runtime authority.
 
 ## Documentation classification
 

@@ -42,19 +42,20 @@ The file is written once, then frozen until Kyler approves or amends it. If it a
 }
 ```
 
-3. **Mechanical validation.** Before writing the artifact, verify:
-   - `nodes` is an array and every node has `id`, `intent`, `change_spec`, `acceptance_criteria`, `depends_on`.
+3. **Mechanical validation.** Before writing the proposed artifact, verify:
+   - The top level contains `schema_version: 1` and `nodes`; `kind` and `source` are optional.
+   - `nodes` is an array and every node has exactly `id`, `intent`, `change_spec`, `acceptance_criteria`, `depends_on`.
    - All `id` values are unique.
    - Every `depends_on` entry references an existing `id`.
    - The graph has no cycles (run a topological sort; fail closed on cycle).
    - At least one node has `depends_on.length === 0` (ready nodes exist).
-4. **Write the durable artifact.** Save the validated DAG to `docs/raw/plans/proposed-build-dag.json`.
-5. **Stop for Kyler approval.** Present the artifact path, node count, ready nodes, the ADR-034 gate status, and whether a valid domain-map approval record exists. Do not begin implementation until Kyler approves.
+4. **Write the durable proposal.** Save it to `docs/raw/plans/proposed-build-dag.json`. This pre-approval structural check is intentionally separate from `goal-plan.mjs`, whose full validator requires human approval metadata.
+5. **Stop for Kyler approval.** Present the artifact path, node count, ready nodes, the ADR-034 gate status, and whether a valid domain-map approval record exists. Do not begin implementation until Kyler approves. On approval, add the required `approval` object and run `node .pi/scripts/validate-goal-plan.mjs`; the approved artifact must pass the full `goal-plan.mjs` schema and hash validation.
 6. **On approval: reserve one ready node.** A node is ready when all of its `depends_on` nodes have passed in the local ledger. By default, reserve and execute exactly one node per `/goal` invocation, then stop and report the new frontier.
 
 ## ADR-034 domain-map approval seam
 
-Before any feature-implementation node may begin, the durable artifact must include a completed domain-map node and a valid, separate domain-map approval record must exist at:
+Before any feature-implementation node may begin, the approved domain map and its valid, separate approval record must exist at:
 
 ```
 docs/raw/plans/domain-map-approval.json
@@ -78,11 +79,11 @@ Mechanical check before feature-slice DAG generation/dispatch:
 
 If any check fails, block all feature slices and ask Kyler to approve the domain map first. Do not invent domains opportunistically.
 
-A template is at `docs/raw/specs/templates/domain-map-approval.json`. Kyler fills it in and moves it to `docs/raw/plans/domain-map-approval.json`; the repository does not ship an approved record.
+A template is at `docs/raw/specs/templates/domain-map-approval.json`. This repository currently contains an approved record at `docs/raw/plans/domain-map-approval.json`; do not replace it unless Kyler approves the changed map and records its new SHA-256. DAG dependency status remains a separate ledger concern—for the current approved DAG, `domain-scaffolding` carries the map-approval acceptance criterion and unlocks its dependent feature nodes.
 
 ## Ledger and dispatcher
 
-The local conductor uses `node .pi/scripts/goal-dispatcher.mjs` to durably track Repository Builder node lifecycles. This is local development bookkeeping, not Pool Worker runtime state or authority. The dispatcher stores its state under `.pi/goal-runs/<runId>/ledger.json` (which is gitignored) and exposes the commands `init`, `status`, `resume`, `start`, `retry`, `record-phase`, `complete`, `emit-candidate`, and `migrate-plan`. It freezes the approved DAG SHA-256 on `init` and rejects any operation when the approved plan drifts.
+The local conductor uses `node .pi/scripts/goal-dispatcher.mjs` to durably track Repository Builder node lifecycles. This is local development bookkeeping, not Pool Worker runtime state or authority. The dispatcher stores its state under `.pi/goal-runs/<runId>/ledger.json` (which is gitignored) and exposes the commands `init`, `status`, `resume`, `start`, `retry`, `record-phase`, `record-checkpoint`, `record-decision`, `complete`, `emit-candidate`, `upgrade-ledger`, and `archive-reset`. It freezes the approved DAG SHA-256 on `init` and rejects any operation when the approved plan drifts.
 
 Before the first dispatch, run:
 
@@ -102,19 +103,35 @@ And reserve exactly one ready node with its selected flow:
 node .pi/scripts/goal-dispatcher.mjs start [node-id] [C-R-A-F-T-S|R-S]
 ```
 
-A repeated `start` resumes the same active attempt instead of allocating another. `resume` reports its next required phase. Every phase result is written beneath `.pi/goal-runs/<run-id>/incoming/` as a non-symlinked JSON file and persisted before continuing; `record-phase` rejects arbitrary external paths:
+A repeated `start` resumes the same active attempt instead of allocating another. `resume` reports its next required action. The conductor first stages each returned JSON artifact as a non-symlinked file inside `.pi/goal-runs/<run-id>/` (by convention under `incoming/`), then records it:
 
 ```bash
 node .pi/scripts/goal-dispatcher.mjs record-phase <node-id> <attempt-id> <C|R|A|F|T|S> <artifact.json>
 ```
 
-A Tighten finding follows the CRAFTS repair loop without overwriting evidence:
+`record-phase` rejects arbitrary external paths, validates the staged input, and writes the canonical append-only copy beneath `.pi/goal-runs/<run-id>/phases/` before updating the ledger and next action. `record-checkpoint` and `record-decision` use the same staging rule and persist canonical copies under `checkpoints/` and `decisions/`.
 
-```text
-T needs_fix -> F -> T recheck
+### Elevated-risk plan-security checkpoint
+
+When a C artifact declares non-empty `security_triggers`, the full flow requires a fresh independent `local-craft-security` plan-security checkpoint before Render. Record it with:
+
+```bash
+node .pi/scripts/goal-dispatcher.mjs record-checkpoint <node-id> <attempt-id> <checkpoint.json>
 ```
 
-The dispatcher stores later F/T artifacts as immutable revisions (`F-2.json`, `T-2.json`, and so on), retains every revision in `phase_history`, and treats only the latest revision as the active gate result. It never advances to S while the latest T is non-passing.
+The checkpoint JSON must contain `kind: "plan-security"`, `status: "pass"|"needs-replan"`, the reviewed C artifact SHA-256 and revision, the triggers, and findings for `needs-replan`. A `needs-replan` result allows one C repair and one re-review; a second blocking critical/high result requires a persisted human decision with only `stop-and-rescope` allowed.
+
+### Bounded review loops and human decisions
+
+A `needs_fix` Assess or Tighten result routes through Fix and one re-review. A second blocking result for the same phase requires a human decision bound to the review artifact hash. Record it with:
+
+```bash
+node .pi/scripts/goal-dispatcher.mjs record-decision <node-id> <attempt-id> <decision.json>
+```
+
+The decision JSON must contain `kind: "human-decision"`, `bound_to` (the review or checkpoint artifact SHA-256), `outcome: "defer-and-proceed"|"stop-and-rescope"`, `decided_by`, and `reason`. `stop-and-rescope` terminates the attempt as escalated. The current journal permits explicitly human-attributed `defer-and-proceed` only for an exhausted A/T `needs_fix` review or an exhausted plan-security checkpoint whose unresolved findings are below high severity, and only within the existing criteria. Unresolved critical/high plan-security findings permit only `stop-and-rescope`.
+
+### Completion and retry
 
 After all required phases pass:
 
@@ -130,48 +147,30 @@ node .pi/scripts/goal-dispatcher.mjs retry <node-id> <approved-by> "<reason>"
 
 Retry preserves the terminal attempt and completion record, records approver/reason/time, and creates the next numbered attempt. It is local Repository Builder workflow state only.
 
-### Approved-plan migration (`migrate-plan`)
+### Approved-plan drift recovery (`archive-reset`)
 
-When an approved plan needs a bounded post-approval amendment, use:
+When the approved plan changes materially, do not patch the ledger in place. After Kyler approves the new plan and its SHA-256, archive the existing run and create a fresh ledger:
 
 ```bash
-node .pi/scripts/goal-dispatcher.mjs migrate-plan <old-plan.json> <new-plan.json> <approval.json>
+node .pi/scripts/goal-dispatcher.mjs archive-reset <current-plan-sha256> <approved-by> "<reason>"
 ```
 
-All three arguments are repository-relative paths. `old-plan.json` is the snapshot that was frozen in the ledger. `new-plan.json` must be the dispatcher's canonical plan path (`docs/raw/plans/proposed-build-dag.json`) and must match the detached approved hash. `approval.json` is a separate, human-signed envelope.
+This validates and hashes the current approved plan, then performs a backup-first reset under the ledger lock: it copies the whole run beneath `.pi/goal-runs/.archived/`, removes the active run, and initializes a fresh ledger with approver, reason, old hash, and archive path recorded in `reset_from`. This sequence is intentionally recoverable but is not one atomic filesystem transaction; after an interruption, inspect the archived copy and active run before retrying.
 
-The approval envelope must contain exactly:
+### Ledger upgrade (`upgrade-ledger`)
 
-```json
-{
-  "schema_version": 1,
-  "run_id": "<run-id>",
-  "expected_old_plan_sha256": "<sha256-of-old-plan-bytes>",
-  "approved_new_plan_sha256": "<sha256-of-new-plan-bytes>",
-  "approver": "<identifier>",
-  "approved_at": "<ISO-8601-timestamp>",
-  "approval_context": "<human-readable rationale>"
-}
+If an existing v1 ledger is present, normalize it to v2 before use:
+
+```bash
+node .pi/scripts/goal-dispatcher.mjs upgrade-ledger --dry-run
+node .pi/scripts/goal-dispatcher.mjs upgrade-ledger
 ```
 
-Mechanical checks performed by the dispatcher:
-
-- The envelope is owned by the effective user and is not group- or world-writable.
-- `run_id` matches the dispatcher's run ID.
-- `expected_old_plan_sha256` equals both the SHA-256 of `old-plan.json` and the ledger's `frozen_plan_sha`.
-- `approved_new_plan_sha256` equals the SHA-256 of `new-plan.json`.
-- The new plan's approval timestamp is later than the old plan's approval timestamp.
-- No active attempt or workspace writer exists.
-- Node IDs, intents, change specs, and dependency topology are unchanged.
-- Completed (`passed`) nodes keep their existing acceptance criteria verbatim.
-- Pending nodes may only receive append-only additions to acceptance criteria; existing criteria must not be altered or removed.
-- Completed node definitions and phase evidence are preserved and re-verified before activation.
-
-On success the dispatcher writes content-addressed audit objects (old plan, new plan, approval envelope, evidence manifest, amendment record) under `.pi/goal-runs/<runId>/migrations/objects/`, updates the ledger's `frozen_plan_sha` atomically, and appends the amendment. Re-running the same command with identical inputs is a verified idempotent replay that returns the existing amendment index. The ledger is never deleted or reinitialized to resolve approved-plan drift.
+The upgrade preserves every node, attempt, phase artifact, and historical amendment, creates an exact-byte backup named with the old ledger hash, and atomically writes the v2 ledger. Active attempts remain active and resume at the action derived from their recorded artifacts.
 
 ## Eval telemetry
 
-The project-local `.pi/extensions/eval-telemetry/` extension auto-loads in each `local-craft-*` child after `/reload`. It associates a child only from `PI_SUBAGENT_CHILD*`, the active workspace-writer guard, and the frozen goal ledger; prompt text is never used for identity.
+The project-local `.pi/extensions/eval-telemetry/` extension auto-loads in each `local-craft-*` child after `/reload`. It associates a child only from `PI_SUBAGENT_CHILD*`, the active workspace-writer guard, and the dispatcher-written `next_action`; prompt text is never used for identity.
 
 For every phase it records launcher/runtime metadata, actual provider/model usage and cost from Pi's finalized assistant messages, prompt/system hashes, tool names and outcomes, session references, configured versions, and Git state. It never persists prompt text, assistant text, tool arguments/results, environment variables, changed-file names, or credentials. Raw local telemetry remains under the ignored path:
 
@@ -187,8 +186,10 @@ The `/goal` session is the local ledger conductor. It keeps only the approved no
 
 - pass the node's `intent`, `change_spec`, and original `acceptance_criteria` as the immutable unit payload;
 - use the project-local `local-craft-*` agents named in `.pi/skills/craft/SKILL.md`;
-- call exactly one phase at a time and wait for its schema-valid JSON result;
+- call exactly one phase at a time and wait for its structured artifact;
 - persist the result through `record-phase` before invoking the next phase;
+- for triggered work, persist the plan-security checkpoint through `record-checkpoint` before Render;
+- for exhausted review loops, persist a human decision through `record-decision` before proceeding;
 - use model grants pinned exactly to `.pi/model-routing.bootstrap.json` and `.pi/settings.json`;
 - obey the phase tool grants in `.pi/skills/craft/SKILL.md`.
 
@@ -197,7 +198,7 @@ Preflight before spawning:
 1. Confirm the pinned models exist in `.pi/runtime-versions.json` `allowedModels`.
 2. Confirm `.pi/model-routing.bootstrap.json` has `failClosedOnUnavailableExplicitModel: true`.
 3. Run `node .pi/scripts/validate-goal-plan.mjs` from the repository root; it must validate the approved DAG topology and the domain-map approval SHA-256.
-4. Run `node .pi/scripts/goal-dispatcher.mjs init`, then `resume`. If an attempt is active, continue its reported `next_phase`; otherwise confirm the target is in the ready frontier.
+4. Run `node .pi/scripts/goal-dispatcher.mjs init`, then `resume`. If an attempt is active, continue its reported `next_action`; otherwise confirm the target is in the ready frontier.
 5. Confirm dependency nodes are `passed` in the ledger and their completion records and required phase artifacts exist.
 6. If this is a feature-implementation node, confirm the ADR-034 domain-map approval seam passes (record exists, is schema-valid, and the map SHA-256 matches).
 

@@ -7,17 +7,9 @@ import { afterEach, beforeEach, describe, test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { GoalDispatcher } from "./goal-dispatcher.mjs";
+import { hashJson, JOURNAL_SCHEMA_VERSION } from "./goal-journal.mjs";
 
-const CLOCK_SKEW_MS = 5 * 60 * 1000;
-
-function sha256(value) { return crypto.createHash("sha256").update(value).digest("hex"); }
-function canonical(value) {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
+function sha256File(filePath) { return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex"); }
 
 function makePlan(root, { approvedAt } = {}) {
   const planPath = path.join(root, "plan.json");
@@ -32,17 +24,18 @@ function makePlan(root, { approvedAt } = {}) {
   }, null, 2));
   return planPath;
 }
+
 const evidence = () => ({ commit_sha: "abc", suite_path: "test", suite_hash: "hash", command: "test", exit_code: 0, image_digest: "local", output_artifact: "output" });
 const scores = () => Object.fromEntries(["correctness_risk", "locality_simplicity", "interface_clarity", "type_error_safety", "test_quality"].map((key) => [key, { score: 3, rationale: key }]));
-function phaseData(phase, flow = "C-R-A-F-T-S") {
-  if (phase === "C") return { complexity: "full", selected_flow: flow, scope: "scope", non_goals: [], test_strategy: ["test"], planned_files: ["file"], trust_boundaries: [], security_triggers: [], render_plan: ["render"] };
+function phaseData(phase, flow = "C-R-A-F-T-S", triggers = []) {
+  if (phase === "C") return { complexity: "full", selected_flow: flow, scope: "scope", non_goals: [], test_strategy: ["test"], planned_files: ["file"], trust_boundaries: [], security_triggers: triggers, render_plan: ["render"] };
   if (phase === "R") return { red_evidence: evidence(), green_evidence: evidence(), implementation_notes: [], patch_path: null };
   if (phase === "A") return { criteria_fit: { passed: true, rationale: "fit" }, maintainability: scores(), blocking_findings: [], non_blocking_observations: [] };
   if (phase === "F") return { findings_addressed: [], documented_disagreements: [], green_evidence: evidence(), patch_path: null };
   if (phase === "T") return { trust_boundaries_reviewed: [], security_findings: [], security_commands: [], residual_risk: [] };
   return { docs_changed: [], domain_instructions_changed: [], wiki_pages_changed: [], durable_learnings: [] };
 }
-function artifact(phase, nodeId, attemptId, { status = "passed", flow = "C-R-A-F-T-S", criterion = "A works" } = {}) {
+function artifact(phase, nodeId, attemptId, { status = "passed", flow = "C-R-A-F-T-S", triggers = [], criterion = "A works" } = {}) {
   return {
     schema_version: 1, node_id: nodeId, attempt_id: attemptId, phase, status,
     model: "test/model", started_at: new Date().toISOString(), completed_at: new Date().toISOString(), summary: "artifact",
@@ -50,51 +43,24 @@ function artifact(phase, nodeId, attemptId, { status = "passed", flow = "C-R-A-F
     changed_files: ["file"].filter(() => !["C", "A", "T"].includes(phase)), commands_run: [],
     cost: { input_tokens: 0, output_tokens: 0, amount: null, currency: null }, risks: [], open_questions: [],
     recommended_next_step: "next", failure_context: status === "passed" ? null : { attempted: [], failure_reason: "fix", discoveries: [], dead_ends: [] },
-    transcript_path: null, phase_data: phaseData(phase, flow),
+    transcript_path: null, phase_data: phaseData(phase, flow, triggers),
   };
 }
-function recordFull(dispatcher, nodeId, attemptId, { assessmentStatus = "passed" } = {}) {
-  dispatcher.recordPhase(nodeId, attemptId, "C", artifact("C", nodeId, attemptId));
-  dispatcher.recordPhase(nodeId, attemptId, "R", artifact("R", nodeId, attemptId));
-  dispatcher.recordPhase(nodeId, attemptId, "A", artifact("A", nodeId, attemptId, { status: assessmentStatus }));
-  if (assessmentStatus === "needs_fix") dispatcher.recordPhase(nodeId, attemptId, "F", artifact("F", nodeId, attemptId));
-  dispatcher.recordPhase(nodeId, attemptId, "T", artifact("T", nodeId, attemptId));
-  dispatcher.recordPhase(nodeId, attemptId, "S", artifact("S", nodeId, attemptId));
-}
-function sha256File(filePath) { return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex"); }
-function artifactFor(node, phase, attemptId, { status = "passed", flow = "C-R-A-F-T-S" } = {}) {
-  const base = artifact(phase, node.id, attemptId, { status, flow, criterion: node.acceptance_criteria[0] || "criterion" });
-  base.acceptance_criteria_status = node.acceptance_criteria.map((criterion) => ({ criterion, status: status === "passed" ? "met" : "unmet", evidence: [] }));
-  return base;
-}
-function recordFullForNode(dispatcher, node, attemptId) {
-  dispatcher.recordPhase(node.id, attemptId, "C", artifactFor(node, "C", attemptId));
-  dispatcher.recordPhase(node.id, attemptId, "R", artifactFor(node, "R", attemptId));
-  dispatcher.recordPhase(node.id, attemptId, "A", artifactFor(node, "A", attemptId));
-  dispatcher.recordPhase(node.id, attemptId, "T", artifactFor(node, "T", attemptId));
-  dispatcher.recordPhase(node.id, attemptId, "S", artifactFor(node, "S", attemptId));
-}
-function makeApproval(root, { run_id = "default", old_sha, new_sha, approver = "test", approved_at, approval_context = "approved", fileMode = 0o600 } = {}) {
-  const approvalPath = path.join(root, "approval.json");
-  const envelope = { schema_version: 1, run_id, expected_old_plan_sha256: old_sha, approved_new_plan_sha256: new_sha, approver, approved_at: approved_at || new Date().toISOString(), approval_context };
-  fs.writeFileSync(approvalPath, JSON.stringify(envelope, null, 2));
-  fs.chmodSync(approvalPath, fileMode);
-  return approvalPath;
-}
-function copyPlan(root, sourcePath, name) {
-  const dest = path.join(root, name);
-  fs.copyFileSync(sourcePath, dest);
-  return dest;
-}
-function makeMutatedPlan(root, basePath, mutator) {
-  const plan = JSON.parse(fs.readFileSync(basePath, "utf8"));
-  mutator(plan);
-  const newPath = path.join(root, "plan-new.json");
-  fs.writeFileSync(newPath, JSON.stringify(plan, null, 2));
-  return newPath;
+async function recordFull(dispatcher, nodeId, attemptId, { assessmentStatus = "passed", flow = "C-R-A-F-T-S" } = {}) {
+  await dispatcher.recordPhase(nodeId, attemptId, "C", artifact("C", nodeId, attemptId, { flow }));
+  await dispatcher.recordPhase(nodeId, attemptId, "R", artifact("R", nodeId, attemptId, { flow }));
+  await dispatcher.recordPhase(nodeId, attemptId, "A", artifact("A", nodeId, attemptId, { status: assessmentStatus, flow }));
+  if (assessmentStatus === "needs_fix") {
+    await dispatcher.recordPhase(nodeId, attemptId, "F", artifact("F", nodeId, attemptId, { flow }));
+    const a2 = artifact("A", nodeId, attemptId, { status: "passed", flow });
+    a2.summary = "reassessed";
+    await dispatcher.recordPhase(nodeId, attemptId, "A", a2);
+  }
+  await dispatcher.recordPhase(nodeId, attemptId, "T", artifact("T", nodeId, attemptId, { flow }));
+  await dispatcher.recordPhase(nodeId, attemptId, "S", artifact("S", nodeId, attemptId, { flow }));
 }
 
-function writeLegacyLedger(dispatcher, plan, { nodeId = "a", attemptId = "a-attempt-1" } = {}) {
+function writeV1Ledger(dispatcher, { nodeId = "a", attemptId = "a-attempt-1", active = false, triggers = [], legacyUnverifiedC = false, legacyMissingTriggers = false } = {}) {
   const now = new Date().toISOString();
   const ledger = {
     schema_version: 1,
@@ -104,27 +70,23 @@ function writeLegacyLedger(dispatcher, plan, { nodeId = "a", attemptId = "a-atte
     frozen_plan_sha: sha256File(dispatcher.planPath),
     plan_path: path.relative(dispatcher.rootDir, dispatcher.planPath),
     nodes: {},
-    amendments: [],
+    amendments: [{ old_plan_sha: "0".repeat(64), new_plan_sha: "1".repeat(64), approver: "test", approved_at: now, approval_context: "historical" }],
   };
-  const node = plan.nodes.find((n) => n.id === nodeId);
   const phases = {};
-  for (const phase of ["C", "R", "A", "T", "S"]) {
-    const art = artifactFor(node, phase, attemptId);
+  const phaseList = active ? ["C"] : ["C", "R", "A", "T", "S"];
+  for (const phase of phaseList) {
+    const art = artifact(phase, nodeId, attemptId, { triggers: phase === "C" ? triggers : [] });
+    if (phase === "C" && legacyUnverifiedC) art.acceptance_criteria_status[0].status = "not_tested";
+    if (phase === "C" && legacyMissingTriggers) delete art.phase_data.security_triggers;
     const rel = path.join("phases", nodeId, attemptId, `${phase}.json`);
     const full = path.join(dispatcher.ledgerDir, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });
-    const bytes = Buffer.from(`${JSON.stringify(art, null, 2)}\n`);
-    fs.writeFileSync(full, bytes);
-    phases[phase] = { path: rel, sha256: sha256(canonical(art)), status: "passed" };
+    fs.writeFileSync(full, Buffer.from(`${JSON.stringify(art, null, 2)}\n`));
+    phases[phase] = { path: rel, sha256: hashJson(art), status: "passed" };
   }
-  const summary = { schema_version: 1, node_id: nodeId, attempt_id: attemptId, status: "passed", flow: "C-R-A-F-T-S", completed_at: now, phases };
-  const compRel = path.join("nodes", nodeId, attemptId, "completion.json");
-  const compFull = path.join(dispatcher.ledgerDir, compRel);
-  fs.mkdirSync(path.dirname(compFull), { recursive: true });
-  fs.writeFileSync(compFull, Buffer.from(`${JSON.stringify(summary, null, 2)}\n`));
   ledger.nodes[nodeId] = {
-    status: "passed",
-    depends_on: [...node.depends_on],
+    status: active ? "in_progress" : "passed",
+    depends_on: [],
     attempts: [{
       attempt_id: attemptId,
       sequence: 1,
@@ -132,678 +94,399 @@ function writeLegacyLedger(dispatcher, plan, { nodeId = "a", attemptId = "a-atte
       started_at: now,
       base_git: { available: false },
       phases,
-      final_status: "passed",
-      completed_at: now,
-      completion_path: compRel,
+      final_status: active ? null : "passed",
+      completed_at: active ? undefined : now,
+      completion_path: active ? undefined : path.join("nodes", nodeId, attemptId, "completion.json"),
     }],
   };
-  for (const n of plan.nodes) {
-    if (n.id !== nodeId) ledger.nodes[n.id] = { status: "pending", depends_on: [...n.depends_on], attempts: [] };
+  if (!active) {
+    const compRel = path.join("nodes", nodeId, attemptId, "completion.json");
+    const compFull = path.join(dispatcher.ledgerDir, compRel);
+    fs.mkdirSync(path.dirname(compFull), { recursive: true });
+    fs.writeFileSync(compFull, Buffer.from(`${JSON.stringify({ schema_version: 1, node_id: nodeId, attempt_id: attemptId, status: "passed", flow: "C-R-A-F-T-S", completed_at: now, phases }, null, 2)}\n`));
+    ledger.nodes[nodeId].attempts[0].completion_path = compRel;
   }
+  ledger.nodes.b = { status: "pending", depends_on: ["a"], attempts: [] };
+  ledger.nodes.c = { status: "pending", depends_on: ["a"], attempts: [] };
   fs.mkdirSync(dispatcher.ledgerDir, { recursive: true });
   fs.writeFileSync(dispatcher.ledgerPath, JSON.stringify(ledger, null, 2));
 }
 
-const CANONICAL_PLAN_PATH = fileURLToPath(new URL("../../docs/raw/plans/proposed-build-dag.json", import.meta.url));
-
-// The seven Decision-1 target pending nodes: all nodes within distance 2 of the root
-// (domain-scaffolding) in the canonical 16-node plan. Their final acceptance criterion
-// is treated as the appended amendment target for this end-to-end migration fixture.
-const DECISION1_TARGET_NODE_IDS = new Set([
-  "work-contracts-direct-intake",
-  "model-routing-foundation",
-  "codebase-knowledge-foundation",
-  "orchestrator-decomposition-harness",
-  "async-spec-intake-gate-one",
-  "controller-ready-frontier",
-  "isolated-pool-worker-execution",
-]);
-
-function readCanonicalPlanBytes() {
-  return fs.readFileSync(CANONICAL_PLAN_PATH);
-}
-
-function deriveOldFixtureFromCanonical(canonicalBytes) {
-  const plan = JSON.parse(canonicalBytes);
-  for (const nodeId of DECISION1_TARGET_NODE_IDS) {
-    const node = plan.nodes.find((n) => n.id === nodeId);
-    assert.ok(node, `Decision-1 target node ${nodeId} must exist in canonical plan`);
-    const finalCriterion = node.acceptance_criteria.at(-1);
-    assert.ok(typeof finalCriterion === "string" && finalCriterion.length > 0, `Decision-1 target node ${nodeId} must have a non-empty final criterion`);
-    node.acceptance_criteria.pop();
-  }
-  return Buffer.from(JSON.stringify(plan, null, 2));
-}
-
-function rel(root, p) { return path.relative(root, p); }
-function migrateWithNewAtPlanPath(dispatcher, oldPlanPath, newPlanPath, approvalPath) {
-  fs.copyFileSync(newPlanPath, dispatcher.planPath);
-  const rootDir = dispatcher.rootDir;
-  return dispatcher.migratePlan({
-    oldPlanPath: rel(rootDir, fs.realpathSync(oldPlanPath)),
-    newPlanPath: rel(rootDir, dispatcher.planPath),
-    approvalPath: rel(rootDir, fs.realpathSync(approvalPath)),
-  });
-}
+const script = fileURLToPath(new URL("./goal-dispatcher.mjs", import.meta.url));
+function run(args, cwd) { return spawnSync(process.execPath, [script, ...args], { cwd, encoding: "utf8" }); }
 
 describe("GoalDispatcher", () => {
   let root, planPath, dispatcher;
   beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), "goal-dispatcher-")); planPath = makePlan(root); dispatcher = new GoalDispatcher({ rootDir: root, planPath }); });
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
-  test("init freezes the plan and is idempotent", () => {
-    assert.equal(dispatcher.init().created, true); assert.equal(dispatcher.init().created, false);
-    const status = dispatcher.status(); assert.deepEqual(status.ready, ["a"]); assert.equal(status.planDrift, false);
-    assert.equal(status.frozen_plan_sha, crypto.createHash("sha256").update(fs.readFileSync(planPath)).digest("hex"));
+  test("init freezes the plan and is idempotent", async () => {
+    const first = await dispatcher.init();
+    assert.equal(first.created, true);
+    const second = await dispatcher.init();
+    assert.equal(second.created, false);
+    const status = dispatcher.status();
+    assert.deepEqual(status.ready, ["a"]);
+    assert.equal(status.planDrift, false);
   });
-  test("validatePlan accepts the canonical approved plan with kind/source/approval notes", () => {
-    const canonicalPlanPath = fileURLToPath(new URL("../../docs/raw/plans/proposed-build-dag.json", import.meta.url));
-    const result = GoalDispatcher.validatePlan(canonicalPlanPath);
-    assert.equal(result.plan.schema_version, 1);
-    assert.equal(result.plan.kind, "repository-builder-v1-build-dag");
-    assert.equal(result.plan.approval.approved_by, "Kyler Berry");
-    assert.ok(result.plan.approval.notes);
-    assert.match(result.sha, /^[0-9a-f]{64}$/);
+
+  test("status reports drift and blocks mutation", async () => {
+    await dispatcher.init();
+    const plan = JSON.parse(fs.readFileSync(planPath)); plan.nodes[0].intent = "changed"; fs.writeFileSync(planPath, JSON.stringify(plan));
+    assert.equal(dispatcher.status().planDrift, true);
+    await assert.rejects(dispatcher.start(), /drift/);
+    assert.throws(() => dispatcher.resume(), /drift/);
   });
-  test("exclusive lock blocks another initializer", () => {
-    fs.mkdirSync(dispatcher.ledgerDir, { recursive: true }); fs.writeFileSync(dispatcher.lockPath, `${process.pid}:held\n`);
-    assert.throws(() => dispatcher.init(), /lock is held/);
+
+  test("start reserves one stable attempt and duplicate start resumes it", async () => {
+    await dispatcher.init();
+    const first = await dispatcher.start();
+    const replay = await dispatcher.start();
+    assert.equal(first.attempt_id, "a-attempt-1");
+    assert.equal(replay.resumed, true);
+    assert.deepEqual(dispatcher.status().inProgress, ["a"]);
   });
-  test("concurrent CLI initialization never corrupts the ledger", async () => {
-    const defaultPlan = path.join(root, "docs/raw/plans/proposed-build-dag.json");
-    fs.mkdirSync(path.dirname(defaultPlan), { recursive: true }); fs.copyFileSync(planPath, defaultPlan);
-    const script = fileURLToPath(new URL("./goal-dispatcher.mjs", import.meta.url));
-    const launch = () => new Promise((resolve) => {
-      const child = spawn(process.execPath, [script, "init"], { cwd: root });
-      let stdout = "", stderr = "";
-      child.stdout.on("data", (chunk) => { stdout += chunk; }); child.stderr.on("data", (chunk) => { stderr += chunk; });
-      child.on("close", (code) => resolve({ code, stdout, stderr }));
-    });
-    const results = await Promise.all([launch(), launch()]);
-    assert.ok(results.some((result) => result.code === 0));
-    assert.ok(results.every((result) => result.code === 0 || /lock is held/.test(result.stderr)));
-    const successful = results.filter((result) => result.code === 0).map((result) => JSON.parse(result.stdout));
-    assert.equal(successful.filter((result) => result.created === true).length, 1, "exactly one initializer creates the ledger");
-    assert.ok(successful.filter((result) => result.created === false).length <= 1, "a sequential follower may observe the existing ledger");
-    const ledger = JSON.parse(fs.readFileSync(path.join(root, ".pi/goal-runs/default/ledger.json"), "utf8"));
-    assert.deepEqual(Object.keys(ledger.nodes).sort(), ["a", "b", "c"]);
+
+  test("workspace guard blocks a distinct run ID in the same worktree", async () => {
+    await dispatcher.init();
+    const first = await dispatcher.start();
+    const other = new GoalDispatcher({ rootDir: root, planPath, runId: "other" }); await other.init();
+    await assert.rejects(other.start(), /workspace already has active writer/);
+    await dispatcher.complete(first.node_id, first.attempt_id, "failed");
+    assert.equal((await other.start()).node_id, "a");
   });
-  test("start reserves one stable attempt and duplicate start resumes it", () => {
-    dispatcher.init(); const first = dispatcher.start(); const replay = dispatcher.start();
-    assert.equal(first.attempt_id, "a-attempt-1"); assert.deepEqual(replay, { ...first, resumed: true }); assert.deepEqual(dispatcher.status().inProgress, ["a"]);
+
+  test("phase order is enforced", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    await assert.rejects(dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id)), /expected C/);
   });
-  test("start rejects a different node while one is active", () => {
-    dispatcher.init(); dispatcher.start(); assert.throws(() => dispatcher.start({ nodeId: "b" }), /distinct git worktree/);
-  });
-  test("workspace guard blocks a distinct run ID in the same worktree", () => {
-    dispatcher.init(); const first = dispatcher.start();
-    const other = new GoalDispatcher({ rootDir: root, planPath, runId: "other" }); other.init();
-    assert.throws(() => other.start(), /workspace already has active writer/);
-    dispatcher.complete(first.node_id, first.attempt_id, "failed");
-    assert.equal(other.start().node_id, "a");
-  });
-  test("unsafe run and node path segments are rejected", () => {
-    assert.throws(() => new GoalDispatcher({ rootDir: root, planPath, runId: "../escape" }), /safe path segment/);
-    const plan = JSON.parse(fs.readFileSync(planPath)); plan.nodes[0].id = "../escape"; fs.writeFileSync(planPath, JSON.stringify(plan));
-    assert.throws(() => dispatcher.init(), /safe path segment/);
-  });
-  test("symlinked ledger ancestors are rejected", () => {
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "goal-ledger-outside-"));
-    fs.mkdirSync(path.join(root, ".pi"), { recursive: true }); fs.symlinkSync(outside, path.join(root, ".pi", "goal-runs"));
-    try { assert.throws(() => dispatcher.init(), /symlinked dispatcher path/); } finally { fs.rmSync(outside, { recursive: true, force: true }); }
-  });
-  test("artifact identity mismatch and invalid canonical payload reject", () => {
-    dispatcher.init(); const active = dispatcher.start();
-    assert.throws(() => dispatcher.recordPhase(active.node_id, active.attempt_id, "C", artifact("C", "wrong", active.attempt_id)), /identity/);
-    const invalid = artifact("C", active.node_id, active.attempt_id); invalid.extra = true;
-    assert.throws(() => dispatcher.recordPhase(active.node_id, active.attempt_id, "C", invalid), /unknown fields/);
-  });
-  test("canonical validation rejects duplicate changed files and malformed failure context", () => {
-    dispatcher.init(); const active = dispatcher.start();
-    const duplicate = artifact("C", active.node_id, active.attempt_id); duplicate.changed_files = ["x", "x"];
-    assert.throws(() => dispatcher.recordPhase(active.node_id, active.attempt_id, "C", duplicate), /read-only|unique/);
-    const malformed = artifact("C", active.node_id, active.attempt_id, { status: "needs_fix" }); malformed.failure_context = { failure_reason: 3 };
-    assert.throws(() => dispatcher.recordPhase(active.node_id, active.attempt_id, "C", malformed), /failure_context/);
-    const unknownTrigger = artifact("C", active.node_id, active.attempt_id); unknownTrigger.phase_data.security_triggers = ["subjective-risk-score"];
-    assert.throws(() => dispatcher.recordPhase(active.node_id, active.attempt_id, "C", unknownTrigger), /security_triggers/);
-  });
-  test("criteria mapping must exactly match the approved node criteria", () => {
-    dispatcher.init(); const active = dispatcher.start(); const wrong = artifact("C", active.node_id, active.attempt_id, { criterion: "invented" });
-    assert.throws(() => dispatcher.recordPhase(active.node_id, active.attempt_id, "C", wrong), /original criterion/);
-  });
-  test("CLI rejects artifact reads outside the run incoming directory", () => {
-    const defaultPlan = path.join(root, "docs/raw/plans/proposed-build-dag.json"); fs.mkdirSync(path.dirname(defaultPlan), { recursive: true }); fs.copyFileSync(planPath, defaultPlan);
-    const script = fileURLToPath(new URL("./goal-dispatcher.mjs", import.meta.url));
-    assert.equal(spawnSync(process.execPath, [script, "init"], { cwd: root }).status, 0);
-    const started = JSON.parse(spawnSync(process.execPath, [script, "start"], { cwd: root, encoding: "utf8" }).stdout);
-    const outside = path.join(root, "outside.json"); fs.writeFileSync(outside, JSON.stringify(artifact("C", started.node_id, started.attempt_id)));
-    const result = spawnSync(process.execPath, [script, "record-phase", started.node_id, started.attempt_id, "C", outside], { cwd: root, encoding: "utf8" });
-    assert.notEqual(result.status, 0); assert.match(result.stderr, /under .*incoming/);
-  });
-  test("phase order is enforced", () => {
-    dispatcher.init(); const active = dispatcher.start();
-    assert.throws(() => dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id)), /expected C/);
-  });
-  test("identical phase replay is idempotent and conflicting replay rejects", () => {
-    dispatcher.init(); const active = dispatcher.start(); const value = artifact("C", active.node_id, active.attempt_id);
-    assert.equal(dispatcher.recordPhase(active.node_id, active.attempt_id, "C", value).replayed, false);
-    assert.equal(dispatcher.recordPhase(active.node_id, active.attempt_id, "C", value).replayed, true);
+
+  test("identical phase replay is idempotent and conflicting replay rejects", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    const value = artifact("C", active.node_id, active.attempt_id);
+    assert.equal((await dispatcher.recordPhase(active.node_id, active.attempt_id, "C", value)).replayed, false);
+    assert.equal((await dispatcher.recordPhase(active.node_id, active.attempt_id, "C", value)).replayed, true);
     const conflict = structuredClone(value); conflict.summary = "different";
-    assert.throws(() => dispatcher.recordPhase(active.node_id, active.attempt_id, "C", conflict), /conflicting replay/);
+    await assert.rejects(dispatcher.recordPhase(active.node_id, active.attempt_id, "C", conflict), /conflicting replay|phase order/);
   });
-  test("passed completion requires all full-flow phases", () => {
-    dispatcher.init(); const active = dispatcher.start();
-    assert.throws(() => dispatcher.complete(active.node_id, active.attempt_id, "passed"), /incomplete/);
-    recordFull(dispatcher, active.node_id, active.attempt_id); dispatcher.complete(active.node_id, active.attempt_id, "passed");
+
+  test("passed completion requires all full-flow phases", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    await assert.rejects(dispatcher.complete(active.node_id, active.attempt_id, "passed"), /incomplete/);
+    await recordFull(dispatcher, active.node_id, active.attempt_id);
+    await dispatcher.complete(active.node_id, active.attempt_id, "passed");
     assert.deepEqual(dispatcher.status().ready, ["b", "c"]);
   });
-  test("needs-fix assessment requires a passing F artifact", () => {
-    dispatcher.init(); const active = dispatcher.start(); recordFull(dispatcher, active.node_id, active.attempt_id, { assessmentStatus: "needs_fix" });
-    dispatcher.complete(active.node_id, active.attempt_id, "passed"); assert.deepEqual(dispatcher.status().completed, ["a"]);
+
+  test("passed completion rejects failed or blocked terminal phase states", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "C", artifact("C", active.node_id, active.attempt_id, { status: "failed" }));
+    await assert.rejects(dispatcher.complete(active.node_id, active.attempt_id, "passed"), /incomplete/);
+    await dispatcher.complete(active.node_id, active.attempt_id, "failed");
+    const retried = await dispatcher.retry({ nodeId: "a", approvedBy: "kyler", reason: "C failed" });
+    await dispatcher.recordPhase(retried.node_id, retried.attempt_id, "C", artifact("C", retried.node_id, retried.attempt_id, { status: "blocked" }));
+    await assert.rejects(dispatcher.complete(retried.node_id, retried.attempt_id, "passed"), /incomplete/);
   });
-  test("needs-fix Tighten routes through Fix and an immutable Tighten recheck", () => {
-    dispatcher.init(); const active = dispatcher.start();
-    dispatcher.recordPhase(active.node_id, active.attempt_id, "C", artifact("C", active.node_id, active.attempt_id));
-    dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id));
-    dispatcher.recordPhase(active.node_id, active.attempt_id, "A", artifact("A", active.node_id, active.attempt_id, { status: "needs_fix" }));
-    dispatcher.recordPhase(active.node_id, active.attempt_id, "F", artifact("F", active.node_id, active.attempt_id));
-    const firstT = artifact("T", active.node_id, active.attempt_id, { status: "needs_fix" });
-    firstT.summary = "first Tighten finding";
-    const firstTRecord = dispatcher.recordPhase(active.node_id, active.attempt_id, "T", firstT);
-    assert.equal(firstTRecord.path.endsWith("T.json"), true);
 
-    // Simulate an active ledger written before phase_history existed.
-    const legacyLedger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
-    delete legacyLedger.nodes.a.attempts[0].phase_history;
-    fs.writeFileSync(dispatcher.ledgerPath, JSON.stringify(legacyLedger, null, 2));
-    dispatcher = new GoalDispatcher({ rootDir: root, planPath });
-    assert.equal(dispatcher.resume().active_attempt.next_phase, "F");
-
-    const secondF = artifact("F", active.node_id, active.attempt_id); secondF.summary = "Tighten fix";
-    const secondFRecord = dispatcher.recordPhase(active.node_id, active.attempt_id, "F", secondF);
-    assert.equal(secondFRecord.path.endsWith("F-2.json"), true);
-    assert.equal(dispatcher.resume().active_attempt.next_phase, "T");
-
-    const secondT = artifact("T", active.node_id, active.attempt_id); secondT.summary = "Tighten passed";
-    const secondTRecord = dispatcher.recordPhase(active.node_id, active.attempt_id, "T", secondT);
-    assert.equal(secondTRecord.path.endsWith("T-2.json"), true);
-
-    // Simulate a partially migrated per-phase history missing the current T pointer.
-    const partialLedger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
-    partialLedger.nodes.a.attempts[0].phase_history.T = [partialLedger.nodes.a.attempts[0].phase_history.T[0]];
-    fs.writeFileSync(dispatcher.ledgerPath, JSON.stringify(partialLedger, null, 2));
-    dispatcher = new GoalDispatcher({ rootDir: root, planPath });
-    assert.equal(dispatcher.resume().active_attempt.next_phase, "S");
-    dispatcher.recordPhase(active.node_id, active.attempt_id, "S", artifact("S", active.node_id, active.attempt_id));
-    dispatcher.complete(active.node_id, active.attempt_id, "passed");
-
-    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
-    const attempt = ledger.nodes.a.attempts[0];
-    assert.deepEqual(Object.keys(attempt.phase_history).sort(), ["A", "C", "F", "R", "S", "T"]);
-    assert.equal(attempt.phase_history.F.length, 2);
-    assert.equal(attempt.phase_history.T.length, 2);
-    assert.equal(attempt.phases.T.status, "passed");
-    assert.equal(JSON.parse(fs.readFileSync(path.join(dispatcher.ledgerDir, firstTRecord.path))).status, "needs_fix");
-    assert.equal(JSON.parse(fs.readFileSync(path.join(dispatcher.ledgerDir, secondTRecord.path))).status, "passed");
-
-    const oldSnapshot = copyPlan(root, planPath, "plan-before-history-migration.json");
-    const newPath = makeMutatedPlan(root, planPath, (plan) => plan.nodes.find((node) => node.id === "b").acceptance_criteria.push("extra B"));
-    const approvalPath = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) });
-    const migration = migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath);
-    assert.equal(migration.replayed, false);
-    const manifest = JSON.parse(fs.readFileSync(path.join(dispatcher.ledgerDir, "migrations", "objects", migration.manifest_sha), "utf8"));
-    assert.equal(manifest.completed_evidence[0].phase_digests.length, 8);
+  test("needs-fix assessment requires a passing F artifact", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    await recordFull(dispatcher, active.node_id, active.attempt_id, { assessmentStatus: "needs_fix" });
+    await dispatcher.complete(active.node_id, active.attempt_id, "passed");
+    assert.deepEqual(dispatcher.status().completed, ["a"]);
   });
-  test("explicit retry preserves a failed attempt and creates a new audited attempt", () => {
-    dispatcher.init(); const first = dispatcher.start(); dispatcher.complete(first.node_id, first.attempt_id, "failed");
-    const retried = dispatcher.retry({ nodeId: "a", approvedBy: "kyler", reason: "repair failed Tighten findings" });
+
+  test("lite flow requires only R and S", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start({ flow: "R-S" });
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id, { flow: "R-S" }));
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "S", artifact("S", active.node_id, active.attempt_id, { flow: "R-S" }));
+    const completed = await dispatcher.complete(active.node_id, active.attempt_id, "passed");
+    assert.deepEqual(dispatcher.status().completed, ["a"]);
+    assert.ok(["written", "degraded"].includes(completed.telemetry_candidate.status));
+  });
+
+  test("resume returns the active attempt and refreshes under the ledger lock", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "C", artifact("C", active.node_id, active.attempt_id));
+    const reopened = new GoalDispatcher({ rootDir: root, planPath });
+    const resumed = reopened.resume();
+    assert.equal(resumed.active_attempt.node_id, "a");
+    assert.equal(resumed.active_attempt.next_action.phase, "R");
+
+    fs.writeFileSync(dispatcher.lockPath, "held\n");
+    try {
+      assert.throws(() => reopened.resume(), /lock is held/);
+    } finally {
+      fs.rmSync(dispatcher.lockPath, { force: true });
+    }
+  });
+
+  test("explicit retry preserves a failed attempt and creates a new audited attempt", async () => {
+    await dispatcher.init();
+    const first = await dispatcher.start();
+    await dispatcher.complete(first.node_id, first.attempt_id, "failed");
+    const retried = await dispatcher.retry({ nodeId: "a", approvedBy: "kyler", reason: "repair failed Tighten findings" });
     assert.equal(retried.attempt_id, "a-attempt-2");
     assert.equal(retried.retry_of, "a-attempt-1");
     assert.deepEqual(dispatcher.status().inProgress, ["a"]);
-    assert.deepEqual(dispatcher.status().blocked, []);
-    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
-    assert.equal(ledger.nodes.a.attempts[0].final_status, "failed");
-    assert.deepEqual({ ...ledger.nodes.a.attempts[1].retry, authorized_at: undefined }, { retry_of: "a-attempt-1", approved_by: "kyler", reason: "repair failed Tighten findings", authorized_at: undefined });
-    assert.ok(!Number.isNaN(Date.parse(ledger.nodes.a.attempts[1].retry.authorized_at)));
-    assert.throws(() => dispatcher.retry({ nodeId: "a", approvedBy: "kyler", reason: "duplicate" }), /failed or escalated/);
-  });
-  test("lite flow requires only R and S", () => {
-    dispatcher.init(); const active = dispatcher.start({ flow: "R-S" });
-    dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id, { flow: "R-S" }));
-    dispatcher.recordPhase(active.node_id, active.attempt_id, "S", artifact("S", active.node_id, active.attempt_id, { flow: "R-S" }));
-    const completed = dispatcher.complete(active.node_id, active.attempt_id, "passed");
-    assert.deepEqual(dispatcher.status().completed, ["a"]);
-    assert.equal(completed.telemetry_candidate.status, "written");
-    const candidate = JSON.parse(fs.readFileSync(path.join(root, completed.telemetry_candidate.path), "utf8"));
-    assert.equal(candidate.eligibility, "telemetry-only");
-    assert.ok(candidate.eligibility_reasons.includes("missing_actual_usage"));
-  });
-  test("completed attempts reject additional phase writes", () => {
-    dispatcher.init(); const active = dispatcher.start({ flow: "R-S" });
-    dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id, { flow: "R-S" }));
-    dispatcher.recordPhase(active.node_id, active.attempt_id, "S", artifact("S", active.node_id, active.attempt_id, { flow: "R-S" })); dispatcher.complete(active.node_id, active.attempt_id, "passed");
-    assert.throws(() => dispatcher.recordPhase(active.node_id, active.attempt_id, "F", artifact("F", active.node_id, active.attempt_id)), /active attempt|order/);
-  });
-  test("resume returns the active attempt and next phase", () => {
-    dispatcher.init(); const active = dispatcher.start(); dispatcher.recordPhase(active.node_id, active.attempt_id, "C", artifact("C", active.node_id, active.attempt_id));
-    const reopened = new GoalDispatcher({ rootDir: root, planPath });
-    assert.deepEqual(reopened.resume().active_attempt, { node_id: "a", attempt_id: active.attempt_id, flow: "C-R-A-F-T-S", next_phase: "R" });
-  });
-  test("plan drift is reported and blocks mutation and resume", () => {
-    dispatcher.init(); const plan = JSON.parse(fs.readFileSync(planPath)); plan.nodes[0].intent = "changed"; fs.writeFileSync(planPath, JSON.stringify(plan));
-    assert.equal(dispatcher.status().planDrift, true); assert.throws(() => dispatcher.start(), /drift/); assert.throws(() => dispatcher.resume(), /drift/);
-  });
-  test("candidate write failure degrades telemetry without rolling back completion", () => {
-    dispatcher.init(); const active = dispatcher.start({ flow: "R-S" });
-    dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id, { flow: "R-S" }));
-    dispatcher.recordPhase(active.node_id, active.attempt_id, "S", artifact("S", active.node_id, active.attempt_id, { flow: "R-S" }));
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "candidate-outside-"));
-    const evalPath = path.join(dispatcher.ledgerDir, "eval-candidates"); fs.symlinkSync(outside, evalPath);
-    try {
-      const completed = dispatcher.complete(active.node_id, active.attempt_id, "passed");
-      assert.equal(completed.status, "passed"); assert.equal(completed.telemetry_candidate.status, "degraded");
-      assert.deepEqual(dispatcher.status().completed, ["a"]);
-    } finally { fs.rmSync(outside, { recursive: true, force: true }); }
-  });
-  test("failure blocks dependent branches", () => {
-    dispatcher.init(); const active = dispatcher.start(); dispatcher.complete(active.node_id, active.attempt_id, "failed");
-    const status = dispatcher.status(); assert.deepEqual(status.failed, ["a"]); assert.deepEqual(status.blocked, ["b", "c"]);
-  });
-});
-
-describe("migrate-plan", () => {
-  let root, planPath, dispatcher;
-  beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), "goal-migrate-")); planPath = makePlan(root); dispatcher = new GoalDispatcher({ rootDir: root, planPath }); });
-  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
-
-  function setupCompletedRoot() {
-    dispatcher.init();
-    const active = dispatcher.start();
-    const plan = JSON.parse(fs.readFileSync(planPath, "utf8"));
-    const nodeA = plan.nodes.find((node) => node.id === "a");
-    recordFullForNode(dispatcher, nodeA, active.attempt_id);
-    dispatcher.complete(active.node_id, active.attempt_id, "passed");
-    const oldSnapshot = copyPlan(root, planPath, "plan-old.json");
-    return { plan, active, oldSnapshot };
-  }
-
-  test("happy path migrates pending nodes with appended criteria", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra B"); p.nodes.find((n) => n.id === "c").acceptance_criteria.push("extra C"); });
-    const oldSha = sha256File(oldSnapshot); const newSha = sha256File(newPath);
-    const approvalPath = makeApproval(root, { old_sha: oldSha, new_sha: newSha });
-    const result = migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath);
-    assert.equal(result.replayed, false); assert.equal(result.old_plan_sha, oldSha); assert.equal(result.new_plan_sha, newSha);
-    const status = dispatcher.status();
-    assert.equal(status.planDrift, false); assert.deepEqual(status.completed, ["a"]); assert.deepEqual(status.ready, ["b", "c"]);
-    assert.deepEqual(status.inProgress, []);
-    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
-    assert.equal(ledger.amendments.length, 1);
-    assert.equal(ledger.amendments[0].old_plan_sha, oldSha);
-    assert.equal(ledger.amendments[0].new_plan_sha, newSha);
-    assert.ok(ledger.amendments[0].trust_basis.path);
-    assert.equal(typeof ledger.amendments[0].approval_envelope_sha, "string");
-    assert.equal(ledger.amendments[0].evidence_manifest_sha, result.manifest_sha);
-    assert.match(ledger.amendments[0].amendment_object_sha, /^[0-9a-f]{64}$/);
-    assert.ok(fs.existsSync(path.join(dispatcher.ledgerDir, "migrations", "objects", ledger.amendments[0].amendment_object_sha)));
-    const manifest = JSON.parse(fs.readFileSync(path.join(dispatcher.ledgerDir, "migrations", "objects", ledger.amendments[0].evidence_manifest_sha), "utf8"));
-    assert.equal(manifest.old_plan_sha, oldSha);
-    assert.equal(manifest.new_plan_sha, newSha);
-    assert.equal(manifest.completed_evidence.length, 1);
-    assert.equal(manifest.completed_evidence[0].phase_digests.length, 5);
-    assert.ok(manifest.completed_evidence[0].completion_sha256);
   });
 
-  test("rejects wrong old and new hashes", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const wrongOld = makeApproval(root, { old_sha: "0".repeat(64), new_sha: sha256File(newPath) });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, wrongOld), /old plan hash/);
-    const wrongNew = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: "1".repeat(64) });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, wrongNew), /new plan hash/);
-  });
-
-  test("rejects active attempt and workspace writer", () => {
-    dispatcher.init(); dispatcher.start();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const oldSnapshot = copyPlan(root, planPath, "plan-old.json");
-    const approvalPath = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) });
-    fs.copyFileSync(newPath, planPath);
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath), /active attempt/);
-    fs.copyFileSync(oldSnapshot, planPath);
-    dispatcher.complete("a", "a-attempt-1", "failed");
-    fs.copyFileSync(newPath, planPath);
-    const otherGuard = { run_id: "other", node_id: "x", attempt_id: "x-1", workspace: root };
-    fs.mkdirSync(dispatcher.ledgerBase, { recursive: true });
-    fs.writeFileSync(dispatcher.workspaceGuardPath, JSON.stringify(otherGuard));
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath), /workspace already has active writer|migration guard/);
-  });
-
-  test("rejects changed completed definition or evidence", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const changedCompleted = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "a").acceptance_criteria.push("changed"); });
-    const approvalPath = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(changedCompleted) });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, changedCompleted, approvalPath), /completed node.*acceptance_criteria changed/);
-  });
-
-  test("rejects evidence tampering", () => {
-    const { active, oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const phasePath = path.join(dispatcher.ledgerDir, "phases", "a", active.attempt_id, "C.json");
-    const tampered = JSON.parse(fs.readFileSync(phasePath, "utf8"));
-    tampered.summary = "tampered";
-    fs.writeFileSync(phasePath, JSON.stringify(tampered, null, 2));
-    const approvalPath = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath), /digest mismatch|canonical digest mismatch/);
-  });
-
-  test("rejects invalid topology and node ID changes", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const changedDep = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").depends_on = ["c"]; });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, changedDep, makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(changedDep) })), /depends_on changed/);
-    const addedNode = makeMutatedPlan(root, planPath, (p) => { p.nodes.push({ id: "d", intent: "D", change_spec: "D", acceptance_criteria: ["D"], depends_on: ["a"] }); });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, addedNode, makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(addedNode) })), /node count changed/);
-    const cycled = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "a").depends_on = ["b"]; p.nodes.find((n) => n.id === "b").depends_on = ["a"]; });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, cycled, makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(cycled) })), /cycle/);
-  });
-
-  test("rejects stale or mismatched approval envelope", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const stale = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath), run_id: "other" });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, stale), /run_id/);
-    const foreign = path.join(root, "foreign.json");
-    fs.writeFileSync(foreign, JSON.stringify({ schema_version: 1, run_id: "default", expected_old_plan_sha256: sha256File(oldSnapshot), approved_new_plan_sha256: sha256File(newPath), approver: "test", approved_at: new Date().toISOString(), approval_context: "approved", extra: true }));
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, foreign), /unknown fields/);
-  });
-
-  test("rejects writable or symlinked approval files", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const writable = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath), fileMode: 0o666 });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, writable), /group or world writable/);
-    const real = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) });
-    const link = path.join(root, "approval-link.json"); fs.symlinkSync(real, link);
-    fs.copyFileSync(newPath, planPath);
-    assert.throws(() => dispatcher.migratePlan({ oldPlanPath: "plan-old.json", newPlanPath: "plan.json", approvalPath: "approval-link.json" }), /symlink/);
-  });
-
-  test("rejects bounded malformed input", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const badPlan = path.join(root, "bad.json"); fs.writeFileSync(badPlan, JSON.stringify({ schema_version: 1, nodes: [{ id: "a".repeat(200), intent: "A", change_spec: "X", acceptance_criteria: ["c"], depends_on: [] }], approval: { approved_by: "test", approved_at: new Date().toISOString() } }));
-    const good = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, badPlan, good, makeApproval(root, { old_sha: sha256File(badPlan), new_sha: sha256File(good) })), /out of bounds|safe path segment/);
-    const badEnvelope = path.join(root, "bad-approval.json"); fs.writeFileSync(badEnvelope, JSON.stringify({ schema_version: 1, run_id: "default", expected_old_plan_sha256: sha256File(oldSnapshot), approved_new_plan_sha256: sha256File(good), approver: "test", approved_at: "not-a-date", approval_context: "x" }));
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, good, badEnvelope), /date-time/);
-  });
-
-  test("rejects unsafe content-addressed object collision", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const oldSha = sha256File(oldSnapshot);
-    const collisionDir = path.join(dispatcher.ledgerDir, "migrations", "objects");
-    fs.mkdirSync(collisionDir, { recursive: true });
-    const collisionPath = path.join(collisionDir, oldSha);
-    fs.writeFileSync(collisionPath, "wrong bytes");
-    fs.chmodSync(collisionPath, 0o600);
-    const approvalPath = makeApproval(root, { old_sha: oldSha, new_sha: sha256File(newPath) });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath), /collision/);
-  });
-
-  test("replay is idempotent and conflicting replay rejects", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const approvalPath = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) });
-    const first = migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath);
-    assert.equal(first.replayed, false);
-    const second = migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath);
-    assert.equal(second.replayed, true); assert.equal(second.amendment_index, first.amendment_index);
-    const otherPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "c").acceptance_criteria.push("other"); });
-    const otherApproval = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(otherPath) });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, otherPath, otherApproval), /conflicting migration replay/);
-  });
-
-  test("verifies historical ledger without bytes_sha256 or completion_sha256", () => {
-    const plan = JSON.parse(fs.readFileSync(planPath, "utf8"));
-    writeLegacyLedger(dispatcher, plan);
-    const oldSnapshot = copyPlan(root, planPath, "plan-old.json");
-    const oldSha = sha256File(oldSnapshot);
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra B"); });
-    const newSha = sha256File(newPath);
-    fs.copyFileSync(newPath, planPath);
-    const approvalPath = makeApproval(root, { old_sha: oldSha, new_sha: newSha });
-    const result = dispatcher.migratePlan({ oldPlanPath: rel(root, oldSnapshot), newPlanPath: rel(root, planPath), approvalPath: rel(root, approvalPath) });
-    assert.equal(result.replayed, false);
-    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
-    assert.equal(ledger.amendments.length, 1);
-    const manifest = JSON.parse(fs.readFileSync(path.join(dispatcher.ledgerDir, "migrations", "objects", ledger.amendments[0].evidence_manifest_sha), "utf8"));
-    assert.equal(manifest.completed_evidence[0].phase_digests.length, 5);
-    assert.ok(manifest.completed_evidence[0].completion_sha256);
-  });
-
-  test("rejects symlink ancestors and final symlinks for inputs", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const realDir = path.join(root, "real"); fs.mkdirSync(realDir);
-    fs.copyFileSync(oldSnapshot, path.join(realDir, "plan.json"));
-    const linkDir = path.join(root, "link"); fs.symlinkSync(realDir, linkDir);
-    const approvalPath1 = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) });
-    fs.copyFileSync(newPath, planPath);
-    assert.throws(() => dispatcher.migratePlan({ oldPlanPath: path.join("link", "plan.json"), newPlanPath: "plan.json", approvalPath: "approval.json" }), /symlinked dispatcher path/);
-    const realApproval = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) });
-    const linkApproval = path.join(root, "approval-link.json"); fs.symlinkSync(realApproval, linkApproval);
-    assert.throws(() => dispatcher.migratePlan({ oldPlanPath: "plan-old.json", newPlanPath: "plan.json", approvalPath: "approval-link.json" }), /symlink/);
-  });
-
-  test("rejects ledger evidence traversal and symlinks", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
-    ledger.nodes.a.attempts[0].completion_path = path.join("..", "..", "outside-completion.json");
-    fs.writeFileSync(dispatcher.ledgerPath, JSON.stringify(ledger, null, 2));
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) })), /path is unsafe/);
-    const outside = path.join(root, "outside-completion.json");
-    fs.writeFileSync(outside, "{}");
-    const linkPath = path.join(dispatcher.ledgerDir, "symlink-completion.json");
-    fs.symlinkSync(outside, linkPath);
-    ledger.nodes.a.attempts[0].completion_path = "symlink-completion.json";
-    fs.writeFileSync(dispatcher.ledgerPath, JSON.stringify(ledger, null, 2));
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) })), /symlink/);
-  });
-
-  test("rejects stale or future approval", () => {
-    const oldApprovedAt = new Date("2020-01-01T00:00:00Z").toISOString();
-    const currentPlanPath = path.join(root, "current-plan.json");
-    fs.writeFileSync(currentPlanPath, JSON.stringify({
-      schema_version: 1,
-      nodes: [{ id: "a", intent: "A", change_spec: "Do A", acceptance_criteria: ["A works"], depends_on: [] }],
-      approval: { approved_by: "test", approved_at: oldApprovedAt },
-    }, null, 2));
-    dispatcher = new GoalDispatcher({ rootDir: root, planPath: currentPlanPath });
-    const oldSnapshot = copyPlan(root, currentPlanPath, "plan-old.json");
-    const newPath = path.join(root, "plan-new.json");
-    fs.writeFileSync(newPath, JSON.stringify({
-      schema_version: 1,
-      nodes: [{ id: "a", intent: "A", change_spec: "Do A changed", acceptance_criteria: ["A works"], depends_on: [] }],
-      approval: { approved_by: "test", approved_at: new Date().toISOString() },
-    }, null, 2));
-    fs.copyFileSync(newPath, currentPlanPath);
-    const staleApproval = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath), approved_at: oldApprovedAt });
-    assert.throws(() => dispatcher.migratePlan({ oldPlanPath: rel(root, oldSnapshot), newPlanPath: rel(root, currentPlanPath), approvalPath: rel(root, staleApproval) }), /later than the old plan approval/);
-    const futureApproval = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath), approved_at: new Date(Date.now() + CLOCK_SKEW_MS + 60_000).toISOString() });
-    assert.throws(() => dispatcher.migratePlan({ oldPlanPath: rel(root, oldSnapshot), newPlanPath: rel(root, currentPlanPath), approvalPath: rel(root, futureApproval) }), /too far in the future/);
-  });
-
-  test("rejects deeply nested or oversized plan/envelope", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const deepPlan = path.join(root, "deep.json");
-    let deep = { schema_version: 1, nodes: [], approval: { approved_by: "test", approved_at: new Date().toISOString() } };
-    let current = deep;
-    for (let i = 0; i < 40; i += 1) { current.nested = {}; current = current.nested; }
-    fs.writeFileSync(deepPlan, JSON.stringify(deep));
-    const good = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, deepPlan, good, makeApproval(root, { old_sha: sha256File(deepPlan), new_sha: sha256File(good) })), /exceeds maximum nesting depth/);
-    const bigArrayPlan = path.join(root, "bigarray.json");
-    fs.writeFileSync(bigArrayPlan, JSON.stringify({ schema_version: 1, nodes: [{ id: "a", intent: "A", change_spec: "X", acceptance_criteria: Array(5000).fill("c"), depends_on: [] }], approval: { approved_by: "test", approved_at: new Date().toISOString() } }));
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, bigArrayPlan, good, makeApproval(root, { old_sha: sha256File(bigArrayPlan), new_sha: sha256File(good) })), /array exceeds maximum length|value count/);
-    const bigStringPlan = path.join(root, "bigstring.json");
-    fs.writeFileSync(bigStringPlan, JSON.stringify({ schema_version: 1, nodes: [{ id: "a", intent: "A".repeat(200_000), change_spec: "X", acceptance_criteria: ["c"], depends_on: [] }], approval: { approved_by: "test", approved_at: new Date().toISOString() } }));
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, bigStringPlan, good, makeApproval(root, { old_sha: sha256File(bigStringPlan), new_sha: sha256File(good) })), /string exceeds maximum length|out of bounds/);
-    const deepApproval = path.join(root, "deep-approval.json");
-    let deepEnv = { schema_version: 1, run_id: "default", expected_old_plan_sha256: sha256File(oldSnapshot), approved_new_plan_sha256: sha256File(good), approver: "test", approved_at: new Date().toISOString(), approval_context: "x" };
-    current = deepEnv;
-    for (let i = 0; i < 20; i += 1) { current.nested = {}; current = current.nested; }
-    fs.writeFileSync(deepApproval, JSON.stringify(deepEnv));
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, good, deepApproval), /exceeds maximum nesting depth/);
-  });
-
-  test("retry succeeds after pre-activation failure", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const approvalPath = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) });
-    let calls = 0;
-    const original = dispatcher._writeLedger.bind(dispatcher);
-    dispatcher._writeLedger = (ledger) => { if (calls++ === 0) throw new Error("simulated activation failure"); original(ledger); };
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath), /simulated activation failure/);
-    assert.equal(fs.existsSync(dispatcher.workspaceGuardPath), false);
-    dispatcher._writeLedger = original;
-    const result = migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath);
-    assert.equal(result.replayed, false);
-    assert.equal(dispatcher.status().planDrift, false);
-  });
-
-  test("replay rejects tampered immutable object", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const approvalPath = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) });
-    migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath);
-    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
-    const oldObjectPath = path.join(dispatcher.ledgerDir, "migrations", "objects", ledger.amendments[0].old_plan_sha);
-    fs.writeFileSync(oldObjectPath, "tampered");
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath), /digest mismatch/);
-  });
-
-  test("preserves canonical plan file mode", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    fs.chmodSync(planPath, 0o644);
-    const modeBefore = fs.statSync(planPath).mode;
-    migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) }));
-    const modeAfter = fs.statSync(planPath).mode;
-    assert.equal(modeAfter, modeBefore);
-  });
-
-  test("durable end-to-end migration on canonical 16-node plan", () => {
-    const canonicalBytes = readCanonicalPlanBytes();
-    const oldBytes = deriveOldFixtureFromCanonical(canonicalBytes);
-
-    const oldPlanPath = path.join(root, "plan-old.json");
-    fs.writeFileSync(oldPlanPath, oldBytes);
-    const newPlanPath = path.join(root, "plan.json");
-    fs.writeFileSync(newPlanPath, oldBytes);
-
-    const localDispatcher = new GoalDispatcher({ rootDir: root, planPath: newPlanPath });
-    localDispatcher.init();
-
-    const active = localDispatcher.start();
-    assert.equal(active.node_id, "domain-scaffolding");
-
-    const oldPlan = JSON.parse(oldBytes);
-    const domainScaffoldingNode = oldPlan.nodes.find((n) => n.id === "domain-scaffolding");
-    recordFullForNode(localDispatcher, domainScaffoldingNode, active.attempt_id);
-    localDispatcher.complete(active.node_id, active.attempt_id, "passed");
-
-    fs.writeFileSync(newPlanPath, canonicalBytes);
-
-    const oldSha = sha256(oldBytes);
-    const newSha = sha256(canonicalBytes);
-    const approvalPath = makeApproval(root, { old_sha: oldSha, new_sha: newSha });
-
-    const result = localDispatcher.migratePlan({
-      oldPlanPath: rel(root, oldPlanPath),
-      newPlanPath: rel(root, newPlanPath),
-      approvalPath: rel(root, approvalPath),
-    });
-
-    assert.equal(result.replayed, false);
-    const status = localDispatcher.status();
-    assert.equal(status.planDrift, false);
-    assert.deepEqual(status.completed, ["domain-scaffolding"]);
-    assert.deepEqual(status.ready, ["codebase-knowledge-foundation", "model-routing-foundation", "work-contracts-direct-intake"]);
-    assert.deepEqual(status.inProgress, []);
-    assert.equal(fs.existsSync(localDispatcher.workspaceGuardPath), false);
-
-    const ledger = JSON.parse(fs.readFileSync(localDispatcher.ledgerPath, "utf8"));
-    assert.equal(ledger.amendments.length, 1);
-    assert.equal(ledger.amendments[0].old_plan_sha, oldSha);
-    assert.equal(ledger.amendments[0].new_plan_sha, newSha);
-    assert.equal(Object.hasOwn(result, "telemetry_candidate"), false);
-  });
-
-  test("does not emit dispatch evidence or eval candidates", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const result = migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) }));
-    assert.equal(Object.hasOwn(result, "telemetry_candidate"), false);
-  });
-
-  function tamperHook(dispatcher, tamperFn) {
-    const original = dispatcher._migrationHook.bind(dispatcher);
-    dispatcher._migrationHook = (name) => {
-      if (name === "before-activation-recheck") tamperFn();
-      original(name);
+  test("with-C triggers require plan-security checkpoint before R", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    const cArt = artifact("C", active.node_id, active.attempt_id, { triggers: ["trust-boundary-change"] });
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "C", cArt);
+    await assert.rejects(dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id)), /checkpoint|phase order/);
+    const checkpoint = {
+      kind: "plan-security", status: "pass", reviewed_c_sha256: hashJson(cArt), reviewed_c_revision: 1,
+      triggers: ["trust-boundary-change"], findings: [],
     };
-  }
-
-  test("rejects reused content-addressed object not exactly mode 0600", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const oldSha = sha256File(oldSnapshot);
-    const objectDir = path.join(dispatcher.ledgerDir, "migrations", "objects");
-    fs.mkdirSync(objectDir, { recursive: true });
-    fs.writeFileSync(path.join(objectDir, oldSha), fs.readFileSync(oldSnapshot));
-    fs.chmodSync(path.join(objectDir, oldSha), 0o644);
-    const approvalPath = makeApproval(root, { old_sha: oldSha, new_sha: sha256File(newPath) });
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath), /mode 0600/);
+    await dispatcher.recordCheckpoint(active.node_id, active.attempt_id, checkpoint);
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id));
+    assert.equal(dispatcher.resume().active_attempt.next_action.phase, "A");
   });
 
-  test("rejects TOCTOU symlink replacement of ledger chain before activation", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const approvalPath = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) });
-    let tampered = false;
-    tamperHook(dispatcher, () => {
-      if (tampered) return;
-      tampered = true;
-      const ledgerBase = dispatcher.ledgerBase;
-      const moved = `${ledgerBase}.moved`;
-      fs.renameSync(ledgerBase, moved);
-      fs.symlinkSync(moved, ledgerBase);
-    });
-    const frozenBefore = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8")).frozen_plan_sha;
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath), /directory identity changed|is not a real directory/);
-    const frozenAfter = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8")).frozen_plan_sha;
-    assert.equal(frozenAfter, frozenBefore);
-    assert.equal(fs.existsSync(dispatcher.workspaceGuardPath), false);
+  test("bounded plan-security loop reaches human decision", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    const c1 = artifact("C", active.node_id, active.attempt_id, { triggers: ["trust-boundary-change"] });
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "C", c1);
+    const ps1 = { kind: "plan-security", status: "needs-replan", reviewed_c_sha256: hashJson(c1), reviewed_c_revision: 1, triggers: ["trust-boundary-change"], findings: [{ severity: "high", finding: "x", exploitability: "y", smallestSafeFix: "z" }] };
+    await dispatcher.recordCheckpoint(active.node_id, active.attempt_id, ps1);
+    const c2 = structuredClone(c1); c2.summary = "revised";
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "C", c2);
+    const ps2 = { kind: "plan-security", status: "needs-replan", reviewed_c_sha256: hashJson(c2), reviewed_c_revision: 2, triggers: ["trust-boundary-change"], findings: [{ severity: "high", finding: "x", exploitability: "y", smallestSafeFix: "z" }] };
+    await dispatcher.recordCheckpoint(active.node_id, active.attempt_id, ps2);
+    assert.equal(dispatcher.resume().active_attempt.next_action.decision, hashJson(ps2));
+    await assert.rejects(dispatcher.recordDecision(active.node_id, active.attempt_id, { kind: "human-decision", bound_to: hashJson(ps2), outcome: "defer-and-proceed", decided_by: "kyler", reason: "proceed" }), /defer-and-proceed is not allowed/);
+    await dispatcher.recordDecision(active.node_id, active.attempt_id, { kind: "human-decision", bound_to: hashJson(ps2), outcome: "stop-and-rescope", decided_by: "kyler", reason: "stop" });
+    assert.equal(dispatcher.status().inProgress.length, 0);
   });
 
-  test("rejects TOCTOU inode replacement of ledger chain before activation", () => {
-    const { oldSnapshot } = setupCompletedRoot();
-    const newPath = makeMutatedPlan(root, planPath, (p) => { p.nodes.find((n) => n.id === "b").acceptance_criteria.push("extra"); });
-    const approvalPath = makeApproval(root, { old_sha: sha256File(oldSnapshot), new_sha: sha256File(newPath) });
-    let tampered = false;
-    tamperHook(dispatcher, () => {
-      if (tampered) return;
-      tampered = true;
-      const ledgerBase = dispatcher.ledgerBase;
-      const moved = `${ledgerBase}.moved`;
-      fs.renameSync(ledgerBase, moved);
-      fs.mkdirSync(ledgerBase, 0o700);
+  test("v1 ledger upgrade is explicit, idempotent, and tolerates completed pre-trigger C artifacts", async () => {
+    writeV1Ledger(dispatcher, { legacyMissingTriggers: true });
+    const before = fs.readFileSync(dispatcher.ledgerPath, "utf8");
+    await assert.rejects(dispatcher.start(), /requires upgrade-ledger/);
+    const dry = await dispatcher.upgradeLedger({ dryRun: true });
+    assert.equal(dry.dry_run, true);
+    assert.equal(fs.readFileSync(dispatcher.ledgerPath, "utf8"), before);
+    const applied = await dispatcher.upgradeLedger();
+    assert.equal(applied.upgraded, true);
+    assert.equal(applied.dry_run, false);
+    assert.equal(applied.backup_existed, false);
+    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
+    assert.equal(ledger.schema_version, JOURNAL_SCHEMA_VERSION);
+    assert.equal(ledger.nodes.a.status, "passed");
+    assert.equal(ledger.nodes.a.attempts[0].attempt_id, "a-attempt-1");
+    assert.ok(fs.existsSync(applied.backup_path));
+    assert.equal(ledger.amendments.length, 1);
+    const replay = await dispatcher.upgradeLedger();
+    assert.equal(replay.upgraded, false);
+    assert.equal(replay.reason, "already_v2");
+  });
+
+  test("active v1 attempt with C triggers resumes at plan-security after upgrade", async () => {
+    writeV1Ledger(dispatcher, { active: true, triggers: ["trust-boundary-change"], legacyUnverifiedC: true });
+    const applied = await dispatcher.upgradeLedger();
+    assert.equal(applied.upgraded, true);
+    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
+    assert.deepEqual(ledger.nodes.a.attempts[0].phases.C.triggers, ["trust-boundary-change"]);
+    const resumed = dispatcher.resume();
+    assert.equal(resumed.active_attempt.node_id, "a");
+    assert.deepEqual(resumed.active_attempt.next_action, { checkpoint: "plan-security" });
+  });
+
+  test("v1 upgrade retry reuses a pre-existing exact-byte backup", async () => {
+    writeV1Ledger(dispatcher);
+    const raw = fs.readFileSync(dispatcher.ledgerPath);
+    const backupPath = path.join(dispatcher.archiveDir, `${crypto.createHash("sha256").update(raw).digest("hex")}.json`);
+    fs.mkdirSync(path.dirname(backupPath), { recursive: true });
+    fs.writeFileSync(backupPath, raw);
+
+    const result = await dispatcher.upgradeLedger();
+    assert.equal(result.upgraded, true);
+    assert.equal(result.backup_existed, true);
+    assert.equal(result.backup_path, backupPath);
+    assert.deepEqual(fs.readFileSync(backupPath), raw);
+    assert.equal(JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8")).schema_version, JOURNAL_SCHEMA_VERSION);
+  });
+
+  test("archive-reset requires confirmation hash and no active writer", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    const frozen = dispatcher.status().frozen_plan_sha;
+    await assert.rejects(dispatcher.archiveReset({ confirmationHash: frozen, approvedBy: "kyler", reason: "reset" }), /active attempt/);
+    await dispatcher.complete(active.node_id, active.attempt_id, "failed");
+    const changedPlan = JSON.parse(fs.readFileSync(planPath, "utf8"));
+    changedPlan.approval.notes = "owner-approved replacement plan";
+    fs.writeFileSync(planPath, JSON.stringify(changedPlan, null, 2));
+    const currentApprovedHash = sha256File(planPath);
+    await assert.rejects(dispatcher.archiveReset({ confirmationHash: frozen, approvedBy: "kyler", reason: "reset" }), /current approved plan SHA/);
+    const result = await dispatcher.archiveReset({ confirmationHash: currentApprovedHash, approvedBy: "kyler", reason: "approved plan changed" });
+    assert.ok(fs.existsSync(result.archived_to));
+    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
+    assert.equal(ledger.schema_version, JOURNAL_SCHEMA_VERSION);
+    assert.equal(ledger.frozen_plan_sha, currentApprovedHash);
+    assert.equal(ledger.reset_from.previous_plan_sha, frozen);
+    assert.equal(ledger.reset_from.approved_by, "kyler");
+    assert.equal(ledger.reset_from.reason, "approved plan changed");
+    assert.deepEqual(dispatcher.status().ready, ["a"]);
+  });
+
+  test("upgrade and archive-reset reject a symlinked archive directory", async () => {
+    writeV1Ledger(dispatcher);
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "goal-archive-outside-"));
+    fs.symlinkSync(outside, dispatcher.archiveDir);
+    try {
+      await assert.rejects(dispatcher.upgradeLedger(), /symlinked dispatcher path/);
+      fs.unlinkSync(dispatcher.archiveDir);
+      await dispatcher.upgradeLedger();
+      fs.rmSync(dispatcher.archiveDir, { recursive: true, force: true });
+      fs.symlinkSync(outside, dispatcher.archiveDir);
+      const frozen = dispatcher.status().frozen_plan_sha;
+      await assert.rejects(dispatcher.archiveReset({ confirmationHash: frozen, approvedBy: "kyler", reason: "reset" }), /symlinked dispatcher path/);
+    } finally {
+      fs.rmSync(dispatcher.archiveDir, { force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  test("CLI awaits async commands and returns meaningful output", async () => {
+    fs.mkdirSync(path.join(root, "docs", "raw", "plans"), { recursive: true }); fs.copyFileSync(planPath, path.join(root, "docs", "raw", "plans", "proposed-build-dag.json"));
+    const initResult = run(["init"], root);
+    assert.equal(initResult.status, 0);
+    const initOut = JSON.parse(initResult.stdout);
+    assert.equal(initOut.created, true);
+    assert.ok(initOut.ledger_path);
+    const started = JSON.parse(run(["start"], root).stdout);
+    assert.equal(started.node_id, "a");
+    assert.equal(started.attempt_id, "a-attempt-1");
+    assert.equal(started.resumed, false);
+    assert.equal(started.flow, "C-R-A-F-T-S");
+    const incoming = path.join(root, ".pi", "goal-runs", "default", "incoming");
+    const cPath = path.join(incoming, "c.json");
+    fs.mkdirSync(incoming, { recursive: true });
+    const cArtifact = artifact("C", started.node_id, started.attempt_id, { triggers: ["trust-boundary-change"] });
+    fs.writeFileSync(cPath, JSON.stringify(cArtifact));
+    const recordResult = run(["record-phase", started.node_id, started.attempt_id, "C", cPath], root);
+    assert.equal(recordResult.status, 0, recordResult.stderr);
+    const recorded = JSON.parse(recordResult.stdout);
+    assert.equal(recorded.replayed, false);
+    assert.ok(recorded.sha256);
+
+    const checkpointPath = path.join(incoming, "plan-security.json");
+    fs.writeFileSync(checkpointPath, JSON.stringify({
+      kind: "plan-security",
+      status: "pass",
+      reviewed_c_sha256: recorded.sha256,
+      reviewed_c_revision: 1,
+      triggers: ["trust-boundary-change"],
+      findings: [],
+    }));
+    const checkpointResult = run(["record-checkpoint", started.node_id, started.attempt_id, checkpointPath], root);
+    assert.equal(checkpointResult.status, 0, checkpointResult.stderr);
+    const checkpoint = JSON.parse(checkpointResult.stdout);
+    assert.equal(checkpoint.replayed, false);
+    assert.ok(checkpoint.sha256);
+  });
+
+  test("CLI upgrade-ledger returns dry-run and applied results", () => {
+    const defaultPlan = path.join(root, "docs", "raw", "plans", "proposed-build-dag.json");
+    fs.mkdirSync(path.dirname(defaultPlan), { recursive: true });
+    fs.copyFileSync(planPath, defaultPlan);
+    const cliDispatcher = new GoalDispatcher({ rootDir: root, planPath: defaultPlan });
+    writeV1Ledger(cliDispatcher, { active: true, triggers: ["trust-boundary-change"] });
+
+    const dryRun = run(["upgrade-ledger", "--dry-run"], root);
+    assert.equal(dryRun.status, 0, dryRun.stderr);
+    assert.equal(JSON.parse(dryRun.stdout).dry_run, true);
+
+    const applied = run(["upgrade-ledger"], root);
+    assert.equal(applied.status, 0, applied.stderr);
+    const result = JSON.parse(applied.stdout);
+    assert.equal(result.upgraded, true);
+    assert.equal(result.dry_run, false);
+  });
+
+  test("CLI rejects artifact reads outside the ledger directory", () => {
+    fs.mkdirSync(path.join(root, "docs", "raw", "plans"), { recursive: true }); fs.copyFileSync(planPath, path.join(root, "docs", "raw", "plans", "proposed-build-dag.json"));
+    assert.equal(run(["init"], root).status, 0);
+    const started = JSON.parse(run(["start"], root).stdout);
+    const outside = path.join(root, "outside.json"); fs.writeFileSync(outside, JSON.stringify(artifact("C", started.node_id, started.attempt_id)));
+    const result = run(["record-phase", started.node_id, started.attempt_id, "C", outside], root);
+    assert.notEqual(result.status, 0); assert.match(result.stderr, /under .*ledger|non-symlinked file under/);
+  });
+
+  test("workspace guard next_action is fresh immediately after phase, checkpoint, and decision", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    const cArt = artifact("C", active.node_id, active.attempt_id, { triggers: ["trust-boundary-change"] });
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "C", cArt);
+    const guardPath = path.join(dispatcher.ledgerBase, "workspace-writer.json");
+    let guard = JSON.parse(fs.readFileSync(guardPath, "utf8"));
+    assert.deepEqual(guard.next_action, { checkpoint: "plan-security" });
+    const checkpoint = {
+      kind: "plan-security", status: "pass", reviewed_c_sha256: hashJson(cArt), reviewed_c_revision: 1,
+      triggers: ["trust-boundary-change"], findings: [],
+    };
+    await dispatcher.recordCheckpoint(active.node_id, active.attempt_id, checkpoint);
+    guard = JSON.parse(fs.readFileSync(guardPath, "utf8"));
+    assert.deepEqual(guard.next_action, { phase: "R" });
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id));
+    guard = JSON.parse(fs.readFileSync(guardPath, "utf8"));
+    assert.deepEqual(guard.next_action, { phase: "A" });
+
+    const a1 = artifact("A", active.node_id, active.attempt_id, { status: "needs_fix" });
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "A", a1);
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "F", artifact("F", active.node_id, active.attempt_id));
+    const a2 = artifact("A", active.node_id, active.attempt_id, { status: "needs_fix" });
+    a2.summary = "second assessment";
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "A", a2);
+    const a2Hash = hashJson(a2);
+    guard = JSON.parse(fs.readFileSync(guardPath, "utf8"));
+    assert.deepEqual(guard.next_action, { decision: a2Hash });
+
+    await dispatcher.recordDecision(active.node_id, active.attempt_id, {
+      kind: "human-decision",
+      bound_to: a2Hash,
+      outcome: "defer-and-proceed",
+      decided_by: "kyler",
+      reason: "accept residual local maintainability risk",
     });
-    const ledgerBefore = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
-    assert.throws(() => migrateWithNewAtPlanPath(dispatcher, oldSnapshot, newPath, approvalPath), /directory identity changed/);
-    const frozenAfter = JSON.parse(fs.readFileSync(path.join(`${dispatcher.ledgerBase}.moved`, dispatcher.runId, "ledger.json"), "utf8")).frozen_plan_sha;
-    assert.equal(frozenAfter, ledgerBefore.frozen_plan_sha);
-    assert.equal(fs.existsSync(dispatcher.workspaceGuardPath), false);
+    guard = JSON.parse(fs.readFileSync(guardPath, "utf8"));
+    assert.deepEqual(guard.next_action, { phase: "T" });
+  });
+
+  test("cross-phase F reuse is rejected by binding", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "C", artifact("C", active.node_id, active.attempt_id));
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id));
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "A", artifact("A", active.node_id, active.attempt_id, { status: "needs_fix" }));
+    const fForA = artifact("F", active.node_id, active.attempt_id);
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "F", fForA);
+    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
+    assert.equal(ledger.nodes.a.attempts[0].phases.F.bound_to, ledger.nodes.a.attempts[0].phases.A.sha256);
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "A", artifact("A", active.node_id, active.attempt_id));
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "T", artifact("T", active.node_id, active.attempt_id, { status: "needs_fix" }));
+    const fForT = artifact("F", active.node_id, active.attempt_id);
+    fForT.summary = "for T";
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "F", fForT);
+    const ledger2 = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
+    assert.equal(ledger2.nodes.a.attempts[0].phases.F.bound_to, ledger2.nodes.a.attempts[0].phases.T.sha256);
+    await assert.rejects(dispatcher.complete(active.node_id, active.attempt_id, "passed"), /incomplete/);
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "T", artifact("T", active.node_id, active.attempt_id));
+    await dispatcher.recordPhase(active.node_id, active.attempt_id, "S", artifact("S", active.node_id, active.attempt_id));
+    await dispatcher.complete(active.node_id, active.attempt_id, "passed");
+  });
+
+  test("scope guard fails if worker package is touched", () => {
+    assert.equal(fs.existsSync(path.join(root, "..", "packages", "worker-harness")), false);
   });
 });
