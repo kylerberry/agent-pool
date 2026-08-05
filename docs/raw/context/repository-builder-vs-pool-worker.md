@@ -25,32 +25,35 @@ This is the default actor whenever no valid pool-worker execution context exists
 
 ### Pool Worker
 
-A fresh Pi session launched by the completed supervisor to execute one node attempt.
+A fresh Pi session launched by trusted product-runtime code to execute one attempt. During the approved Pool Proof, the Minimal Pool Runtime is that launcher; the future complete supervisor fills the role later.
 
 - Receives one bounded unit, original acceptance criteria, exact model/tool grants, and attempt identity.
-- Uses the explicitly loaded `packages/worker-harness` package and its `craft-pool`/`craft-*` resources.
+- Uses an explicitly loaded `packages/worker-harness` profile: the builder-only Pool Proof profile during the approved proof, and `craft-pool`/`craft-*` only when the full production flow is implemented.
 - May implement only the assigned unit and escalate unapproved product or architecture decisions.
-- Does not redesign the supervisor, DAG policy, grading system, or worker harness.
+- Does not redesign the pool runtime, supervisor, DAG policy, grading system, or worker harness.
+
+The Minimal Pool Runtime and Pool Proof Harness are deterministic software, not additional Pi actors. A Repository Builder may invoke the proof command as a developer, but the Runtime creates a separate verified Worker process; the Builder neither becomes nor impersonates that Worker.
 
 ## Physical separation
 
 - `.pi/` is the Repository Builder harness and is auto-discovered locally.
 - `packages/worker-harness/` is the Pool Worker harness and is not listed in local `.pi/settings.json`.
-- The supervisor or worker image explicitly installs/loads the worker package only for pool-worker sessions.
-- Shared capabilities such as Graphify may exist in both environments, but role-specific agents and skills do not.
+- Trusted product-runtime code or the worker image explicitly installs/loads the exact worker profile only for Pool Worker sessions.
+- The Pool Proof profile loads one approved builder and no evaluator, CRAFTS, or Graphify resources; the existing full CRAFTS profile remains separate and unchanged until its deferred integration work.
+- Shared capabilities may exist in later environments, but role-specific agents, skills, config roots, and session stores do not cross actor boundaries.
 
 ## Machine-readable execution context
 
 Before any model call, a Pool Worker validates:
 
-1. `AGENT_POOL_ACTOR=pool-worker` plus launcher-supplied expected node, attempt, repository, and branch values.
+1. `AGENT_POOL_ACTOR=pool-worker` plus launcher-supplied expected node, attempt, repository, branch, workspace, runtime/profile, model/tool grant, and result-destination values.
 2. `.agent-pool/execution-context.json` exists (or the trusted launcher supplies its path through `AGENT_POOL_EXECUTION_CONTEXT`).
-3. The file validates against `docs/raw/specs/schemas/pool-worker-execution-context.schema.json`.
-4. Required worker-harness agents, contracts, routing, models, and tools pass preflight.
+3. The context validates against the approved execution-context contract and independent launcher expectations before paid work.
+4. The exact worker profile, contracts, routing, selected model, trusted tools, private Pi config/session roots, and repository sandbox pass preflight.
 
-The marker is generated per attempt by the trusted supervisor, mounted or protected as launcher-owned state, bound to the expected identity/target environment values, freshness-checked, and never committed to a target repository. It is a role/launch invariant, not an authentication or sandbox boundary.
+The context is generated per attempt by trusted product-runtime code, mounted or captured as launcher-owned state, freshness-checked, and never committed to a target repository. Target instructions and task text are untrusted data and cannot alter actor identity or grants. A parameterless `actor_identity` surface reads the launcher-captured context rather than a mutable workspace marker.
 
-`craft-pool` fails closed when the marker, environment, or capability preflight is invalid. Without a valid marker, the session remains a Repository Builder by default.
+The Pool Proof builder profile and the later `craft-pool` profile each fail closed when their own context, environment, or capability preflight is invalid. Without a valid context and successful matching preflight, the session remains a Repository Builder by default.
 
 ## Repository Builder ledger is not Pool Worker authority
 

@@ -7,6 +7,16 @@ subject: development-harness
 
 Build this repository into the v1 self-hosted agent-pool and supervisor-orchestrator system described by its canonical specifications and ADRs. Work autonomously within the constraints below. Treat the linked raw sources as authoritative; do not restate, weaken, or silently reinterpret their decisions.
 
+## 0. Current approved build phase: Pool Proof
+
+The immediate approved build phase is the exact-hash Pool Proof in `raw/specs/pool-proof.md`, executed through the approved two-node flat DAG derived from `raw/plans/pool-proof-build-dag.candidate.json`.
+
+This phase builds a real Minimal Pool Runtime plus a separate deterministic Harness. It first proves one real headless approved-model Worker against the repository-owned fixture, then proves two ready slots, three jobs, and continued unrelated work after one runner-injected Worker-process failure. A Repository Builder builds this infrastructure; it never becomes a Pool Worker.
+
+The following v1 requirements remain authoritative but are deliberately deferred until evidence from Pool Proof justifies their sequencing: free-form decomposition and Gate 1; predicted-touch/Graphify scheduling; full DAG retry, budget, reconciliation, escalation, and branch-freezing policy; Tier-2 evaluation; full CRAFTS and revision-history activation; builder calibration; integration and GitHub delivery/webhooks; and full backup, restore, retention, and operational audit infrastructure.
+
+Pool Proof completion is governed by its approved specification and two DAG nodes, not by the final-v1 acceptance criteria below. After Pool Proof, the first follow-up is one separately reviewed `agent-pool` dogfood task; the remaining v1 work must be re-planned from observed evidence and approved before dispatch.
+
 ## 1. Product objective
 
 Build a self-hosted personal daily-driver and portfolio system for Kyler Berry. It accepts a free-form feature specification, turns it into an approved DAG of verifiable coding work, dispatches ready nodes to a warm pool of agents, grades each result, and produces reviewable GitHub artifacts with a durable audit trail.
@@ -19,7 +29,7 @@ v1 is for Kyler alone. It is not an external multi-tenant SaaS product.
 
 ## 2. Functional requirements
 
-Implement every behavior defined by the canonical specifications and ADRs, including:
+The complete v1 ultimately implements every behavior defined by the canonical specifications and ADRs, including:
 
 - free-form spec intake, structured decomposition, mechanical DAG validation, persistence, and human approval before dispatch;
 - node-level queue dispatch to the warm pool, dependency-aware readiness, failure containment, retry/budget handling, and human escalation actions;
@@ -67,9 +77,9 @@ Meet only the capacity, concurrency, cost, and execution constraints defined in 
 - Pin and preflight Pool Worker capabilities from `packages/worker-harness/config/runtime-versions.json`. Enforce its five exact models and bootstrap routing; do not select Anthropic or any unlisted model. Local `.pi/` routing applies only to Repository Builders.
 - The CRAFTS S — Sharpen phase maintains durable domain `AGENTS.md` guidance and affected wiki pages. Canonical requirements/decisions are recorded in `docs/raw/` first; omit transient implementation noise.
 
-## 5. Acceptance criteria
+## 5. Final-v1 acceptance criteria
 
-The implementation is complete only when all of the following are objectively demonstrated:
+These criteria define complete v1, not the current Pool Proof phase. The final implementation is complete only when all of the following are objectively demonstrated:
 
 1. Every applicable requirement in [the orchestrator specification](raw/specs/orchestrator-spec.md) is traced to implementation, automated verification, or an explicitly documented deferred item approved by Kyler.
 2. Every ADR has either an implementation trace or a documented statement that it is a future-phase decision; no implementation contradicts an ADR without a newly approved ADR.

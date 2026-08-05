@@ -40,10 +40,5 @@
         "single-worker-pool-proof"
       ]
     }
-  ],
-  "approval": {
-    "approved_by": "Kyler Berry",
-    "approved_at": "2026-08-05T16:24:38Z",
-    "notes": "Approved exact-hash Pool Proof package: candidate_path=docs/raw/plans/pool-proof-build-dag.candidate.json candidate_sha256=9e176ea505cff322f1cd864b4aead3b158b5c5ad04b828b01d5f0968dc9f792e source_path=docs/raw/specs/pool-proof.md source_sha256=96d8ece41dd820c04b45b8c3468a8c1b1bcf8ce8ffabec82d1f258ce08125de5. Activate through canonical validation and archive-reset."
-  }
+  ]
 }

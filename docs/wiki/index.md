@@ -3,7 +3,7 @@ title: Wiki Index
 type: index
 tags: [index]
 created: 2026-07-22
-updated: 2026-07-31
+updated: 2026-08-05
 sources:
   - docs/raw/
 ---
@@ -68,4 +68,5 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/sources/2026-04-13_adr-034-domain-discovery-before-implementation|ADR-034: Domain Discovery Gate]]
 - [[wiki/sources/2026-04-13_crafts-phase-artifact-contract|CRAFTS Phase Artifact Contract]]
 - [[wiki/sources/2026-04-13_v1-roadmap|v1 Roadmap]]
-- [[wiki/sources/2026-07-25_approved-v1-build-dag|Approved Repository Builder v1 Build DAG]] — `docs/raw/plans/proposed-build-dag.json`
+- [[wiki/sources/2026-07-25_approved-v1-build-dag|Superseded Repository Builder v1 Build DAG]] — historical full-v1 build sequence
+- [[wiki/sources/2026-08-05_pool-proof-specification|Pool Proof Specification (Approved Build Phase)]] — `docs/raw/specs/pool-proof.md`; canonical DAG at `docs/raw/plans/proposed-build-dag.json`

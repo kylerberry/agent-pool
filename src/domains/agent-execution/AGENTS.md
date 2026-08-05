@@ -2,8 +2,9 @@
 
 ## Terms
 
-- **Warm worker pool**: Pre-initialized agent sessions available to accept an attempt contract.
-- **Fresh Pi node session**: A new Pi session started for a single attempt, isolated from other attempts.
+- **Warm worker pool**: Ready execution-capacity slots available to accept an attempt contract. A slot may persist; conversational state does not.
+- **Fresh Pi node session**: A new Pi process/session started for a single attempt, isolated from other attempts and never reused by a slot.
+- **Pool Proof Worker profile**: The approved builder-only `packages/worker-harness` profile used to prove one real direct attempt without evaluator, CRAFTS, Graphify, or grading resources. It does not weaken the separate full CRAFTS profile.
 - **Execution context**: The launcher-owned per-attempt marker (`pool-worker-execution-context.schema.json`, v2) binding actor, node, attempt, repository, branch, workspace, and freshness.
 - **Freshness expectation**: `issued_at` + `expires_at` + `max_age_seconds`, owned by the launcher and capped by the specification's five-minute ceiling. A launcher may be stricter, never laxer.
 - **Attempt contract**: The single DAG-free unit payload a worker executes (`pool-worker-attempt-contract.schema.json`, v1).
@@ -14,8 +15,8 @@
 
 ## Owned state
 
-- Worker pool membership, health, and availability.
-- Active Pi node sessions and their assigned attempt contracts.
+- Worker capacity-slot membership, health, and availability.
+- Active fresh Pi sessions and their assigned attempt contracts.
 - CRAFTS phase sequence state per attempt.
 - Phase artifacts emitted by each phase and their validation status.
 - Backend fallback ledgers: per-backend cost, evidence, and outcome for one attempt.
@@ -28,7 +29,7 @@
 - Every attempt receives a fresh launcher-owned context; identity, target, and workspace must match launcher expectations independently of the marker's own claims.
 - `max_age_seconds` never exceeds 300, and `expires_at` never outruns the context's own budget.
 - No worker-bound payload carries DAG topology at any nesting depth.
-- CRAFTS phases execute in the approved sequence and produce schema-valid artifacts; a phase artifact is forwarded only after validation.
+- The full production profile executes CRAFTS phases in the approved sequence and forwards only schema-valid artifacts. The explicitly selected Pool Proof profile runs one builder directly and writes no synthetic phase artifact or evaluator provenance.
 - A (`A`), Tighten (`T`), and Conceptualize (`C`) hold no write capability. Sharpen writes only into an owner-approved knowledge sink and never creates one.
 - Repository commands receive an allowlist-built environment and no provider or GitHub credential — **including file-based ones**. The host `HOME` is never propagated; home-scoped variables and git's config paths are repointed inside a caller-supplied workspace home.
 - Startup validates the model scope against the exact five-model set fixed in the specification, held as a constant in the gate. Configuration files agreeing with each other is not evidence: both are mutable and in-repo.
@@ -57,8 +58,9 @@
 
 ## Trust boundaries
 
-- The launcher marker, the attempt contract, and all host environment state are untrusted until preflight and domain validation pass.
-- Repository commands and generated tests are untrusted code; filesystem, credentials, and network access are sandboxed.
+- The launcher context, attempt contract, profile selection, and all host environment state are untrusted until preflight and domain validation pass.
+- The trusted credential-bearing Pi control process and untrusted repository execution occupy separate zones. Repository tools run through workspace-confined adapters in a credential-free sandbox; environment filtering alone is not sufficient when processes share a filesystem or process namespace.
+- Repository commands and generated tests are untrusted code; filesystem, credentials, process visibility, and network access are sandboxed.
 - Transcript bytes are untrusted content and are redacted before hashing and persistence.
 - The attempt workspace is untrusted once repository code has run and must be destroyed under a bounded deadline.
 - Phase artifacts are validated before leaving the session boundary.
@@ -96,7 +98,8 @@ Implemented here is the ADR-032 baseline. The following remain approved roadmap 
 
 ## Footguns
 
-- Sharing a worker session across attempts leaks state and violates isolation.
+- Treating a persistent capacity slot as a reusable Pi conversation leaks state and violates isolation.
+- Running repository commands as ordinary children of a provider-credential-bearing Pi process exposes credentials through environment, files, or process inspection even when the child environment is filtered.
 - Skipping artifact schema validation lets downstream phases consume garbage.
 - Hard-coding backend selection bypasses Model Routing and Evaluation policy.
 - Filtering a credential denylist instead of building from an allowlist fails open on the one variable nobody named.

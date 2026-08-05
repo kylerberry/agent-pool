@@ -3,7 +3,7 @@ title: Repository Builder vs Pool Worker
 type: architecture
 tags: [agents, pi, harness, runtime]
 created: 2026-04-13
-updated: 2026-08-03
+updated: 2026-08-05
 audience: both
 subject: development-harness
 sources:
@@ -15,9 +15,9 @@ sources:
 This project has two Pi actors:
 
 - **Repository Builder** — develops the agent-pool product using auto-discovered `.pi/` resources, local `/goal`, `craft`, and `local-craft-*` agents.
-- **Pool Worker** — executes one runtime node attempt using the explicitly loaded `packages/worker-harness/`, `craft-pool`, and runtime `craft-*` agents.
+- **Pool Worker** — executes one runtime attempt through an explicitly selected `packages/worker-harness` profile. The approved Pool Proof uses a builder-only profile; full `craft-pool`/`craft-*` execution remains deferred.
 
-Repository subject matter never determines actor identity. Without a valid supervisor-issued execution marker and successful worker preflight, the session is a Repository Builder.
+A Repository Builder builds the infrastructure and environment in which Pool Workers operate; it does not become one. The Minimal Pool Runtime and Harness are deterministic software, not Pi actors. Repository subject matter never determines actor identity. Without launcher-verified execution context and successful matching preflight, the session is a Repository Builder.
 
 ## Local builder ledger
 
@@ -30,9 +30,9 @@ Explicit retries preserve terminal attempts. Existing v1 journals upgrade throug
 ## Enforcement
 
 - Runtime-only agents and skills are physically outside `.pi/`.
-- The supervisor sets the actor and expected identity/target environment values, then supplies launcher-owned `.agent-pool/execution-context.json` per attempt; preflight requires them to match and rejects stale markers.
-- `craft-pool` runs `packages/worker-harness/scripts/preflight.mjs` before model work and fails closed.
-- The worker package validates context, capabilities, exact models, model diversity, Graphify, and bundled contracts.
+- Trusted product-runtime code sets actor and independent identity/target/runtime expectations, then supplies launcher-owned context per attempt; preflight requires them to match and rejects stale or replayed contexts.
+- Pool Proof explicitly loads one builder-only profile with private Pi config/session roots and workspace-confined sandbox tools. The later full profile retains its separate CRAFTS, model-diversity, Graphify, and artifact checks.
+- `actor_identity` exposes sanitized launcher-captured identity for introspection, but capabilities and result acceptance—not model prose—enforce the boundary.
 
 ## Related
 

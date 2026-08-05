@@ -3,7 +3,7 @@ title: Supervisor Orchestrator
 type: architecture
 tags: [orchestrator, dag, agents]
 created: 2026-07-22
-updated: 2026-08-03
+updated: 2026-08-05
 sources:
   - docs/raw/specs/orchestrator-spec.md
   - docs/raw/adr/orchestrator/
@@ -12,6 +12,10 @@ sources:
 # Supervisor Orchestrator
 
 The supervisor orchestrator accepts a free-form feature spec, decomposes it into a validated DAG of verifiable work units, gates that DAG for human approval, dispatches ready nodes to a warm agent pool, grades attempts, and assembles reviewable GitHub outputs with an audit trail.
+
+## Current build phase
+
+The approved Pool Proof precedes further supervisor governance. It builds and verifies the Minimal Pool Runtime against a controlled fixture using direct atomic jobs, one then two ready slots, fresh headless Worker sessions, deterministic results, and one contained Worker-process failure. Decomposition, grading, GitHub delivery, full failure policy, and operations remain authoritative v1 targets but are not Pool Proof prerequisites.
 
 ## Operating model
 
