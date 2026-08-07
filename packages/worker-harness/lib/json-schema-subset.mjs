@@ -21,7 +21,7 @@
 const SUPPORTED_KEYWORDS = new Set([
   "$schema", "$id", "$defs", "$ref", "title", "description",
   "type", "const", "enum", "required", "properties", "additionalProperties",
-  "pattern", "minLength", "minimum", "maximum", "format",
+  "pattern", "minLength", "maxLength", "minimum", "maximum", "format",
   "items", "minItems", "maxItems", "uniqueItems",
   "allOf", "anyOf", "oneOf", "not", "if", "then", "else",
 ]);
@@ -97,6 +97,9 @@ export function validateInstance(schema, instance, root = schema, path = "") {
     }
     if (typeof schema.minLength === "number" && instance.length < schema.minLength) {
       errors.push(`${label} is shorter than ${schema.minLength}`);
+    }
+    if (typeof schema.maxLength === "number" && instance.length > schema.maxLength) {
+      errors.push(`${label} is longer than ${schema.maxLength}`);
     }
   }
 

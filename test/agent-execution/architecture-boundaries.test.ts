@@ -88,12 +88,25 @@ describe('architecture boundaries', () => {
     }
   });
 
+  it('the Pi launcher composition references the sandbox broker', () => {
+    const launcher = readFileSync(join(domainSourceRoot, 'pool-proof-pi-launcher.ts'), 'utf8');
+    assert.ok(launcher.includes('createSandboxBroker'), 'launcher must start the sandbox broker');
+    assert.ok(launcher.includes('AGENT_POOL_BROKER_SOCKET'), 'launcher must pass broker socket to Pi');
+    assert.ok(launcher.includes('--no-builtin-tools'), 'launcher must disable built-in tools');
+    assert.ok(launcher.includes('--tools'), 'launcher must explicitly allowlist tools');
+    assert.ok(launcher.includes('--no-extensions'), 'launcher must disable ambient extension discovery');
+    assert.ok(launcher.includes('--no-skills'), 'launcher must disable skill discovery');
+    assert.ok(launcher.includes('--no-prompt-templates'), 'launcher must disable prompt templates');
+    assert.ok(launcher.includes('--no-context-files'), 'launcher must disable context-file discovery');
+    assert.ok(launcher.includes("'--mode'") && launcher.includes("'json'"), 'launcher must use JSON mode');
+  });
+
   it('the execution-context schema binds freshness and workspace to the launcher', () => {
     const schema = JSON.parse(
       readFileSync(join(repoRoot, 'docs/raw/specs/schemas/pool-worker-execution-context.schema.json'), 'utf8'),
     );
-    assert.equal(schema.properties.schema_version.const, 2);
-    assert.equal(schema.properties.issued_by.const, 'agent-pool-supervisor');
+    assert.equal(schema.properties.schema_version.const, 3);
+    assert.deepEqual(schema.properties.issued_by.enum, ['agent-pool-supervisor', 'agent-pool-runtime']);
     assert.equal(schema.properties.max_age_seconds.maximum, 300);
     for (const key of ['expires_at', 'max_age_seconds', 'workspace_path', 'attempt_nonce']) {
       assert.ok(schema.required.includes(key), `${key} must be required`);

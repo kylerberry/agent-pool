@@ -1,0 +1,18 @@
+{
+  "name": "pool-proof-builder",
+  "actor": "pool-worker",
+  "profileVersion": 1,
+  "description": "Builder-only Pool Proof profile for a single direct attempt. No evaluator, CRAFTS phase sequencing, Graphify, or phase-artifact emission.",
+  "agents": ["./agents/pool-proof-builder.md"],
+  "extensions": ["./extensions/trusted-bootstrap.ts"],
+  "modelScope": {
+    "enforce": true,
+    "allow": [
+      "openai-codex/gpt-5.6-luna",
+      "openai-codex/gpt-5.6-terra",
+      "openai-codex/gpt-5.6-sol",
+      "moonshot/kimi-k2.7-code",
+      "moonshot/kimi-k3"
+    ]
+  }
+}

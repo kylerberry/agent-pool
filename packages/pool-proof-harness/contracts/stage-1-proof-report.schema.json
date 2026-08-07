@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stage-1-proof-report.schema.json",
+  "title": "Stage 1 Pool Proof Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "node_id",
+    "attempt_id",
+    "model",
+    "base_commit",
+    "result_commit",
+    "status",
+    "fake_adapter",
+    "verifier_checks",
+    "diagnostics",
+    "cleanup_disposition",
+    "residual_warning",
+    "red_evidence",
+    "green_evidence"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "node_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "attempt_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "model": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "base_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "result_commit": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+    "status": { "enum": ["passed", "failed"] },
+    "fake_adapter": { "const": false },
+    "verifier_checks": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "passed"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "passed": { "type": "boolean" }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "finished_at", "failure_code"],
+      "properties": {
+        "started_at": { "type": "string", "format": "date-time" },
+        "finished_at": { "type": "string", "format": "date-time" },
+        "failure_code": { "type": ["string", "null"], "maxLength": 256 }
+      }
+    },
+    "cleanup_disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workspace_removed", "session_removed"],
+      "properties": {
+        "workspace_removed": { "type": "boolean" },
+        "session_removed": { "type": "boolean" }
+      }
+    },
+    "residual_warning": { "const": "This controlled fixture proof is not production authorization for arbitrary repositories." },
+    "red_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "exit_code", "output_artifact"],
+      "properties": {
+        "command": { "type": "array", "items": { "type": "string" } },
+        "exit_code": { "type": "integer" },
+        "output_artifact": { "type": "string", "maxLength": 8192 }
+      }
+    },
+    "green_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "exit_code", "output_artifact"],
+      "properties": {
+        "command": { "type": "array", "items": { "type": "string" } },
+        "exit_code": { "type": "integer" },
+        "output_artifact": { "type": "string", "maxLength": 8192 }
+      }
+    }
+  }
+}

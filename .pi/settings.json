@@ -4,7 +4,9 @@
     "openai-codex/gpt-5.6-terra",
     "openai-codex/gpt-5.6-sol",
     "moonshot/kimi-k2.7-code",
-    "moonshot/kimi-k3"
+    "moonshot/kimi-k3",
+    "zai/glm-5.2",
+    "zai/glm-5.1"
   ],
   "packages": [
     "npm:pi-subagents@0.35.1",
@@ -19,7 +21,9 @@
         "openai-codex/gpt-5.6-terra",
         "openai-codex/gpt-5.6-sol",
         "moonshot/kimi-k2.7-code",
-        "moonshot/kimi-k3"
+        "moonshot/kimi-k3",
+        "zai/glm-5.2",
+        "zai/glm-5.1"
       ]
     },
     "agentOverrides": {

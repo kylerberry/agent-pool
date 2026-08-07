@@ -3,8 +3,9 @@
  *
  * Every attempt gets a context the launcher issued for that attempt alone. This
  * module is the fail-closed gate that binds an untrusted marker to the launcher's
- * independent expectations — node, attempt, repository, branch, workspace — and
- * to a launcher-owned freshness budget, before any paid work begins.
+ * independent expectations — node, attempt, repository, branch, workspace, private
+ * Pi runtime/session roots, executable/package/profile identity, selected model,
+ * tool grants, and result destination — before any paid work begins.
  *
  * Freshness is a marker field rather than a constant here so the launcher owns
  * the expectation. The five-minute ceiling from the orchestrator specification
@@ -14,12 +15,15 @@
 import {
   createExecutionFailure,
   deepFreeze,
+  isExecutionFailure,
   isPlainObject,
   type ExecutionContextShape,
   type ExecutionFailure,
   type LaunchExpectations,
+  type PoolProofLaunchExpectations,
 } from './contracts.ts';
 import { findDagTopology } from './dag-exclusion.ts';
+import { isApprovedModelId } from '../model-routing-and-evaluation/approved-models.ts';
 
 /** Absolute freshness ceiling fixed by `docs/raw/specs/orchestrator-spec.md` §2.1. */
 export const FRESHNESS_CEILING_SECONDS = 300;
@@ -27,7 +31,7 @@ export const FRESHNESS_CEILING_SECONDS = 300;
 /** Tolerance for launcher/worker clock skew on a not-yet-valid marker. */
 export const CLOCK_SKEW_TOLERANCE_MS = 30_000;
 
-export const SUPPORTED_CONTEXT_SCHEMA_VERSION = 2;
+export const SUPPORTED_CONTEXT_SCHEMA_VERSION = 3;
 
 /** Upper bound on any marker string field, applied before pattern matching. */
 export const MAX_FIELD_LENGTH = 4096;
@@ -45,6 +49,14 @@ const REQUIRED_FIELDS = Object.freeze([
   'target_repo',
   'target_branch',
   'workspace_path',
+  'pi_runtime_parent',
+  'pi_session_dir',
+  'pi_executable_identity',
+  'package_identity',
+  'profile_identity',
+  'selected_model',
+  'tool_grants',
+  'result_destination',
 ]);
 
 const REQUIRED_FIELD_SET = new Set<string>(REQUIRED_FIELDS);
@@ -98,6 +110,14 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
 }
 
+function isStringArray(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((v) => typeof v === 'string' && v.length > 0);
+}
+
+function isAbsolutePath(value: unknown): value is string {
+  return typeof value === 'string' && ABSOLUTE_WORKSPACE_PATH.test(value);
+}
+
 export type ValidatedExecutionContext = {
   readonly context: ExecutionContextShape;
   readonly issuedAtMs: number;
@@ -108,7 +128,26 @@ export type ValidatedExecutionContext = {
 export type ValidateExecutionContextOptions = {
   readonly now?: number;
   readonly nonceStore?: ConsumedNonceStore;
+  /** If provided, validate the extended Pool Proof binding fields. */
+  readonly poolProofExpectations?: PoolProofLaunchExpectations;
 };
+
+function validateIdentityObject(
+  input: unknown,
+  requiredKeys: readonly string[],
+  code: string,
+): ExecutionFailure | Record<string, unknown> {
+  if (!isPlainObject(input)) return createExecutionFailure(code);
+  const required = new Set(requiredKeys);
+  for (const key of Object.keys(input)) {
+    if (!required.has(key)) return createExecutionFailure(code, key);
+  }
+  for (const key of requiredKeys) {
+    if (!Object.hasOwn(input, key)) return createExecutionFailure(code, key);
+    if (!isNonEmptyString((input as Record<string, unknown>)[key])) return createExecutionFailure(code, key);
+  }
+  return input;
+}
 
 /**
  * Validate an untrusted execution-context marker against launcher expectations.
@@ -134,18 +173,20 @@ export function validateExecutionContext(
     }
   }
 
+  if (input.schema_version !== SUPPORTED_CONTEXT_SCHEMA_VERSION) {
+    return createExecutionFailure('CONTEXT_VERSION_UNSUPPORTED');
+  }
+
   for (const key of Object.keys(input)) {
     if (!REQUIRED_FIELD_SET.has(key)) return createExecutionFailure('CONTEXT_UNKNOWN_FIELD', key);
   }
   for (const key of REQUIRED_FIELDS) {
     if (!Object.hasOwn(input, key)) return createExecutionFailure('CONTEXT_MISSING_FIELD', key);
   }
-
-  if (input.schema_version !== SUPPORTED_CONTEXT_SCHEMA_VERSION) {
-    return createExecutionFailure('CONTEXT_VERSION_UNSUPPORTED');
-  }
   if (input.actor !== 'pool-worker') return createExecutionFailure('CONTEXT_INVALID_FIELD', 'actor');
-  if (input.issued_by !== 'agent-pool-supervisor') return createExecutionFailure('CONTEXT_UNTRUSTED_ISSUER');
+  if (input.issued_by !== 'agent-pool-supervisor' && input.issued_by !== 'agent-pool-runtime') {
+    return createExecutionFailure('CONTEXT_UNTRUSTED_ISSUER');
+  }
 
   for (const key of ['node_id', 'attempt_id', 'target_repo', 'target_branch'] as const) {
     if (!isNonEmptyString(input[key])) return createExecutionFailure('CONTEXT_INVALID_FIELD', key);
@@ -153,8 +194,14 @@ export function validateExecutionContext(
   if (typeof input.attempt_nonce !== 'string' || !NONCE_PATTERN.test(input.attempt_nonce)) {
     return createExecutionFailure('CONTEXT_INVALID_FIELD', 'attempt_nonce');
   }
-  if (typeof input.workspace_path !== 'string' || !ABSOLUTE_WORKSPACE_PATH.test(input.workspace_path)) {
+  if (!isAbsolutePath(input.workspace_path)) {
     return createExecutionFailure('CONTEXT_INVALID_FIELD', 'workspace_path');
+  }
+  if (!isAbsolutePath(input.pi_runtime_parent)) {
+    return createExecutionFailure('CONTEXT_INVALID_FIELD', 'pi_runtime_parent');
+  }
+  if (!isAbsolutePath(input.pi_session_dir)) {
+    return createExecutionFailure('CONTEXT_INVALID_FIELD', 'pi_session_dir');
   }
   if (
     typeof input.max_age_seconds !== 'number' ||
@@ -166,6 +213,37 @@ export function validateExecutionContext(
   if (input.max_age_seconds > FRESHNESS_CEILING_SECONDS) {
     return createExecutionFailure('CONTEXT_FRESHNESS_CEILING_EXCEEDED');
   }
+
+  const piExecutable = validateIdentityObject(
+    input.pi_executable_identity,
+    ['path', 'version', 'digest'],
+    'CONTEXT_INVALID_FIELD',
+  );
+  if (isExecutionFailure(piExecutable)) return piExecutable;
+
+  const packageIdentity = validateIdentityObject(
+    input.package_identity,
+    ['path', 'profile', 'digest'],
+    'CONTEXT_INVALID_FIELD',
+  );
+  if (isExecutionFailure(packageIdentity)) return packageIdentity;
+
+  const profileIdentity = validateIdentityObject(
+    input.profile_identity,
+    ['name', 'path', 'digest'],
+    'CONTEXT_INVALID_FIELD',
+  );
+  if (isExecutionFailure(profileIdentity)) return profileIdentity;
+
+  if (!isNonEmptyString(input.selected_model)) return createExecutionFailure('CONTEXT_INVALID_FIELD', 'selected_model');
+  if (!isApprovedModelId(input.selected_model)) {
+    return createExecutionFailure('POOL_PROOF_MODEL_UNAPPROVED');
+  }
+  if (!isStringArray(input.tool_grants) || input.tool_grants.length === 0) {
+    return createExecutionFailure('CONTEXT_INVALID_FIELD', 'tool_grants');
+  }
+  const resultDestination = validateResultDestination(input.result_destination);
+  if (isExecutionFailure(resultDestination)) return resultDestination;
 
   const issuedAtMs = parseCanonicalUtc(input.issued_at);
   if (issuedAtMs === null) return createExecutionFailure('CONTEXT_INVALID_FIELD', 'issued_at');
@@ -190,6 +268,38 @@ export function validateExecutionContext(
     return createExecutionFailure('CONTEXT_WORKSPACE_MISMATCH');
   }
 
+  if (options.poolProofExpectations) {
+    const p = options.poolProofExpectations;
+    if (input.pi_runtime_parent !== p.piRuntimeParent) {
+      return createExecutionFailure('CONTEXT_PI_RUNTIME_MISMATCH');
+    }
+    if (input.pi_session_dir !== p.piSessionDir) {
+      return createExecutionFailure('CONTEXT_PI_SESSION_MISMATCH');
+    }
+    const pi = input.pi_executable_identity as ExecutionContextShape['pi_executable_identity'];
+    if (pi.path !== p.piExecutablePath || pi.version !== p.piExecutableVersion || pi.digest !== p.piExecutableDigest) {
+      return createExecutionFailure('CONTEXT_PI_EXECUTABLE_MISMATCH');
+    }
+    const pkg = input.package_identity as ExecutionContextShape['package_identity'];
+    if (pkg.path !== p.packagePath || pkg.profile !== p.packageProfile || pkg.digest !== p.packageDigest) {
+      return createExecutionFailure('CONTEXT_PACKAGE_MISMATCH');
+    }
+    const prof = input.profile_identity as ExecutionContextShape['profile_identity'];
+    if (prof.name !== p.profileName || prof.path !== p.profilePath || prof.digest !== p.profileDigest) {
+      return createExecutionFailure('CONTEXT_PROFILE_MISMATCH');
+    }
+    if (input.selected_model !== p.selectedModel) {
+      return createExecutionFailure('CONTEXT_MODEL_MISMATCH');
+    }
+    if (input.tool_grants.length !== p.toolGrants.length || !input.tool_grants.every((g, i) => g === p.toolGrants[i])) {
+      return createExecutionFailure('CONTEXT_TOOL_GRANT_MISMATCH');
+    }
+    const ctx = input as ExecutionContextShape;
+    if (ctx.result_destination.kind !== 'sqlite' || ctx.result_destination.id !== p.resultDestinationId) {
+      return createExecutionFailure('CONTEXT_RESULT_DESTINATION_MISMATCH');
+    }
+  }
+
   if (issuedAtMs - now > CLOCK_SKEW_TOLERANCE_MS) return createExecutionFailure('CONTEXT_NOT_YET_VALID');
   if (now >= expiresAtMs || now - issuedAtMs > input.max_age_seconds * 1000) {
     return createExecutionFailure('CONTEXT_STALE');
@@ -210,4 +320,20 @@ export function validateExecutionContext(
       return { ...context };
     },
   });
+}
+
+function validateResultDestination(input: unknown): { readonly kind: 'sqlite' | 'callback'; readonly id: string } | ExecutionFailure {
+  if (!isPlainObject(input)) return createExecutionFailure('CONTEXT_INVALID_FIELD', 'result_destination');
+  const allowed = new Set(['kind', 'id']);
+  for (const key of Object.keys(input)) {
+    if (!allowed.has(key)) return createExecutionFailure('CONTEXT_INVALID_FIELD', 'result_destination');
+  }
+  if (!Object.hasOwn(input, 'kind') || !Object.hasOwn(input, 'id')) {
+    return createExecutionFailure('CONTEXT_INVALID_FIELD', 'result_destination');
+  }
+  if (input.kind !== 'sqlite' && input.kind !== 'callback') {
+    return createExecutionFailure('CONTEXT_INVALID_FIELD', 'result_destination.kind');
+  }
+  if (!isNonEmptyString(input.id)) return createExecutionFailure('CONTEXT_INVALID_FIELD', 'result_destination.id');
+  return { kind: input.kind, id: input.id };
 }

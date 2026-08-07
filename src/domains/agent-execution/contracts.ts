@@ -8,20 +8,43 @@
 
 export type CraftsPhase = 'C' | 'R' | 'A' | 'F' | 'T' | 'S';
 
-/** Launcher-owned per-attempt execution marker (pool-worker-execution-context.schema.json v2). */
+/** Launcher-owned per-attempt execution marker (pool-worker-execution-context.schema.json v3). */
 export type ExecutionContextShape = {
-  readonly schema_version: 2;
+  readonly schema_version: 3;
   readonly actor: 'pool-worker';
   readonly node_id: string;
   readonly attempt_id: string;
   readonly attempt_nonce: string;
-  readonly issued_by: 'agent-pool-supervisor';
+  readonly issued_by: 'agent-pool-supervisor' | 'agent-pool-runtime';
   readonly issued_at: string;
   readonly expires_at: string;
   readonly max_age_seconds: number;
   readonly target_repo: string;
   readonly target_branch: string;
   readonly workspace_path: string;
+  readonly pi_runtime_parent: string;
+  readonly pi_session_dir: string;
+  readonly pi_executable_identity: {
+    readonly path: string;
+    readonly version: string;
+    readonly digest: string;
+  };
+  readonly package_identity: {
+    readonly path: string;
+    readonly profile: string;
+    readonly digest: string;
+  };
+  readonly profile_identity: {
+    readonly name: string;
+    readonly path: string;
+    readonly digest: string;
+  };
+  readonly selected_model: string;
+  readonly tool_grants: readonly string[];
+  readonly result_destination: {
+    readonly kind: 'sqlite' | 'callback';
+    readonly id: string;
+  };
 };
 
 /** What the launcher independently asserts the attempt must be, out of band from the marker. */
@@ -31,6 +54,24 @@ export type LaunchExpectations = {
   readonly targetRepo: string;
   readonly targetBranch: string;
   readonly workspacePath: string;
+};
+
+/** Extended launcher expectations for the Pool Proof vertical slice. */
+export type PoolProofLaunchExpectations = LaunchExpectations & {
+  readonly piRuntimeParent: string;
+  readonly piSessionDir: string;
+  readonly piExecutablePath: string;
+  readonly piExecutableVersion: string;
+  readonly piExecutableDigest: string;
+  readonly packagePath: string;
+  readonly packageProfile: string;
+  readonly packageDigest: string;
+  readonly profileName: string;
+  readonly profilePath: string;
+  readonly profileDigest: string;
+  readonly selectedModel: string;
+  readonly toolGrants: readonly string[];
+  readonly resultDestinationId: string;
 };
 
 export type AcceptanceCriterion = {
@@ -133,6 +174,14 @@ const FAILURE_REASONS: Readonly<Record<string, string>> = Object.freeze({
   CONTEXT_STALE: 'Execution context is stale',
   CONTEXT_REPLAYED: 'Execution context nonce has already been consumed',
   CONTEXT_CARRIES_DAG_TOPOLOGY: 'Execution context must not carry DAG topology',
+  CONTEXT_PI_RUNTIME_MISMATCH: 'Execution context Pi runtime parent does not match launcher expectations',
+  CONTEXT_PI_SESSION_MISMATCH: 'Execution context Pi session directory does not match launcher expectations',
+  CONTEXT_PI_EXECUTABLE_MISMATCH: 'Execution context Pi executable identity does not match launcher expectations',
+  CONTEXT_PACKAGE_MISMATCH: 'Execution context Worker package identity does not match launcher expectations',
+  CONTEXT_PROFILE_MISMATCH: 'Execution context Worker profile identity does not match launcher expectations',
+  CONTEXT_MODEL_MISMATCH: 'Execution context selected model does not match launcher expectations',
+  CONTEXT_TOOL_GRANT_MISMATCH: 'Execution context tool grants do not match launcher expectations',
+  CONTEXT_RESULT_DESTINATION_MISMATCH: 'Execution context result destination does not match launcher expectations',
 
   // Attempt contract
   CONTRACT_NOT_AN_OBJECT: 'Attempt contract must be an object',
@@ -166,6 +215,11 @@ const FAILURE_REASONS: Readonly<Record<string, string>> = Object.freeze({
   TRANSCRIPT_INDEX_FAILED: 'Transcript audit index commit failed',
   TRANSCRIPT_PATH_NOT_WORKSPACE_RELATIVE: 'transcript_path must be a workspace-relative locator',
   CLEANUP_BLOCKED_PENDING_EXTRACTION: 'Workspace cleanup is blocked until transcript extraction resolves',
+
+  // Pool Proof
+  POOL_PROOF_MODEL_UNAPPROVED: 'Selected builder model is not in the approved registry',
+  POOL_PROOF_LAUNCHER_MISMATCH: 'Launcher expectation binding failed',
+  POOL_PROOF_FAKE_ADAPTER_REJECTED: 'Production proof entry point rejected a fake adapter'
 });
 
 export function createExecutionFailure(code: string, detail?: string): ExecutionFailure {

@@ -5,7 +5,7 @@
 - **Warm worker pool**: Ready execution-capacity slots available to accept an attempt contract. A slot may persist; conversational state does not.
 - **Fresh Pi node session**: A new Pi process/session started for a single attempt, isolated from other attempts and never reused by a slot.
 - **Pool Proof Worker profile**: The approved builder-only `packages/worker-harness` profile used to prove one real direct attempt without evaluator, CRAFTS, Graphify, or grading resources. It does not weaken the separate full CRAFTS profile.
-- **Execution context**: The launcher-owned per-attempt marker (`pool-worker-execution-context.schema.json`, v2) binding actor, node, attempt, repository, branch, workspace, and freshness.
+- **Execution context**: The launcher-owned per-attempt marker (`pool-worker-execution-context.schema.json`, v3). Version 3 extends v2 with private Pi runtime/session roots, executable/package/profile identity, the selected approved model, tool grants, and result destination; it binds actor, node, attempt, repository, branch, workspace, and freshness.
 - **Freshness expectation**: `issued_at` + `expires_at` + `max_age_seconds`, owned by the launcher and capped by the specification's five-minute ceiling. A launcher may be stricter, never laxer.
 - **Attempt contract**: The single DAG-free unit payload a worker executes (`pool-worker-attempt-contract.schema.json`, v1).
 - **CRAFTS phase**: One of Conceptualize, Render, Assess, Fix, Tighten, or Sharpen executed within an attempt.
@@ -111,3 +111,5 @@ Implemented here is the ADR-032 baseline. The following remain approved roadmap 
 - Treating a nonce *format* check as replay protection is a false assurance.
 - Any cleanup path that can return "retain" forever reintroduces the ADR-032 failure mode — including a `NaN` deadline, which no `now >= deadline` comparison ever satisfies.
 - Advancing cleanup state without retention proof turns a gate into a formality.
+- A fresh launcher-owned `PI_CODING_AGENT_DIR` combined with `PI_OFFLINE=1` cannot resolve non-native (host-configured) providers such as `moonshot` — their definitions live in the host `~/.pi/agent/models.json`, not Pi's built-ins. The launcher must carry the selected provider's `models.json` entry (`copyProviderModels`), not only its auth, or the pinned model resolves as unavailable offline.
+- Spawning the headless `--print` Pi Worker with an open stdin pipe blocks indefinitely with **zero output** until the wall-clock kill. Always spawn with `stdio: ['ignore', 'pipe', 'pipe']` so stdin is not a pipe.

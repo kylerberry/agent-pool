@@ -33,7 +33,7 @@ function validContract(workspace, overrides = {}) {
 function validMarker(workspace, overrides = {}) {
   const issuedAt = new Date();
   return {
-    schema_version: 2,
+    schema_version: 3,
     actor: "pool-worker",
     node_id: "node-1",
     attempt_id: "attempt-1",
@@ -45,6 +45,14 @@ function validMarker(workspace, overrides = {}) {
     target_repo: "owner/repo",
     target_branch: "main",
     workspace_path: workspace,
+    pi_runtime_parent: join(workspace, ".pi-runtime"),
+    pi_session_dir: join(workspace, ".pi-runtime", "session"),
+    pi_executable_identity: { path: "/opt/pi/pi", version: "0.81.1", digest: "d1" },
+    package_identity: { path: "/opt/agent-pool-worker-harness", profile: "pool-proof-builder", digest: "d2" },
+    profile_identity: { name: "pool-proof-builder", path: "/opt/agent-pool-worker-harness/profiles/pool-proof-builder", digest: "d3" },
+    selected_model: "moonshot/kimi-k2.7-code",
+    tool_grants: ["read", "edit", "write", "bash"],
+    result_destination: { kind: "sqlite", id: "result-1" },
     ...overrides,
   };
 }
@@ -392,6 +400,11 @@ test("rejects a model scope that drifts from the specification, even when both c
     writeFileSync(settingsPath, originalSettings);
     writeFileSync(runtimePath, originalRuntime);
   }
+});
+
+test("bundled v3 execution-context schema accepts both supervisor and runtime issuers", () => {
+  const schema = JSON.parse(readFileSync(join(packageRoot, "contracts/pool-worker-execution-context.schema.json"), "utf8"));
+  assert.deepEqual(schema.properties.issued_by.enum, ["agent-pool-supervisor", "agent-pool-runtime"]);
 });
 
 test("preflight's exact model set matches the domain approved-model registry", () => {

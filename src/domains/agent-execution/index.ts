@@ -14,10 +14,16 @@ export type {
   ExecutionContextShape,
   ExecutionFailure,
   LaunchExpectations,
+  PoolProofLaunchExpectations,
   PriorFailureContext,
   TranscriptRetentionStep,
 } from './contracts.ts';
 export { isExecutionFailure } from './contracts.ts';
+
+export type {
+  ActorIdentity,
+} from './actor-context.ts';
+export { buildActorIdentity, createActorIdentityAccessor, renderIdentityCapsule } from './actor-context.ts';
 
 export { DAG_TOPOLOGY_KEYS, findDagTopology } from './dag-exclusion.ts';
 
@@ -82,3 +88,59 @@ export {
   MAX_QUARANTINE_MS,
   createAttemptWorkspaceLifecycle,
 } from './workspace-lifecycle.ts';
+
+export type {
+  AttemptResources,
+  ResourceFactory,
+  ResourceFactoryOptions,
+} from './attempt-resources.ts';
+export { createAttemptResourceFactory } from './attempt-resources.ts';
+
+export type {
+  RepositorySandbox,
+  RepositorySandboxOptions,
+  SandboxProcess,
+  BrokerResponse,
+} from './repository-sandbox.ts';
+export { createRepositorySandbox } from './repository-sandbox.ts';
+
+export type {
+  SandboxIdentity,
+} from './sandbox-identity.ts';
+export {
+  SANDBOX_PINNED_GID,
+  SANDBOX_PINNED_UID,
+  prepareWorkspaceForSandbox,
+  requireNonRootSandboxIdentity,
+  resolveSandboxIdentity,
+} from './sandbox-identity.ts';
+
+export type {
+  SandboxBroker,
+  SandboxBrokerOptions,
+} from './sandbox-broker.ts';
+export { createSandboxBroker } from './sandbox-broker.ts';
+
+export type {
+  RepositoryToolAdapters,
+  ToolCommandResult,
+  ToolReadResult,
+  ToolWriteResult,
+} from './repository-tool-adapters.ts';
+export { createRepositoryToolAdapters } from './repository-tool-adapters.ts';
+
+export type {
+  PackageProfileVerifier,
+  PiLauncher,
+  PiLauncherOptions,
+  PiProcess,
+} from './pool-proof-pi-launcher.ts';
+export { createPoolProofPiLauncher } from './pool-proof-pi-launcher.ts';
+
+export type {
+  MinimalPoolRuntime,
+  MinimalPoolRuntimeOptions,
+  ProofJob,
+  SubmitResult,
+} from './minimal-pool-runtime.ts';
+export { createMinimalPoolRuntime } from './minimal-pool-runtime.ts';

@@ -1,0 +1,4 @@
+# Sandbox-owned HOME scaffolding created by prepareWorkspaceForSandbox.
+# The container runs with HOME=/workspace/.home; these dirs are runner
+# infrastructure, never worker output or repo content.
+.home/

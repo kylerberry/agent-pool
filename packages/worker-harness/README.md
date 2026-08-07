@@ -12,6 +12,14 @@ This package is deliberately outside `.pi/` so Repository Builder sessions do no
 - `config/` — runtime versions, exact model scope, and bootstrap routing.
 - `scripts/preflight.mjs` — mandatory fail-closed actor/capability check.
 
+## Pool Proof builder profile
+
+The Pool Proof builder profile sandbox is defined under
+`profiles/pool-proof-builder/`. Its Dockerfile, build instructions, and image
+reference rules are documented in `profiles/pool-proof-builder/README.md`.
+This top-level package builds the full CRAFTS worker image and must not be
+repurposed as the Pool Proof sandbox image.
+
 ## Launch contract
 
 The trusted launcher:

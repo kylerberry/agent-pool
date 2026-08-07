@@ -23,7 +23,7 @@ const expectations: LaunchExpectations = {
 
 function marker(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    schema_version: 2,
+    schema_version: 3,
     actor: 'pool-worker',
     node_id: 'node-1',
     attempt_id: 'attempt-1',
@@ -35,6 +35,14 @@ function marker(overrides: Record<string, unknown> = {}): Record<string, unknown
     target_repo: 'owner/repo',
     target_branch: 'main',
     workspace_path: WORKSPACE,
+    pi_runtime_parent: '/tmp/agent-pool/pi-runtime',
+    pi_session_dir: '/tmp/agent-pool/pi-runtime/session-1',
+    pi_executable_identity: { path: '/opt/pi/pi', version: '0.81.1', digest: 'd1' },
+    package_identity: { path: '/opt/agent-pool-worker-harness', profile: 'pool-proof-builder', digest: 'd2' },
+    profile_identity: { name: 'pool-proof-builder', path: '/opt/agent-pool-worker-harness/profile', digest: 'd3' },
+    selected_model: 'moonshot/kimi-k2.7-code',
+    tool_grants: ['read', 'edit', 'write', 'bash'],
+    result_destination: { kind: 'sqlite', id: 'result-1' },
     ...overrides,
   };
 }
@@ -71,9 +79,9 @@ describe('execution context binding', () => {
     );
   });
 
-  it('rejects a version 1 context that carries no freshness expectation', () => {
+  it('rejects a version 2 context missing launcher-owned Pool Proof fields', () => {
     const legacy = {
-      schema_version: 1,
+      schema_version: 2,
       actor: 'pool-worker',
       node_id: 'node-1',
       attempt_id: 'attempt-1',
@@ -82,7 +90,7 @@ describe('execution context binding', () => {
       target_repo: 'owner/repo',
       target_branch: 'main',
     };
-    assert.equal(codeOf(validateExecutionContext(legacy, expectations, { now: NOW })), 'CONTEXT_MISSING_FIELD');
+    assert.equal(codeOf(validateExecutionContext(legacy, expectations, { now: NOW })), 'CONTEXT_VERSION_UNSUPPORTED');
   });
 
   it('rejects an issuer other than the supervisor', () => {
@@ -90,6 +98,14 @@ describe('execution context binding', () => {
       codeOf(validateExecutionContext(marker({ issued_by: 'repository-builder' }), expectations, { now: NOW })),
       'CONTEXT_UNTRUSTED_ISSUER',
     );
+  });
+
+  it('accepts both supervisor and runtime issuers in v3', () => {
+    const supervisor = validateExecutionContext(marker({ issued_by: 'agent-pool-supervisor' }), expectations, { now: NOW });
+    assert.equal(isExecutionFailure(supervisor), false);
+    const runtime = validateExecutionContext(marker({ issued_by: 'agent-pool-runtime' }), expectations, { now: NOW });
+    assert.equal(isExecutionFailure(runtime), false);
+    assert.equal('context' in runtime ? runtime.context.issued_by : null, 'agent-pool-runtime');
   });
 
   it('rejects identity, target, and workspace mismatches independently', () => {

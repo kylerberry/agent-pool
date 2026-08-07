@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "node_id": "single-worker-pool-proof",
+  "attempt_id": "single-worker-pool-proof-attempt-1",
+  "model": "moonshot/kimi-k2.7-code",
+  "base_commit": "fef9c4d1716ed54988a889126b6db0f01e192d5f",
+  "result_commit": "dfe2d85a2f32566d533d8cb98b477b2f4b699e4f",
+  "status": "passed",
+  "fake_adapter": false,
+  "verifier_checks": [
+    {
+      "name": "allowed_paths_only",
+      "passed": true
+    },
+    {
+      "name": "clean_tree",
+      "passed": true
+    },
+    {
+      "name": "commit_resolved",
+      "passed": true
+    },
+    {
+      "name": "exactly_one_commit",
+      "passed": true
+    },
+    {
+      "name": "expected_parent",
+      "passed": true
+    },
+    {
+      "name": "fixture_test_passes",
+      "passed": true
+    },
+    {
+      "name": "git_directory_present",
+      "passed": true
+    },
+    {
+      "name": "isolation_probes_pass",
+      "passed": true
+    },
+    {
+      "name": "no_conflicting_result",
+      "passed": true
+    },
+    {
+      "name": "process_attempt_binding",
+      "passed": true
+    },
+    {
+      "name": "process_exit_success",
+      "passed": true
+    },
+    {
+      "name": "process_node_binding",
+      "passed": true
+    },
+    {
+      "name": "process_nonce_binding",
+      "passed": true
+    },
+    {
+      "name": "process_result_binding",
+      "passed": true
+    },
+    {
+      "name": "workspace_contained",
+      "passed": true
+    }
+  ],
+  "diagnostics": {
+    "started_at": "2026-08-06T04:29:28.403Z",
+    "finished_at": "2026-08-06T04:31:07.306Z",
+    "failure_code": null
+  },
+  "cleanup_disposition": {
+    "workspace_removed": true,
+    "session_removed": true
+  },
+  "residual_warning": "This controlled fixture proof is not production authorization for arbitrary repositories.",
+  "red_evidence": {
+    "command": [
+      "npm",
+      "test"
+    ],
+    "exit_code": 1,
+    "output_artifact": "\n> single-worker-fixture@0.0.0 test\n> node --test test/*.test.js\n\n✖ getMessage returns the expected value (1.061958ms)\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 60.844291\n\n✖ failing tests:\n\ntest at test/message.test.js:5:1\n✖ getMessage returns the expected value (1.061958ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  'hello' !== 'world'\n  \n      at TestContext.<anonymous> (file:///workspace/test/message.test.js:6:10)\n      at Test.runInAsyncScope (node:async_hooks:227:14)\n      at Test.run (node:internal/test_runner/test:1382:25)\n      at Test.start (node:internal/test_runner/test:1242:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'hello',\n    expected: 'world',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n"
+  },
+  "green_evidence": {
+    "command": [
+      "npm",
+      "test"
+    ],
+    "exit_code": 0,
+    "output_artifact": "\n> single-worker-fixture@0.0.0 test\n> node --test test/*.test.js\n\n✔ getMessage returns the expected value (0.4285ms)\nℹ tests 1\nℹ suites 0\nℹ pass 1\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 42.1485\n"
+  }
+}

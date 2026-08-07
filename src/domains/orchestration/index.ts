@@ -26,8 +26,15 @@ export type {
   OrchestrationStore,
   PhaseArtifactInput,
   PhaseArtifactRecord,
+  ProofResultRecord,
+  ProofCheckRecord,
+  ProofResultInput,
 } from './sqlite-store.ts';
 export { createSqliteStore } from './sqlite-store.ts';
+export type {
+  PoolProofPersistence,
+} from './pool-proof-persistence.ts';
+export { createPoolProofPersistence } from './pool-proof-persistence.ts';
 export { computeReadyFrontier } from './ready-frontier.ts';
 export { isValidTransition, transitionError } from './lifecycle.ts';
 export {

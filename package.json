@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test test/agent-execution/*.test.ts test/codebase-knowledge/*.test.ts test/model-routing-and-evaluation/*.test.ts test/orchestration/*.test.ts test/work-intake/*.test.ts",
+    "test": "node --experimental-strip-types --test test/agent-execution/*.test.ts test/codebase-knowledge/*.test.ts test/model-routing-and-evaluation/*.test.ts test/orchestration/*.test.ts test/verification/*.test.ts test/work-intake/*.test.ts",
+    "test:pool-proof": "cd packages/pool-proof-harness && npm test",
     "test:worker": "cd packages/worker-harness && npm test"
   },
   "devDependencies": {

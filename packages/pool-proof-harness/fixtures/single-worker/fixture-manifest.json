@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "fixture_name": "single-worker",
+  "base_commit_author": "Pool Proof Harness <proof@agent-pool.local>",
+  "base_commit_message": "Base commit: failing fixture test",
+  "allowed_changed_paths": ["src/message.js"],
+  "fixture_test_command": ["npm", "test"]
+}

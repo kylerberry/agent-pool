@@ -1,0 +1,22 @@
+{
+  "schema_version": 3,
+  "actor": "pool-worker",
+  "node_id": "node-1",
+  "attempt_id": "attempt-1",
+  "attempt_nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "issued_by": "agent-pool-runtime",
+  "issued_at": "2026-08-05T00:00:00Z",
+  "expires_at": "2026-08-05T00:03:00Z",
+  "max_age_seconds": 180,
+  "target_repo": "owner/repo",
+  "target_branch": "main",
+  "workspace_path": "/workspace",
+  "pi_runtime_parent": "/workspace/.pi-runtime",
+  "pi_session_dir": "/workspace/.pi-runtime/session",
+  "pi_executable_identity": { "path": "/opt/pi/pi", "version": "0.83.0", "digest": "d1" },
+  "package_identity": { "path": "/opt/agent-pool-worker-harness", "profile": "pool-proof-builder", "digest": "d2" },
+  "profile_identity": { "name": "pool-proof-builder", "path": "/opt/profile", "digest": "d3" },
+  "selected_model": "openai-codex/gpt-5.6-terra",
+  "tool_grants": ["read", "edit", "write", "bash", "actor_identity"],
+  "result_destination": { "kind": "sqlite", "id": "result-1" }
+}

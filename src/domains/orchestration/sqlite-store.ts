@@ -22,6 +22,8 @@ import {
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import crypto from 'node:crypto';
 
+import { isApprovedModelId } from '../model-routing-and-evaluation/approved-models.ts';
+
 import type {
   ApprovedNode,
   ApprovedWork,
@@ -45,7 +47,7 @@ import {
 } from './contracts.ts';
 import { isValidTransition } from './lifecycle.ts';
 
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 
 const MIGRATIONS: readonly string[] = [
   `
@@ -332,6 +334,57 @@ const MIGRATIONS: readonly string[] = [
   WHEN EXISTS (SELECT 1 FROM attempt_routing_decisions WHERE attempt_id = NEW.attempt_id)
   BEGIN SELECT RAISE(ABORT, 'attempt_routing_decisions is append-only'); END;
   `,
+  // v6: append-only Pool Proof result and check records.
+  //
+  // These tables hold the runner-owned terminal proof outcome, deterministic
+  // verifier checks, commit SHA, and timing. They are managed entirely through
+  // the OrchestrationStore public API; no caller holds a separate DatabaseSync
+  // handle.
+  `
+  CREATE TABLE IF NOT EXISTS pool_proof_results (
+    attempt_id TEXT PRIMARY KEY,
+    result_id TEXT NOT NULL,
+    node_id TEXT NOT NULL,
+    builder_model TEXT NOT NULL,
+    status TEXT NOT NULL,
+    commit_sha TEXT,
+    failure_code TEXT,
+    started_at TEXT NOT NULL,
+    finished_at TEXT NOT NULL,
+    FOREIGN KEY (attempt_id) REFERENCES attempts(attempt_id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS pool_proof_checks (
+    attempt_id TEXT NOT NULL,
+    check_name TEXT NOT NULL,
+    passed INTEGER NOT NULL,
+    PRIMARY KEY (attempt_id, check_name),
+    FOREIGN KEY (attempt_id) REFERENCES attempts(attempt_id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_pool_proof_results_attempt ON pool_proof_results(attempt_id);
+
+  CREATE TRIGGER IF NOT EXISTS trg_pool_proof_results_no_update
+  BEFORE UPDATE ON pool_proof_results
+  BEGIN SELECT RAISE(ABORT, 'pool_proof_results is append-only'); END;
+
+  CREATE TRIGGER IF NOT EXISTS trg_pool_proof_results_no_delete
+  BEFORE DELETE ON pool_proof_results
+  BEGIN SELECT RAISE(ABORT, 'pool_proof_results is append-only'); END;
+
+  CREATE TRIGGER IF NOT EXISTS trg_pool_proof_results_no_replace
+  BEFORE INSERT ON pool_proof_results
+  WHEN EXISTS (SELECT 1 FROM pool_proof_results WHERE attempt_id = NEW.attempt_id)
+  BEGIN SELECT RAISE(ABORT, 'pool_proof_results is append-only'); END;
+
+  CREATE TRIGGER IF NOT EXISTS trg_pool_proof_checks_no_update
+  BEFORE UPDATE ON pool_proof_checks
+  BEGIN SELECT RAISE(ABORT, 'pool_proof_checks is append-only'); END;
+
+  CREATE TRIGGER IF NOT EXISTS trg_pool_proof_checks_no_delete
+  BEFORE DELETE ON pool_proof_checks
+  BEGIN SELECT RAISE(ABORT, 'pool_proof_checks is append-only'); END;
+  `,
 ];
 
 export type NodeRecord = {
@@ -418,6 +471,40 @@ export type PhaseArtifactInput = {
   readonly artifact_path: string;
 };
 
+/** Append-only Pool Proof terminal result for one attempt. */
+export type ProofResultRecord = {
+  readonly attempt_id: string;
+  readonly result_id: string;
+  readonly node_id: string;
+  readonly builder_model: string;
+  readonly status: 'passed' | 'failed';
+  readonly commit_sha: string | null;
+  readonly failure_code: string | null;
+  readonly started_at: string;
+  readonly finished_at: string;
+};
+
+/** One deterministic verifier check recorded for a Pool Proof result. */
+export type ProofCheckRecord = {
+  readonly attempt_id: string;
+  readonly check_name: string;
+  readonly passed: number;
+};
+
+/** Input to record a Pool Proof result atomically through the public store API. */
+export type ProofResultInput = {
+  readonly attempt_id: string;
+  readonly result_id: string;
+  readonly node_id: string;
+  readonly builder_model: string;
+  readonly status: 'passed' | 'failed';
+  readonly commit_sha: string | null;
+  readonly failure_code: string | null;
+  readonly checks: readonly { readonly name: string; readonly passed: boolean }[];
+  readonly started_at: Date;
+  readonly finished_at: Date;
+};
+
 export type OrchestrationStore = {
   readonly importApprovedWork: (work: ApprovedWork) => Promise<ImportedWork | { readonly error: OrchestrationError }>;
   readonly getImportedWork: (workId: string) => Promise<ImportedWork | null>;
@@ -454,6 +541,11 @@ export type OrchestrationStore = {
   readonly listAttemptsNeedingReconciliation: (now: Date) => Promise<readonly AttemptRecord[]>;
   readonly listAuthorizedResults: () => Promise<readonly { readonly attempt_id: string; readonly node_id: string; readonly work_id: string; readonly result_id: string; readonly expected_node_version: number }[]>;
   readonly listCreatedAttempts: () => Promise<readonly AttemptRecord[]>;
+  readonly recordProofResult: (input: ProofResultInput) => Promise<{ readonly ok: true } | { readonly error: OrchestrationError }>;
+  readonly getProofResult: (attemptId: string) => Promise<ProofResultRecord | null>;
+  readonly getProofChecks: (attemptId: string) => Promise<readonly ProofCheckRecord[]>;
+  readonly hasConflictingProofResult: (attemptId: string, resultId: string) => Promise<{ readonly hasConflict: boolean; readonly existingResultId: string | null }>;
+  readonly countPhaseArtifactsForAttempt: (attemptId: string) => Promise<number>;
   readonly close: () => Promise<void>;
 };
 
@@ -1609,6 +1701,142 @@ export async function createSqliteStore(config: {
 
     async listCreatedAttempts() {
       return db.prepare('SELECT * FROM attempts WHERE state = ?').all('created') as AttemptRecord[];
+    },
+
+    async recordProofResult(input) {
+      if (!isNonEmptyString(input.attempt_id, ORCHESTRATION_LIMITS.maxIdLength)) {
+        return err('INVALID_RESULT', 'invalid attempt_id');
+      }
+      if (!isNonEmptyString(input.result_id, ORCHESTRATION_LIMITS.maxResultIdLength)) {
+        return err('INVALID_RESULT', 'invalid result_id');
+      }
+      if (!isNonEmptyString(input.node_id, ORCHESTRATION_LIMITS.maxIdLength)) {
+        return err('INVALID_RESULT', 'invalid node_id');
+      }
+      if (!isApprovedModelId(input.builder_model)) {
+        return err('INVALID_RESULT', 'invalid builder_model');
+      }
+      if (input.status !== 'passed' && input.status !== 'failed') {
+        return err('INVALID_RESULT', 'invalid status');
+      }
+      if (input.commit_sha !== null && !/^[0-9a-f]{40}$/.test(input.commit_sha)) {
+        return err('INVALID_RESULT', 'commit_sha must be a 40-character hex SHA-1');
+      }
+      if (input.status === 'passed' && input.commit_sha === null) {
+        return err('INVALID_RESULT', 'passed result requires a commit sha');
+      }
+      if (input.status === 'failed' && input.failure_code === null) {
+        return err('INVALID_RESULT', 'failed result requires a failure code');
+      }
+      if (input.status === 'passed' && input.failure_code !== null) {
+        return err('INVALID_RESULT', 'passed result must have null failure_code');
+      }
+      if (input.failure_code !== null && !isNonEmptyString(input.failure_code, ORCHESTRATION_LIMITS.maxVersionLength)) {
+        return err('INVALID_RESULT', 'invalid failure_code');
+      }
+      if (!(input.started_at instanceof Date) || !(input.finished_at instanceof Date)) {
+        return err('INVALID_RESULT', 'invalid timestamps');
+      }
+      if (!Number.isFinite(input.started_at.getTime()) || !Number.isFinite(input.finished_at.getTime())) {
+        return err('INVALID_RESULT', 'timestamps must be finite');
+      }
+      if (input.finished_at.getTime() < input.started_at.getTime()) {
+        return err('INVALID_RESULT', 'finished_at must not be before started_at');
+      }
+      if (!Array.isArray(input.checks) || input.checks.length === 0) {
+        return err('INVALID_RESULT', 'checks must be a non-empty array');
+      }
+      const seenChecks = new Set<string>();
+      for (const check of input.checks) {
+        if (!check || typeof check.name !== 'string' || typeof check.passed !== 'boolean') {
+          return err('INVALID_RESULT', 'invalid check');
+        }
+        if (check.name.length === 0 || check.name.length > 200) {
+          return err('INVALID_RESULT', 'check name out of bounds');
+        }
+        if (seenChecks.has(check.name)) {
+          return err('INVALID_RESULT', `duplicate check name ${check.name}`);
+        }
+        seenChecks.add(check.name);
+      }
+      try {
+        db.exec('BEGIN IMMEDIATE;');
+      } catch (e) {
+        return err('DATABASE_UNREACHABLE', `could not begin write transaction: ${(e as Error).message}`);
+      }
+      try {
+        const attempt = db.prepare('SELECT attempt_id, node_id FROM attempts WHERE attempt_id = ?').get(input.attempt_id) as { attempt_id: string; node_id: string } | undefined;
+        if (!attempt) {
+          db.exec('ROLLBACK;');
+          return err('INVALID_RESULT', 'attempt not found');
+        }
+        if (attempt.node_id !== input.node_id) {
+          db.exec('ROLLBACK;');
+          return err('RESULT_IDENTITY_MISMATCH', 'result node_id does not match stored attempt');
+        }
+        const routing = db.prepare('SELECT builder_model FROM attempt_routing_decisions WHERE attempt_id = ?').get(input.attempt_id) as { builder_model: string } | undefined;
+        if (!routing || routing.builder_model !== input.builder_model) {
+          db.exec('ROLLBACK;');
+          return err('RESULT_IDENTITY_MISMATCH', 'result builder_model does not attempt routing provenance');
+        }
+        db.prepare(
+          `INSERT INTO pool_proof_results
+           (attempt_id, result_id, node_id, builder_model, status, commit_sha, failure_code, started_at, finished_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        ).run(
+          input.attempt_id,
+          input.result_id,
+          input.node_id,
+          input.builder_model,
+          input.status,
+          input.commit_sha,
+          input.failure_code,
+          input.started_at.toISOString(),
+          input.finished_at.toISOString(),
+        );
+        const checkInsert = db.prepare(
+          'INSERT INTO pool_proof_checks (attempt_id, check_name, passed) VALUES (?, ?, ?);',
+        );
+        for (const check of input.checks) {
+          checkInsert.run(input.attempt_id, check.name, check.passed ? 1 : 0);
+        }
+        db.exec('COMMIT;');
+        audit('proof_result_recorded', { result_id: input.result_id, status: input.status }, { attemptId: input.attempt_id, nodeId: input.node_id });
+        return { ok: true };
+      } catch (e) {
+        db.exec('ROLLBACK;');
+        return err('INVALID_RESULT', (e as Error).message);
+      }
+    },
+
+    async getProofResult(attemptId) {
+      if (!isNonEmptyString(attemptId, ORCHESTRATION_LIMITS.maxIdLength)) return null;
+      return (
+        (db.prepare('SELECT * FROM pool_proof_results WHERE attempt_id = ?').get(attemptId) as ProofResultRecord | undefined) ??
+        null
+      );
+    },
+
+    async getProofChecks(attemptId) {
+      if (!isNonEmptyString(attemptId, ORCHESTRATION_LIMITS.maxIdLength)) return [];
+      return db.prepare('SELECT * FROM pool_proof_checks WHERE attempt_id = ?').all(attemptId) as ProofCheckRecord[];
+    },
+
+    async hasConflictingProofResult(attemptId, resultId) {
+      if (!isNonEmptyString(attemptId, ORCHESTRATION_LIMITS.maxIdLength) || !isNonEmptyString(resultId, ORCHESTRATION_LIMITS.maxResultIdLength)) {
+        return { hasConflict: false, existingResultId: null };
+      }
+      const row = db.prepare('SELECT result_id FROM pool_proof_results WHERE attempt_id = ?').get(attemptId) as { result_id: string } | undefined;
+      if (!row) {
+        return { hasConflict: false, existingResultId: null };
+      }
+      return { hasConflict: row.result_id !== resultId, existingResultId: row.result_id };
+    },
+
+    async countPhaseArtifactsForAttempt(attemptId) {
+      if (!isNonEmptyString(attemptId, ORCHESTRATION_LIMITS.maxIdLength)) return 0;
+      const row = db.prepare('SELECT COUNT(*) AS n FROM phase_artifacts WHERE attempt_id = ?').get(attemptId) as { n: number } | undefined;
+      return row?.n ?? 0;
     },
 
     async close() {

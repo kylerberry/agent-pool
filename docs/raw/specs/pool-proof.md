@@ -286,6 +286,14 @@ The trusted tool adapters enforce canonical realpath containment for every file 
 
 This split is required because removing credential variables from a child shell is insufficient when untrusted commands share the credential-bearing Pi process's filesystem or process namespace.
 
+### Sandbox lifecycle (Stage 1 baseline vs. production target)
+
+Stage 1 uses the simplest correct shape: **one fresh, destroyed-after container per repository tool call** (`docker run --rm` per `read`/`write`/`edit`/`bash`). This is maximally isolated and stateless — every repo command is a clean slate with a fresh allowlist environment — which is why it is the proof baseline. It does not scale: a real attempt issues hundreds of tool calls, and per-call container start cost dominates wall time.
+
+The production target is a **persistent per-worker sandbox container** that lives for the duration of one attempt, with tool calls piped through a small in-container supervisor rather than a fresh `docker run` each time. This eliminates per-call start cost while preserving per-attempt isolation (each attempt still gets its own fresh container, torn down at attempt end).
+
+The hard requirement that move re-introduces, and which the per-call baseline gets for free, is **per-command credential isolation inside a long-lived container**: every repository command must still receive the allowlist environment, a workspace-scoped `HOME`, and no visibility of the Worker's provider credential (ADR-032). The persistent container must re-earn this via its supervisor rather than relying on a fresh container per call. The `runTool` broker interface is abstract enough that this is an implementation change behind the same boundary, not a redesign. This lifecycle upgrade is **deferned** from Pool Proof; it is the prerequisite for the agent-pool dogfood follow-up, where real tool-call volume first appears.
+
 ## Target instructions
 
 Automatic target context-file discovery is disabled.
@@ -293,6 +301,16 @@ Automatic target context-file discovery is disabled.
 If a fixture or later target contains `AGENTS.md`, the trusted launcher may read bounded repository guidance and include it in the task input as untrusted repository content. It may guide implementation style, but it cannot change actor identity, attempt scope, selected model, tool grants, result destination, or pool policy.
 
 A target instruction claiming “you are the supervisor” or “load Repository Builder resources” must have no effect on capabilities or `actor_identity`.
+
+### Target-provided capability surface (trust tiers)
+
+Repository-provided content is not one trust level. The baseline disables all three tiers; each re-enters under a different policy.
+
+1. **Context files and skills (instructions).** `AGENTS.md`/`CLAUDE.md` and `SKILL.md` files are instructions the model reads. They are the tier a target maintainer legitimately uses to help an agent work in their codebase (for example, a skill documenting a non-standard build system). At the Stage 1 baseline they are not discovered (`--no-context-files`, `--no-skills`). When re-enabled, they re-enter only as **advisory, projected input** under explicit capability grant — never via ambient auto-discovery — and must be read-only, content-scanned for secrets, provenance-tagged as target-origin, and subordinated to the authoritative identity capsule. They may guide implementation style; they cannot change actor identity, attempt scope, selected model, tool grants, result destination, or pool policy.
+2. **Extensions and MCP (code).** Repository-provided extensions and external providers are executable code that runs inside the Worker process with full process privileges. They are never auto-loaded (`--no-extensions`). They re-enter only after controller onboarding enforces pinned versions, read-only allowlists, scoped secrets/egress, phase grants, and provenance (the ADR-029 external-provider track). Repository configuration must never auto-launch code; write-capable external sinks remain separately deferred.
+3. **Ambient host profile.** The Worker never inherits the Builder’s skills, extensions, prompt templates, or context files. The Worker’s world is assembled per attempt by the launcher, not subtracted from the host.
+
+The identity capsule is the firewall between “helpful guidance” and “policy override”: target-origin instructions are advisory capability hints, never authority. Absence at Stage 1 is the minimal-trust baseline, not the permanent policy.
 
 ## Workspace and session lifecycle
 
