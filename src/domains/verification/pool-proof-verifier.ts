@@ -27,6 +27,9 @@ export type GreenEvidence = {
   readonly stdout: string;
   readonly stderr: string;
   readonly timedOut: boolean;
+  /** True when the runner discarded excess stream bytes during receipt. */
+  readonly stdoutTruncated?: boolean;
+  readonly stderrTruncated?: boolean;
 };
 
 export type VerifierVerdict = {
@@ -277,8 +280,10 @@ export function createPoolProofVerifier(options: PoolProofVerifierOptions): Pool
       const allPassed = checks.every((c) => c.passed);
       return {
         status: allPassed ? 'passed' : 'failed',
-        commitSha,
-        failureCode: allPassed ? null : 'VERIFIER_CHECK_FAILED',
+        // A resolved HEAD is evidence only until every verifier check passes.
+        // In particular, a failed launch can still point at the fixture base.
+        commitSha: allPassed ? commitSha : null,
+        failureCode: allPassed ? null : (process.failureCode ?? 'VERIFIER_CHECK_FAILED'),
         checks,
         greenEvidence: allPassed ? fixtureResult.evidence : null,
       };

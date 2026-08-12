@@ -12,10 +12,21 @@ const bootstrapPath = join(
   "profiles/pool-proof-builder/extensions/trusted-bootstrap.ts",
 );
 
-function loadBootstrapWithContext(context) {
+function loadBootstrapWithContext(context, actorIdentity = undefined) {
   const contextDir = mkdtempSync(join(tmpdir(), "trusted-bootstrap-ctx-"));
   const contextFile = join(contextDir, "context.json");
+  const identityFile = join(contextDir, "actor-identity.json");
   writeFileSync(contextFile, JSON.stringify(context));
+  writeFileSync(identityFile, JSON.stringify(actorIdentity ?? {
+    actor: "pool-worker",
+    authority: "single-attempt-execution",
+    node_id: context.node_id,
+    attempt_id: context.attempt_id,
+    target_repo: context.target_repo,
+    target_branch: context.target_branch,
+    context_source: "launcher-verified",
+    can_modify_pool_policy: false,
+  }));
 
   const script = `
     import bootstrap from ${JSON.stringify(bootstrapPath)};
@@ -38,6 +49,7 @@ function loadBootstrapWithContext(context) {
       env: {
         ...process.env,
         AGENT_POOL_EXECUTION_CONTEXT: contextFile,
+        AGENT_POOL_ACTOR_IDENTITY: identityFile,
         AGENT_POOL_BROKER_SOCKET: "/tmp/agent-pool-broker.sock",
       },
       encoding: "utf8",
@@ -80,4 +92,12 @@ test("trusted bootstrap loads without paid calls and registers five tools", () =
   assert.equal(result.identity.can_modify_pool_policy, false);
   assert.equal(result.identity.node_id, "node-1");
   assert.equal(result.identity.attempt_id, "att://proof/node-1/1");
+});
+
+test("trusted bootstrap rejects an actor identity that is not bound to the captured context", () => {
+  const context = { node_id: "node-1", attempt_id: "att://proof/node-1/1", target_repo: "fixture", target_branch: "main" };
+  assert.throws(() => loadBootstrapWithContext(context, {
+    actor: "pool-worker", authority: "single-attempt-execution", node_id: "node-1", attempt_id: "att://attacker/1",
+    target_repo: "fixture", target_branch: "main", context_source: "launcher-verified", can_modify_pool_policy: false,
+  }), /launcher actor identity does not bind execution context/);
 });

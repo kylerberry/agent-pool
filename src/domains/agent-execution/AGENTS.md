@@ -38,6 +38,7 @@
 - `transcript_path` is a transient workspace-relative locator only; the durable reference is `transcript_object_id`.
 - Cleanup has no indefinite-retention outcome: an unresolved or failed extraction is destroyed once the bounded quarantine expires, preserving the failure record. `startedAt` must be finite, or the deadline comparison never fires.
 - `markAuditComplete()` requires the verified retention record for that attempt. Authorizing destruction is bound to evidence, not to a caller's assertion.
+- Pool Proof reports retain bounded commitments and verifier outcomes, never raw session, private-runtime, broker, nonce, result, workspace, task, credential, prompt, or transcript values.
 
 ## Public interfaces
 
@@ -113,3 +114,4 @@ Implemented here is the ADR-032 baseline. The following remain approved roadmap 
 - Advancing cleanup state without retention proof turns a gate into a formality.
 - A fresh launcher-owned `PI_CODING_AGENT_DIR` combined with `PI_OFFLINE=1` cannot resolve non-native (host-configured) providers such as `moonshot` — their definitions live in the host `~/.pi/agent/models.json`, not Pi's built-ins. The launcher must carry the selected provider's `models.json` entry (`copyProviderModels`), not only its auth, or the pinned model resolves as unavailable offline.
 - Spawning the headless `--print` Pi Worker with an open stdin pipe blocks indefinitely with **zero output** until the wall-clock kill. Always spawn with `stdio: ['ignore', 'pipe', 'pipe']` so stdin is not a pipe.
+- Comparing an observed isolation value with an “expected” value derived from the same mutable source proves nothing. Preserve independently sourced allocator, launcher-context, inventory, verifier, persistence, ownership, and freshness bindings. Retained-report redaction tests must derive fixture-sensitive values and prove detection by contaminating the serialized report one value at a time.

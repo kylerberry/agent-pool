@@ -32,7 +32,7 @@
         "fallbackModels": []
       },
       "local-craft-builder": {
-        "model": "moonshot/kimi-k2.7-code",
+        "model": "zai/glm-5.2",
         "fallbackModels": []
       },
       "local-craft-evaluator": {

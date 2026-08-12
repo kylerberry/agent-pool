@@ -97,6 +97,17 @@ export type {
 export { createAttemptResourceFactory } from './attempt-resources.ts';
 
 export type {
+  BrokerSocketAllocation,
+  BrokerSocketAllocationOptions,
+} from './broker-socket.ts';
+export {
+  AF_UNIX_PATH_LIMIT,
+  DEFAULT_SOCKET_BYTE_BUDGET,
+  allocateBrokerSocket,
+  resolveShortSocketRoot,
+} from './broker-socket.ts';
+
+export type {
   RepositorySandbox,
   RepositorySandboxOptions,
   SandboxProcess,
@@ -128,6 +139,14 @@ export type {
   ToolWriteResult,
 } from './repository-tool-adapters.ts';
 export { createRepositoryToolAdapters } from './repository-tool-adapters.ts';
+
+export type {
+  FaultDirective,
+} from './pool-proof-fault-directive.ts';
+export {
+  createFaultDirectiveState,
+  deriveInjectedFailureCode,
+} from './pool-proof-fault-directive.ts';
 
 export type {
   PackageProfileVerifier,

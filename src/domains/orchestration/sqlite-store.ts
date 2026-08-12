@@ -47,7 +47,7 @@ import {
 } from './contracts.ts';
 import { isValidTransition } from './lifecycle.ts';
 
-const CURRENT_SCHEMA_VERSION = 6;
+const CURRENT_SCHEMA_VERSION = 7;
 
 const MIGRATIONS: readonly string[] = [
   `
@@ -351,6 +351,12 @@ const MIGRATIONS: readonly string[] = [
     failure_code TEXT,
     started_at TEXT NOT NULL,
     finished_at TEXT NOT NULL,
+    CHECK (
+      (status = 'passed' AND commit_sha IS NOT NULL AND failure_code IS NULL)
+      OR
+      (status = 'failed' AND commit_sha IS NULL AND failure_code IS NOT NULL
+       AND length(failure_code) BETWEEN 1 AND 100)
+    ),
     FOREIGN KEY (attempt_id) REFERENCES attempts(attempt_id) ON DELETE CASCADE
   );
 
@@ -384,6 +390,45 @@ const MIGRATIONS: readonly string[] = [
   CREATE TRIGGER IF NOT EXISTS trg_pool_proof_checks_no_delete
   BEFORE DELETE ON pool_proof_checks
   BEGIN SELECT RAISE(ABORT, 'pool_proof_checks is append-only'); END;
+
+  CREATE TRIGGER IF NOT EXISTS trg_pool_proof_checks_no_replace
+  BEFORE INSERT ON pool_proof_checks
+  WHEN EXISTS (SELECT 1 FROM pool_proof_checks WHERE attempt_id = NEW.attempt_id AND check_name = NEW.check_name)
+  BEGIN SELECT RAISE(ABORT, 'pool_proof_checks is append-only'); END;
+  `,
+  // v7: rebuild the v6 result table so existing databases receive the same
+  // terminal-result algebra enforced for new databases. A table CHECK, unlike
+  // application validation, also constrains default-pragmas raw writers.
+  `
+  DROP TRIGGER IF EXISTS trg_pool_proof_results_no_update;
+  DROP TRIGGER IF EXISTS trg_pool_proof_results_no_delete;
+  DROP TRIGGER IF EXISTS trg_pool_proof_results_no_replace;
+  ALTER TABLE pool_proof_results RENAME TO pool_proof_results_v6;
+  CREATE TABLE pool_proof_results (
+    attempt_id TEXT PRIMARY KEY,
+    result_id TEXT NOT NULL,
+    node_id TEXT NOT NULL,
+    builder_model TEXT NOT NULL,
+    status TEXT NOT NULL,
+    commit_sha TEXT,
+    failure_code TEXT,
+    started_at TEXT NOT NULL,
+    finished_at TEXT NOT NULL,
+    CHECK ((status = 'passed' AND commit_sha IS NOT NULL AND failure_code IS NULL)
+      OR (status = 'failed' AND commit_sha IS NULL AND failure_code IS NOT NULL
+        AND length(failure_code) BETWEEN 1 AND 100)),
+    FOREIGN KEY (attempt_id) REFERENCES attempts(attempt_id) ON DELETE CASCADE
+  );
+  INSERT INTO pool_proof_results SELECT * FROM pool_proof_results_v6;
+  DROP TABLE pool_proof_results_v6;
+  CREATE INDEX idx_pool_proof_results_attempt ON pool_proof_results(attempt_id);
+  CREATE TRIGGER trg_pool_proof_results_no_update BEFORE UPDATE ON pool_proof_results
+  BEGIN SELECT RAISE(ABORT, 'pool_proof_results is append-only'); END;
+  CREATE TRIGGER trg_pool_proof_results_no_delete BEFORE DELETE ON pool_proof_results
+  BEGIN SELECT RAISE(ABORT, 'pool_proof_results is append-only'); END;
+  CREATE TRIGGER trg_pool_proof_results_no_replace BEFORE INSERT ON pool_proof_results
+  WHEN EXISTS (SELECT 1 FROM pool_proof_results WHERE attempt_id = NEW.attempt_id)
+  BEGIN SELECT RAISE(ABORT, 'pool_proof_results is append-only'); END;
   `,
 ];
 
@@ -492,18 +537,20 @@ export type ProofCheckRecord = {
 };
 
 /** Input to record a Pool Proof result atomically through the public store API. */
-export type ProofResultInput = {
+type ProofResultCommon = {
   readonly attempt_id: string;
   readonly result_id: string;
   readonly node_id: string;
   readonly builder_model: string;
-  readonly status: 'passed' | 'failed';
-  readonly commit_sha: string | null;
-  readonly failure_code: string | null;
   readonly checks: readonly { readonly name: string; readonly passed: boolean }[];
   readonly started_at: Date;
   readonly finished_at: Date;
 };
+
+/** Terminal result algebra: contradictory commit/failure states are unrepresentable. */
+export type ProofResultInput =
+  | (ProofResultCommon & { readonly status: 'passed'; readonly commit_sha: string; readonly failure_code: null })
+  | (ProofResultCommon & { readonly status: 'failed'; readonly commit_sha: null; readonly failure_code: string });
 
 export type OrchestrationStore = {
   readonly importApprovedWork: (work: ApprovedWork) => Promise<ImportedWork | { readonly error: OrchestrationError }>;
@@ -543,9 +590,12 @@ export type OrchestrationStore = {
   readonly listCreatedAttempts: () => Promise<readonly AttemptRecord[]>;
   readonly recordProofResult: (input: ProofResultInput) => Promise<{ readonly ok: true } | { readonly error: OrchestrationError }>;
   readonly getProofResult: (attemptId: string) => Promise<ProofResultRecord | null>;
+  readonly getProofResultsByWork: (workId: string) => Promise<readonly ProofResultRecord[]>;
   readonly getProofChecks: (attemptId: string) => Promise<readonly ProofCheckRecord[]>;
   readonly hasConflictingProofResult: (attemptId: string, resultId: string) => Promise<{ readonly hasConflict: boolean; readonly existingResultId: string | null }>;
   readonly countPhaseArtifactsForAttempt: (attemptId: string) => Promise<number>;
+  readonly countPhaseArtifactsByWork: (workId: string) => Promise<number>;
+  readonly getAttemptRoutingDecisionsByWork: (workId: string) => Promise<readonly AttemptBuilderRoutingRecord[]>;
   readonly close: () => Promise<void>;
 };
 
@@ -1725,6 +1775,9 @@ export async function createSqliteStore(config: {
       if (input.status === 'passed' && input.commit_sha === null) {
         return err('INVALID_RESULT', 'passed result requires a commit sha');
       }
+      if (input.status === 'failed' && input.commit_sha !== null) {
+        return err('INVALID_RESULT', 'failed result must have null commit_sha');
+      }
       if (input.status === 'failed' && input.failure_code === null) {
         return err('INVALID_RESULT', 'failed result requires a failure code');
       }
@@ -1779,6 +1832,39 @@ export async function createSqliteStore(config: {
           db.exec('ROLLBACK;');
           return err('RESULT_IDENTITY_MISMATCH', 'result builder_model does not attempt routing provenance');
         }
+
+        const existing = db.prepare('SELECT * FROM pool_proof_results WHERE attempt_id = ?').get(input.attempt_id) as ProofResultRecord | undefined;
+        if (existing) {
+          const sameResultId = existing.result_id === input.result_id;
+          const sameContent =
+            sameResultId &&
+            existing.node_id === input.node_id &&
+            existing.builder_model === input.builder_model &&
+            existing.status === input.status &&
+            existing.commit_sha === input.commit_sha &&
+            existing.failure_code === input.failure_code &&
+            existing.started_at === input.started_at.toISOString() &&
+            existing.finished_at === input.finished_at.toISOString();
+
+          const existingChecks = db.prepare('SELECT check_name, passed FROM pool_proof_checks WHERE attempt_id = ? ORDER BY check_name').all(input.attempt_id) as { check_name: string; passed: number }[];
+          const inputChecks = [...input.checks].sort((a, b) => a.name.localeCompare(b.name));
+          const sameChecks =
+            sameContent &&
+            existingChecks.length === inputChecks.length &&
+            existingChecks.every((ec, i) => {
+              const ic = inputChecks[i];
+              return ic && ec.check_name === ic.name && ec.passed === (ic.passed ? 1 : 0);
+            });
+
+          if (sameChecks) {
+            db.exec('COMMIT;');
+            audit('proof_result_replay_no_op', { result_id: input.result_id, status: input.status }, { attemptId: input.attempt_id, nodeId: input.node_id });
+            return { ok: true };
+          }
+          db.exec('ROLLBACK;');
+          return err('CONFLICTING_PROOF_RESULT', 'terminal proof result already recorded with different content');
+        }
+
         db.prepare(
           `INSERT INTO pool_proof_results
            (attempt_id, result_id, node_id, builder_model, status, commit_sha, failure_code, started_at, finished_at)
@@ -1817,6 +1903,16 @@ export async function createSqliteStore(config: {
       );
     },
 
+    async getProofResultsByWork(workId) {
+      if (!isNonEmptyString(workId, ORCHESTRATION_LIMITS.maxIdLength)) return [];
+      return db.prepare(
+        `SELECT r.* FROM pool_proof_results r
+         JOIN attempts a ON a.attempt_id = r.attempt_id
+         WHERE a.work_id = ?
+         ORDER BY r.attempt_id`
+      ).all(workId) as ProofResultRecord[];
+    },
+
     async getProofChecks(attemptId) {
       if (!isNonEmptyString(attemptId, ORCHESTRATION_LIMITS.maxIdLength)) return [];
       return db.prepare('SELECT * FROM pool_proof_checks WHERE attempt_id = ?').all(attemptId) as ProofCheckRecord[];
@@ -1837,6 +1933,26 @@ export async function createSqliteStore(config: {
       if (!isNonEmptyString(attemptId, ORCHESTRATION_LIMITS.maxIdLength)) return 0;
       const row = db.prepare('SELECT COUNT(*) AS n FROM phase_artifacts WHERE attempt_id = ?').get(attemptId) as { n: number } | undefined;
       return row?.n ?? 0;
+    },
+
+    async countPhaseArtifactsByWork(workId) {
+      if (!isNonEmptyString(workId, ORCHESTRATION_LIMITS.maxIdLength)) return 0;
+      const row = db.prepare(
+        `SELECT COUNT(*) AS n FROM phase_artifacts p
+         JOIN attempts a ON a.attempt_id = p.attempt_id
+         WHERE a.work_id = ?`
+      ).get(workId) as { n: number } | undefined;
+      return row?.n ?? 0;
+    },
+
+    async getAttemptRoutingDecisionsByWork(workId) {
+      if (!isNonEmptyString(workId, ORCHESTRATION_LIMITS.maxIdLength)) return [];
+      return db.prepare(
+        `SELECT d.* FROM attempt_routing_decisions d
+         JOIN attempts a ON a.attempt_id = d.attempt_id
+         WHERE a.work_id = ?
+         ORDER BY d.attempt_id`
+      ).all(workId) as AttemptBuilderRoutingRecord[];
     },
 
     async close() {

@@ -7,7 +7,9 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "proof:stage1:preflight": "node --experimental-strip-types src/preflight.ts",
-    "proof:stage1": "node --experimental-strip-types src/run-stage-1.ts"
+    "proof:stage1": "node --experimental-strip-types src/run-stage-1.ts",
+    "proof:stage2:preflight": "node --experimental-strip-types src/preflight.ts",
+    "proof:stage2": "node --experimental-strip-types src/run-stage-2.ts"
   },
   "dependencies": {
     "agent-pool": "file:../.."

@@ -26,6 +26,14 @@ import type { ApprovedModelId } from '../model-routing-and-evaluation/approved-m
 import { validateExecutionContext, createInMemoryNonceStore } from './execution-context.ts';
 import { validateAttemptContracts } from './attempt-contract.ts';
 import { createExecutionFailure, isExecutionFailure } from './contracts.ts';
+import {
+  attemptFaultInjection,
+  createFaultDirective,
+  createFaultDirectiveState,
+  deriveInjectedFailureCode,
+  type FaultDirective,
+  type FaultDirectiveState,
+} from './pool-proof-fault-directive.ts';
 import type { ProofJob } from './minimal-pool-runtime.ts';
 import { createSandboxBroker } from './sandbox-broker.ts';
 import { getProvider } from '../model-routing-and-evaluation/approved-models.ts';
@@ -35,18 +43,36 @@ import {
   resolveSandboxIdentity,
   type SandboxIdentity,
 } from './sandbox-identity.ts';
-import { renderIdentityCapsule } from './actor-context.ts';
+import { buildActorIdentity, renderIdentityCapsule, type ActorIdentity } from './actor-context.ts';
+import { deepFreeze, type AttemptContractShape } from './contracts.ts';
+
+export type { FaultDirective } from './pool-proof-fault-directive.ts';
 
 export type PiProcess = {
   readonly pid: number;
   readonly exitCode: number | null;
+  readonly signalCode: NodeJS.Signals | null;
   readonly timedOut: boolean;
-  readonly kill: (signal?: NodeJS.Signals) => boolean;
   readonly output: string;
   readonly nodeId: string;
   readonly attemptId: string;
   readonly attemptNonce: string;
   readonly resultId: string;
+  /**
+   * Launcher-attested failure code. Set only when the launcher consumed a
+   * proof-only fault directive for this exact child and recorded the resulting
+   * signal/exit evidence. Callers cannot set this field.
+   */
+  readonly failureCode: string | null;
+  /**
+   * Transient, exact, deeply immutable launcher-issued artifacts. This exposes
+   * neither process control, credentials, output, nor mutable runtime state.
+   */
+  readonly issuedArtifacts?: Readonly<{
+    readonly executionContext: ExecutionContextShape;
+    readonly actorIdentity: ActorIdentity;
+    readonly attemptContract: AttemptContractShape;
+  }>;
 };
 
 export type PackageProfileVerifier = (
@@ -72,6 +98,15 @@ export type PiLauncherOptions = {
     /** Launcher-owned sandbox UID:GID mapping. Resolved from the host when omitted. */
     readonly sandboxIdentity?: SandboxIdentity;
   };
+  /**
+   * Proof-only immutable fault directive. If supplied as a bound attempt ID,
+   * the launcher creates an internal directive and consumes it synchronously
+   * and exactly once in the exact spawn-event callback of that attempt. The
+   * signal and failure code are fixed launcher-side; callers cannot supply a
+   * PID, ChildProcess, generic kill target, arbitrary signal, or arbitrary
+   * failure code.
+   */
+  readonly injectFaultForAttemptId?: string;
   /** Wall-clock timeout in milliseconds; default 5 minutes. */
   readonly timeoutMs?: number;
   /**
@@ -110,7 +145,7 @@ function isFakeProcess(value: unknown): value is PiProcess {
     value !== null &&
     typeof value === 'object' &&
     typeof (value as PiProcess).pid === 'number' &&
-    typeof (value as PiProcess).kill === 'function'
+    typeof (value as PiProcess).attemptId === 'string'
   );
 }
 
@@ -284,8 +319,8 @@ function loadVerifiedProfile(profilePath: string, expectedName: string): Verifie
 function loadVerifiedProfileForJob(
   profilePath: string,
   expectedName: string,
-  job: ProofJob,
   context: ExecutionContextShape,
+  attemptContractJson: string,
 ): VerifiedProfile | ExecutionFailure {
   const base = loadVerifiedProfile(profilePath, expectedName);
   if (isExecutionFailure(base)) return base;
@@ -299,12 +334,14 @@ function loadVerifiedProfileForJob(
   return {
     ...base,
     systemPrompt: enforcedSystemPrompt,
-    userPrompt: `Attempt contract:\n${JSON.stringify(buildAttemptContract(job), null, 2)}`,
+    // This is the exact serialization written by writeLauncherContext; never
+    // rebuild the mutable job-derived contract after an await boundary.
+    userPrompt: `Attempt contract:\n${attemptContractJson}`,
   };
 }
 
-function buildAttemptContract(job: ProofJob): Record<string, unknown> {
-  return {
+function buildAttemptContract(job: ProofJob): AttemptContractShape {
+  return deepFreeze({
     schema_version: 1,
     node_id: job.nodeId,
     attempt_id: job.attemptId,
@@ -322,21 +359,22 @@ function buildAttemptContract(job: ProofJob): Record<string, unknown> {
     target_repo: job.targetRepo,
     target_branch: job.targetBranch,
     prior_failure_context: [],
-  };
+  });
 }
 
 function writeLauncherContext(
   piRuntimeParent: string,
-  context: Record<string, unknown>,
-  contract: Record<string, unknown>,
-): string {
+  serialized: Readonly<{ readonly executionContext: string; readonly actorIdentity: string; readonly attemptContract: string }>,
+): Readonly<{ readonly contextPath: string; readonly actorIdentityPath: string }> {
   const contextDir = resolve(piRuntimeParent, 'launcher-context');
   mkdirSync(contextDir, { recursive: true, mode: 0o700 });
   const contextPath = resolve(contextDir, 'execution-context.json');
+  const actorIdentityPath = resolve(contextDir, 'actor-identity.json');
   const contractPath = resolve(contextDir, 'attempt-contract.json');
-  writeFileSync(contextPath, JSON.stringify(context, null, 2), { mode: 0o600 });
-  writeFileSync(contractPath, JSON.stringify(contract, null, 2), { mode: 0o600 });
-  return contextPath;
+  writeFileSync(contextPath, serialized.executionContext, { mode: 0o600 });
+  writeFileSync(actorIdentityPath, serialized.actorIdentity, { mode: 0o600 });
+  writeFileSync(contractPath, serialized.attemptContract, { mode: 0o600 });
+  return Object.freeze({ contextPath, actorIdentityPath });
 }
 
 export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLauncher {
@@ -360,10 +398,23 @@ export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLaunche
       });
       if (isExecutionFailure(contractValidation)) return contractValidation;
 
-      const context = validated.context;
+      // Capture all execution artifacts before any await or mutable boundary.
+      // Their frozen objects and bytes are the only values used for on-disk
+      // bootstrap data and the Worker prompt.
+      const context = deepFreeze(validated.context);
+      const issuedArtifacts = deepFreeze({
+        executionContext: context,
+        actorIdentity: deepFreeze(buildActorIdentity(context)),
+        attemptContract: contract as AttemptContractShape,
+      });
+      const issuedArtifactJson = deepFreeze({
+        executionContext: JSON.stringify(issuedArtifacts.executionContext, null, 2),
+        actorIdentity: JSON.stringify(issuedArtifacts.actorIdentity, null, 2),
+        attemptContract: JSON.stringify(issuedArtifacts.attemptContract, null, 2),
+      });
 
       if (isFakeProcess(options._testOnlyFakeProcess)) {
-        return options._testOnlyFakeProcess;
+        return Object.freeze({ ...options._testOnlyFakeProcess, issuedArtifacts });
       }
 
       // Re-verify Pi executable digest immediately before every launch.
@@ -388,16 +439,12 @@ export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLaunche
       const profile = loadVerifiedProfileForJob(
         context.profile_identity.path,
         context.profile_identity.name,
-        options.job,
         context,
+        issuedArtifactJson.attemptContract,
       );
       if (isExecutionFailure(profile)) return profile;
 
-      const contextPath = writeLauncherContext(
-        context.pi_runtime_parent,
-        validated.toJSON(),
-        contract,
-      );
+      const launcherContext = writeLauncherContext(context.pi_runtime_parent, issuedArtifactJson);
 
       // Prepare provider auth in the actual PI_CODING_AGENT_DIR root.
       copyProviderAuth(context.pi_runtime_parent, getProvider(context.selected_model as ApprovedModelId));
@@ -452,7 +499,8 @@ export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLaunche
         PI_CODING_AGENT_DIR: context.pi_runtime_parent,
         PI_CODING_AGENT_SESSION_DIR: context.pi_session_dir,
         PI_OFFLINE: '1',
-        AGENT_POOL_EXECUTION_CONTEXT: contextPath,
+        AGENT_POOL_EXECUTION_CONTEXT: launcherContext.contextPath,
+        AGENT_POOL_ACTOR_IDENTITY: launcherContext.actorIdentityPath,
       };
       if (options.brokerOptions) {
         env.AGENT_POOL_BROKER_SOCKET = options.brokerOptions.socketPath;
@@ -525,6 +573,14 @@ export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLaunche
         let resolved = false;
         let sigkillTimer: ReturnType<typeof setTimeout> | null = null;
         let completionTimer: ReturnType<typeof setTimeout> | null = null;
+        const faultState: FaultDirectiveState = createFaultDirectiveState();
+
+        child.on('spawn', () => {
+          const directive = options.injectFaultForAttemptId === options.expectations.attemptId
+            ? createFaultDirective('stage2-injected-failure', options.expectations.attemptId)
+            : undefined;
+          attemptFaultInjection(child, directive, options.expectations.attemptId, faultState);
+        });
 
         async function cleanup(): Promise<void> {
           removeProviderAuth(context.pi_runtime_parent);
@@ -550,17 +606,24 @@ export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLaunche
               console.error(output.slice(0, 4000));
             }
           }
-          resolveLaunch({
+          const signalCode = child.signalCode ?? null;
+          const directive = options.injectFaultForAttemptId === options.expectations.attemptId
+            ? createFaultDirective('stage2-injected-failure', options.expectations.attemptId)
+            : undefined;
+          const injectedFailureCode = deriveInjectedFailureCode(directive, faultState.evidence, signalCode);
+          resolveLaunch(Object.freeze({
             pid: child.pid ?? 0,
             exitCode: timedOut ? 124 : exitCode,
+            signalCode,
             timedOut,
-            kill: (signal?: NodeJS.Signals) => child.kill(signal),
             output,
             nodeId: options.expectations.nodeId,
             attemptId: options.expectations.attemptId,
             attemptNonce: context.attempt_nonce,
             resultId: options.expectations.resultDestinationId,
-          });
+            failureCode: injectedFailureCode,
+            issuedArtifacts,
+          }));
         }
 
         const timeout = setTimeout(() => {

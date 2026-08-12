@@ -50,33 +50,41 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-function buildIdentity(context: Record<string, unknown>): ActorIdentity {
-  return {
-    actor: 'pool-worker',
-    authority: 'single-attempt-execution',
-    node_id: String(context.node_id ?? ''),
-    attempt_id: String(context.attempt_id ?? ''),
-    target_repo: String(context.target_repo ?? ''),
-    target_branch: String(context.target_branch ?? ''),
-    context_source: 'launcher-verified',
-    can_modify_pool_policy: false,
-  };
-}
-
 function loadContext(): Record<string, unknown> {
   const markerPath = process.env.AGENT_POOL_EXECUTION_CONTEXT;
   if (!markerPath) throw new Error('missing AGENT_POOL_EXECUTION_CONTEXT');
   return JSON.parse(readFileSync(markerPath, 'utf8')) as Record<string, unknown>;
 }
 
+function loadActorIdentity(): ActorIdentity {
+  const identityPath = process.env.AGENT_POOL_ACTOR_IDENTITY;
+  if (!identityPath) throw new Error('missing AGENT_POOL_ACTOR_IDENTITY');
+  return JSON.parse(readFileSync(identityPath, 'utf8')) as ActorIdentity;
+}
+
+function assertBoundIdentity(context: Record<string, unknown>, identity: ActorIdentity): void {
+  if (
+    identity.actor !== 'pool-worker' ||
+    identity.authority !== 'single-attempt-execution' ||
+    identity.context_source !== 'launcher-verified' ||
+    identity.can_modify_pool_policy !== false ||
+    identity.node_id !== context.node_id ||
+    identity.attempt_id !== context.attempt_id ||
+    identity.target_repo !== context.target_repo ||
+    identity.target_branch !== context.target_branch
+  ) throw new Error('launcher actor identity does not bind execution context');
+}
+
 const capturedContext = deepFreeze(loadContext());
+const capturedIdentity = deepFreeze(loadActorIdentity());
+assertBoundIdentity(capturedContext, capturedIdentity);
 
 // Emit the launcher-verified identity capsule into startup diagnostics. It is
-// derived from the captured context, not from workspace files or prompt text.
+// bound to the exact launcher-captured ActorIdentity, not reconstructed here.
 console.error(renderIdentityCapsule(capturedContext));
 
 export function actor_identity(): ActorIdentity {
-  return buildIdentity(capturedContext);
+  return capturedIdentity;
 }
 
 async function brokerRequest(socketPath: string, request: unknown): Promise<BrokerResponse> {
@@ -116,7 +124,7 @@ async function brokerRequest(socketPath: string, request: unknown): Promise<Brok
 }
 
 export default function trustedBootstrap(pi: ExtensionAPI) {
-  const identity = Object.freeze(buildIdentity(capturedContext));
+  const identity = capturedIdentity;
   const brokerSocket = process.env.AGENT_POOL_BROKER_SOCKET ?? '';
 
   pi.registerTool({

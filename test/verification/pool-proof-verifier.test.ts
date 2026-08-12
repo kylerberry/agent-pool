@@ -29,13 +29,14 @@ function makeProcess(): PiProcess {
   return {
     pid: 1,
     exitCode: 0,
+    signalCode: null,
     timedOut: false,
-    kill: () => true,
     output: '',
     nodeId: 'n1',
     attemptId: 'a1',
     attemptNonce: 'a'.repeat(64),
     resultId: 'result-1',
+    failureCode: null,
   };
 }
 
@@ -141,6 +142,7 @@ describe('Pool Proof Verifier', () => {
       { ...makeProcess(), exitCode: 1 },
     );
     assert.equal(result.status, 'failed');
+    assert.equal(result.commitSha, null, 'a failed verdict must not retain the fixture base HEAD');
     const check = result.checks.find((c) => c.name === 'process_exit_success');
     assert.equal(check?.passed, false);
   });
@@ -161,7 +163,7 @@ describe('Pool Proof Verifier', () => {
 
   it('fails when parent is not the expected base commit', async () => {
     const workspacePath = mkdtempSync(join(tmpdir(), 'verify-'));
-    const { headCommit } = setupRepo(workspacePath, 'src/message.js', "export function getMessage() { return 'world'; }");
+    setupRepo(workspacePath, 'src/message.js', "export function getMessage() { return 'world'; }");
     const verifier = makeVerifier(true);
     const result = await verifier.verify(
       makeResources(workspacePath),
@@ -175,7 +177,7 @@ describe('Pool Proof Verifier', () => {
       makeProcess(),
     );
     assert.equal(result.status, 'failed');
-    assert.equal(result.commitSha, headCommit);
+    assert.equal(result.commitSha, null);
     const check = result.checks.find((c) => c.name === 'expected_parent');
     assert.equal(check?.passed, false);
   });
@@ -253,7 +255,7 @@ describe('Pool Proof Verifier', () => {
 
   it('rejects readable host/root credential exposure through default isolation probes', async () => {
     const workspacePath = mkdtempSync(join(tmpdir(), 'verify-isolation-'));
-    const { baseCommit, headCommit } = setupRepo(
+    const { baseCommit } = setupRepo(
       workspacePath,
       'src/message.js',
       "export function getMessage() { return 'world'; }",
@@ -291,7 +293,7 @@ describe('Pool Proof Verifier', () => {
       makeProcess(),
     );
     assert.equal(result.status, 'failed');
-    assert.equal(result.commitSha, headCommit);
+    assert.equal(result.commitSha, null);
     const check = result.checks.find((c) => c.name === 'isolation_probes_pass');
     assert.equal(check?.passed, false);
   });

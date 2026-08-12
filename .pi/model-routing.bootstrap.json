@@ -16,7 +16,7 @@
       "fallback": []
     },
     "building": {
-      "primary": "moonshot/kimi-k2.7-code",
+      "primary": "zai/glm-5.2",
       "fallback": []
     },
     "assessing": {

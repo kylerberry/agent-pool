@@ -13,18 +13,42 @@ import type { ApprovedModelId } from '../model-routing-and-evaluation/approved-m
 import type { OrchestrationStore } from './sqlite-store.ts';
 import type { ApprovedWork, ResolvedBuilderRouting } from './contracts.ts';
 
-export type ProofResultInput = {
+type ProofResultCommon = {
   readonly attemptId: string;
   readonly resultId: string;
   readonly nodeId: string;
   readonly selectedModel: ApprovedModelId;
-  readonly status: 'passed' | 'failed';
-  readonly commitSha: string | null;
-  readonly failureCode: string | null;
   readonly checks: readonly { readonly name: string; readonly passed: boolean }[];
   readonly startedAt: Date;
   readonly finishedAt: Date;
 };
+
+/** Public terminal-result algebra mirrors the database CHECK invariant. */
+export type ProofResultInput =
+  | (ProofResultCommon & { readonly status: 'passed'; readonly commitSha: string; readonly failureCode: null })
+  | (ProofResultCommon & { readonly status: 'failed'; readonly commitSha: null; readonly failureCode: string });
+
+type UntrustedProofResultInput = ProofResultCommon & {
+  readonly status: 'passed' | 'failed';
+  readonly commitSha: string | null;
+  readonly failureCode: string | null;
+};
+
+/** Converts an untrusted runtime verdict at the public persistence boundary.
+ * Invalid terminal combinations fail before they can reach the SQLite CHECK. */
+export function normalizeProofResultInput(input: ProofResultCommon & {
+  readonly status: 'passed' | 'failed';
+  readonly commitSha: string | null;
+  readonly failureCode: string | null;
+}): ProofResultInput {
+  if (input.status === 'passed' && input.commitSha !== null && input.failureCode === null) {
+    return { ...input, status: 'passed', commitSha: input.commitSha, failureCode: null };
+  }
+  if (input.status === 'failed' && input.commitSha === null && typeof input.failureCode === 'string' && input.failureCode.length > 0) {
+    return { ...input, status: 'failed', commitSha: null, failureCode: input.failureCode };
+  }
+  throw new Error('invalid Pool Proof terminal result algebra');
+}
 
 export type ProofResultRecord = {
   readonly attempt_id: string;
@@ -54,10 +78,14 @@ export type PoolProofPersistence = {
     jobId: string,
     builderRouting: ResolvedBuilderRouting,
   ) => Promise<void>;
-  readonly recordResult: (input: ProofResultInput) => Promise<void>;
+  /** Runtime boundary normalizes untrusted verifier output into ProofResultInput. */
+  readonly recordResult: (input: UntrustedProofResultInput) => Promise<void>;
   readonly getResult: (attemptId: string) => Promise<ProofResultRecord | null>;
+  readonly getResultsForWork: (workId: string) => Promise<readonly ProofResultRecord[]>;
   readonly getChecks: (attemptId: string) => Promise<readonly ProofCheckRecord[]>;
   readonly countPhaseArtifactsForAttempt: (attemptId: string) => Promise<number>;
+  readonly countPhaseArtifactsForWork: (workId: string) => Promise<number>;
+  readonly getBuilderRoutingsForWork: (workId: string) => Promise<readonly { readonly attempt_id: string; readonly builder_model: string }[]>;
   readonly hasConflictingResult: (attemptId: string, resultId: string) => Promise<{ readonly hasConflict: boolean; readonly existingResultId: string | null }>;
 };
 
@@ -94,19 +122,22 @@ export function createPoolProofPersistence(store: OrchestrationStore): PoolProof
       }
     },
 
-    async recordResult(input: ProofResultInput): Promise<void> {
-      const result = await store.recordProofResult({
+    async recordResult(untrusted: UntrustedProofResultInput): Promise<void> {
+      const input = normalizeProofResultInput(untrusted);
+      const common = {
         attempt_id: input.attemptId,
         result_id: input.resultId,
         node_id: input.nodeId,
         builder_model: input.selectedModel,
-        status: input.status,
-        commit_sha: input.commitSha,
-        failure_code: input.failureCode,
         checks: input.checks,
         started_at: input.startedAt,
         finished_at: input.finishedAt,
-      });
+      };
+      const result = await store.recordProofResult(
+        input.status === 'passed'
+          ? { ...common, status: 'passed', commit_sha: input.commitSha, failure_code: null }
+          : { ...common, status: 'failed', commit_sha: null, failure_code: input.failureCode },
+      );
       if (!('ok' in result)) {
         throw new Error(`record proof result failed: ${result.error.code} - ${result.error.message}`);
       }
@@ -118,12 +149,24 @@ export function createPoolProofPersistence(store: OrchestrationStore): PoolProof
       return row as ProofResultRecord;
     },
 
+    async getResultsForWork(workId: string): Promise<readonly ProofResultRecord[]> {
+      return store.getProofResultsByWork(workId);
+    },
+
     async getChecks(attemptId: string): Promise<readonly ProofCheckRecord[]> {
       return store.getProofChecks(attemptId);
     },
 
     async countPhaseArtifactsForAttempt(attemptId: string): Promise<number> {
       return store.countPhaseArtifactsForAttempt(attemptId);
+    },
+
+    async countPhaseArtifactsForWork(workId: string): Promise<number> {
+      return store.countPhaseArtifactsByWork(workId);
+    },
+
+    async getBuilderRoutingsForWork(workId: string): Promise<readonly { readonly attempt_id: string; readonly builder_model: string }[]> {
+      return store.getAttemptRoutingDecisionsByWork(workId);
     },
 
     async hasConflictingResult(attemptId: string, resultId: string): Promise<{ readonly hasConflict: boolean; readonly existingResultId: string | null }> {

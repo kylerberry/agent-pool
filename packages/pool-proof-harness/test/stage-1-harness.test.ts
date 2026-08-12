@@ -179,13 +179,14 @@ describe('Stage 1 harness', () => {
           _testOnlyFakeProcess: {
             pid: 12345,
             exitCode: 0,
+            signalCode: null,
             timedOut: false,
-            kill: () => true,
             output: '',
             nodeId,
             attemptId,
             attemptNonce: 'nonce',
             resultId: 'result-1',
+            failureCode: null,
           },
         });
       },

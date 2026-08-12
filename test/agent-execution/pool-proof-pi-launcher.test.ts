@@ -11,6 +11,7 @@ import {
   type PackageProfileVerifier,
 } from '../../src/domains/agent-execution/index.ts';
 
+
 function makeJob(): ProofJob {
   return {
     nodeId: 'single-worker-pool-proof',
@@ -155,7 +156,7 @@ function makeExpectations(workspacePath: string, piPath: string, identity: Ident
   };
 }
 
-function makeFakePiScript(runtimeRoot: string, options: { rejectFlag?: string; timeoutMs?: number; includePrompt?: string }): string {
+function makeFakePiScript(runtimeRoot: string, options: { rejectFlag?: string; timeoutMs?: number; includePrompt?: string; captureArtifacts?: boolean }): string {
   const script = join(runtimeRoot, 'fake-pi');
   const nodePath = process.execPath;
   const code = `#!${nodePath}
@@ -180,7 +181,12 @@ if (!prompt || !prompt.includes('${options.includePrompt ?? 'Attempt contract'}'
   console.error('prompt not received');
   process.exit(3);
 }
-${options.timeoutMs ? `setTimeout(() => { console.log(JSON.stringify({ done: true })); process.exit(0); }, ${options.timeoutMs});` : `console.log(JSON.stringify({ done: true })); process.exit(0);`}
+${options.captureArtifacts ? `const fs = require('node:fs');
+const contextJson = fs.readFileSync(process.env.AGENT_POOL_EXECUTION_CONTEXT, 'utf8');
+const contextDir = require('node:path').dirname(process.env.AGENT_POOL_EXECUTION_CONTEXT);
+const contractJson = fs.readFileSync(require('node:path').join(contextDir, 'attempt-contract.json'), 'utf8');
+const actorIdentityJson = fs.readFileSync(process.env.AGENT_POOL_ACTOR_IDENTITY, 'utf8');
+console.log(JSON.stringify({ done: true, prompt, contextJson, contractJson, actorIdentityJson })); process.exit(0);` : options.timeoutMs ? `setTimeout(() => { console.log(JSON.stringify({ done: true })); process.exit(0); }, ${options.timeoutMs});` : `console.log(JSON.stringify({ done: true })); process.exit(0);`}
 `;
   writeFileSync(script, code, { mode: 0o700 });
   return script;
@@ -239,6 +245,47 @@ describe('Pool Proof Pi Launcher', () => {
     assert.ok('exitCode' in launched, `launch failed: ${(launched as { code: string; reason: string }).code}`);
     assert.equal(launched.exitCode, 0);
     assert.ok((launched.output ?? '').includes('{"done":true}'));
+  });
+
+  it('uses one deeply frozen issued contract object and exact bytes across awaited verification, context files, and Worker prompt', async () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'launcher-artifact-'));
+    const fixturePath = mkdtempSync(join(tmpdir(), 'fixture-artifact-'));
+    mkdirSync(join(fixturePath, 'src'), { recursive: true });
+    const identity = makeIdentityDirs(runtimeRoot);
+    const piPath = makeFakePiScript(runtimeRoot, { includePrompt: 'Attempt contract', captureArtifacts: true });
+    const expectations = makeExpectations(fixturePath, piPath, identity);
+    const job = makeJob();
+    const launcher = createPoolProofPiLauncher({
+      expectations,
+      job,
+      verifyPackageAndProfile: async (...args) => {
+        await Promise.resolve(); // mutation boundary after capture
+        (job as { intent: string }).intent = 'MUTATED_AFTER_AWAIT';
+        (job as { changeSpec: string }).changeSpec = 'MUTATED_CHANGE_SPEC';
+        ((job.acceptanceCriteria as unknown) as { text: string }[])[0]!.text = 'MUTATED_CRITERION';
+        return identity.verify(...args);
+      },
+    });
+    const launched = await launcher.launch(buildMarker(expectations));
+    assert.ok(!('code' in launched), 'launch must succeed');
+    if ('code' in launched) return;
+    const issued = launched.issuedArtifacts;
+    assert.ok(issued);
+    assert.equal(Object.isFrozen(issued), true);
+    assert.equal(Object.isFrozen(issued!.executionContext), true);
+    assert.equal(Object.isFrozen(issued!.actorIdentity), true);
+    assert.equal(Object.isFrozen(issued!.attemptContract), true);
+    assert.equal(Object.isFrozen(issued!.attemptContract.acceptance_criteria), true);
+    assert.equal(Object.isFrozen(issued!.attemptContract.acceptance_criteria[0]!), true);
+    assert.throws(() => { (issued!.attemptContract as { intent: string }).intent = 'MUTATED'; }, TypeError);
+    const output = JSON.parse(launched.output) as { prompt: string; contextJson: string; contractJson: string; actorIdentityJson: string };
+    assert.equal(output.prompt, `Attempt contract:\n${output.contractJson}`, 'Worker receives the exact serialized contract bytes written by launcher');
+    assert.equal(output.contractJson, JSON.stringify(issued!.attemptContract, null, 2), 'context contract bytes derive from the same issued object');
+    assert.equal(output.contextJson, JSON.stringify(issued!.executionContext, null, 2), 'context bytes derive from the exact issued object');
+    assert.equal(output.actorIdentityJson, JSON.stringify(issued!.actorIdentity, null, 2), 'bootstrap receives the exact captured actor identity');
+    assert.equal(output.contractJson.includes('MUTATED_AFTER_AWAIT'), false);
+    assert.equal(output.contractJson.includes('MUTATED_CHANGE_SPEC'), false);
+    assert.equal(output.contractJson.includes('MUTATED_CRITERION'), false);
   });
 
   it('enforces wall-clock timeout and cleans up', async () => {
@@ -823,5 +870,79 @@ process.exit(0);
 
     assert.ok('code' in launched, 'launch must fail with an execution failure');
     assert.equal((launched as { code: string }).code, 'POOL_PROOF_LAUNCHER_MISMATCH');
+  });
+
+  it('consumes a proof-only fault directive at launch and records the injected failure', async () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'launcher-'));
+    const fixturePath = mkdtempSync(join(tmpdir(), 'fixture-'));
+    mkdirSync(join(fixturePath, 'src'), { recursive: true });
+    const identity = makeIdentityDirs(runtimeRoot);
+    const piPath = makeFakePiScript(runtimeRoot, { includePrompt: 'Attempt contract', timeoutMs: 60_000 });
+    const expectations = makeExpectations(fixturePath, piPath, identity);
+    const attemptId = expectations.attemptId;
+
+    const launcher = createPoolProofPiLauncher({
+      expectations,
+      job: makeJob(),
+      verifyPackageAndProfile: identity.verify,
+      injectFaultForAttemptId: attemptId,
+    });
+
+    const launched = await launcher.launch(buildMarker(expectations));
+    assert.ok(!('code' in launched), 'launch must succeed');
+    if ('code' in launched) return;
+
+    assert.equal(launched.attemptId, attemptId);
+    assert.equal(launched.signalCode, 'SIGTERM');
+    assert.equal(launched.failureCode, 'INJECTED_WORKER_FAILURE');
+    assert.ok(launched.pid > 0);
+  });
+
+  it('ignores a fault directive bound to a different attempt', async () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'launcher-'));
+    const fixturePath = mkdtempSync(join(tmpdir(), 'fixture-'));
+    mkdirSync(join(fixturePath, 'src'), { recursive: true });
+    const identity = makeIdentityDirs(runtimeRoot);
+    const piPath = makeFakePiScript(runtimeRoot, { includePrompt: 'Attempt contract' });
+    const expectations = makeExpectations(fixturePath, piPath, identity);
+
+    const launcher = createPoolProofPiLauncher({
+      expectations,
+      job: makeJob(),
+      verifyPackageAndProfile: identity.verify,
+      injectFaultForAttemptId: 'att://proof/other/1',
+    });
+
+    const launched = await launcher.launch(buildMarker(expectations));
+    assert.ok(!('code' in launched), 'launch must succeed');
+    if ('code' in launched) return;
+
+    assert.equal(launched.signalCode, null);
+    assert.equal(launched.failureCode, null);
+    assert.equal(launched.exitCode, 0);
+  });
+
+  it('does not kill a peer child when fault is bound to a different attempt', async () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'launcher-'));
+    const fixturePath = mkdtempSync(join(tmpdir(), 'fixture-'));
+    mkdirSync(join(fixturePath, 'src'), { recursive: true });
+    const identity = makeIdentityDirs(runtimeRoot);
+    const piPath = makeFakePiScript(runtimeRoot, { includePrompt: 'Attempt contract' });
+    const peerExpectations = makeExpectations(fixturePath, piPath, identity);
+
+    const peerLauncher = createPoolProofPiLauncher({
+      expectations: peerExpectations,
+      job: makeJob(),
+      verifyPackageAndProfile: identity.verify,
+      injectFaultForAttemptId: 'att://proof/other/1',
+    });
+
+    const peer = await peerLauncher.launch(buildMarker(peerExpectations));
+    assert.ok(!('code' in peer), 'peer launch must succeed');
+    if ('code' in peer) return;
+
+    assert.equal(peer.signalCode, null);
+    assert.equal(peer.failureCode, null);
+    assert.equal(peer.exitCode, 0);
   });
 });

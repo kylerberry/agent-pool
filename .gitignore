@@ -12,3 +12,6 @@ graphify-out/
 .env.local
 .env.development
 .env.production
+
+# Stray test scratch directories
+.tmp-test

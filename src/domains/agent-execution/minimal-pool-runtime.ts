@@ -32,8 +32,8 @@ export type ProofJob = {
 };
 
 export type SubmitResult =
-  | { readonly ok: true; readonly attemptId: string; readonly resultId: string; readonly status: 'passed' | 'failed'; readonly cleanupDisposition?: CleanupDisposition }
-  | { readonly ok: false; readonly attemptId: string; readonly error: string; readonly errorDetail?: string; readonly cleanupDisposition?: CleanupDisposition };
+  | { readonly ok: true; readonly attemptId: string; readonly resultId: string; readonly status: 'passed' | 'failed'; readonly slotIndex: number; readonly cleanupDisposition?: CleanupDisposition }
+  | { readonly ok: false; readonly attemptId: string; readonly error: string; readonly errorDetail?: string; readonly slotIndex?: number; readonly cleanupDisposition?: CleanupDisposition };
 
 export type AdapterProvenance = {
   readonly launcher: 'real' | 'fake';
@@ -76,6 +76,11 @@ export type MinimalPoolRuntimeOptions = {
    * field to 'real'; tests may use 'fake' for individual adapters.
    */
   readonly adapterProvenance: AdapterProvenance;
+  /**
+   * Number of persistent ready capacity slots. Defaults to 1 for backwards
+   * compatibility; Stage 2 sets this to 2.
+   */
+  readonly slotCount?: number;
 };
 
 export type MinimalPoolRuntime = {
@@ -92,28 +97,50 @@ function hasFakeAdapter(provenance: AdapterProvenance): boolean {
   return Object.values(provenance).some((v) => v === 'fake');
 }
 
-export function createMinimalPoolRuntime(options: MinimalPoolRuntimeOptions): MinimalPoolRuntime {
-  const queue: QueuedJob[] = [];
-  let active = false;
-  let shuttingDown = false;
-  let drainedResolve: (() => void) | null = null;
+function validateSlotCount(value: unknown): number {
+  const DEFAULT_SLOT_COUNT = 1;
+  if (value === undefined || value === null) return DEFAULT_SLOT_COUNT;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw new Error(`POOL_PROOF_INVALID_SLOT_COUNT: slotCount must be a positive integer, got ${String(value)}`);
+  }
+  return value;
+}
 
-  async function runOne(job: ProofJob): Promise<SubmitResult> {
+export function createMinimalPoolRuntime(options: MinimalPoolRuntimeOptions): MinimalPoolRuntime {
+  const slotCount = validateSlotCount(options.slotCount);
+  const queue: QueuedJob[] = [];
+  const slots: { busy: boolean; attemptId: string | null }[] = Array.from(
+    { length: slotCount },
+    () => ({ busy: false, attemptId: null }),
+  );
+  const admitted = new Set<string>();
+  let shuttingDown = false;
+  let idleWaiters: (() => void)[] = [];
+
+  function notifyWaiters(): void {
+    const allIdle = slots.every((slot) => !slot.busy);
+    if (queue.length === 0 && allIdle) {
+      for (const resolve of idleWaiters) resolve();
+      idleWaiters = [];
+    }
+  }
+
+  async function runOne(job: ProofJob, slotIndex: number): Promise<SubmitResult> {
     const startedAt = new Date();
-    const resources = options.resourceFactory.allocate(job.attemptId, job.workspacePath);
-    let process: PiProcess | undefined;
-    let result: SubmitResult;
+    let resources: AttemptResources | undefined;
+    let result: SubmitResult = { ok: false, attemptId: job.attemptId, error: 'UNINITIALIZED_RUNTIME_RESULT', slotIndex };
     let resultPersisted = false;
 
     async function persistFailed(
       failureCode: string,
       checks: readonly { readonly name: string; readonly passed: boolean }[],
+      resultId: string,
     ): Promise<void> {
       if (resultPersisted) return;
       const finishedAt = new Date();
       await options.persistResult({
         attemptId: job.attemptId,
-        resultId: resources.resultId,
+        resultId,
         status: 'failed',
         commitSha: null,
         failureCode,
@@ -123,6 +150,13 @@ export function createMinimalPoolRuntime(options: MinimalPoolRuntimeOptions): Mi
         finishedAt,
       });
       resultPersisted = true;
+    }
+
+    try {
+      resources = options.resourceFactory.allocate(job.attemptId, job.workspacePath);
+    } catch (e) {
+      const errorDetail = e instanceof Error ? e.message : String(e);
+      return { ok: false, attemptId: job.attemptId, error: 'RESOURCE_ALLOCATION_FAILED', errorDetail, slotIndex };
     }
 
     try {
@@ -140,10 +174,10 @@ export function createMinimalPoolRuntime(options: MinimalPoolRuntimeOptions): Mi
       if (isExecutionFailure(launched)) {
         const failureCode = launched.code;
         const checks = [{ name: 'launcher_binding', passed: false }];
-        await persistFailed(failureCode, checks);
-        result = { ok: false, attemptId: job.attemptId, error: failureCode };
+        await persistFailed(failureCode, checks, resources.resultId);
+        result = { ok: false, attemptId: job.attemptId, error: failureCode, slotIndex };
       } else {
-        process = launched;
+        const process = launched;
         const verdict = await options.verify(resources, job, process);
         const finishedAt = new Date();
         await options.persistResult({
@@ -163,50 +197,68 @@ export function createMinimalPoolRuntime(options: MinimalPoolRuntimeOptions): Mi
           attemptId: job.attemptId,
           resultId: resources.resultId,
           status: verdict.status,
+          slotIndex,
         };
       }
     } catch (e) {
       const failureCode = 'RUNTIME_EXCEPTION';
       const checks = [{ name: 'runtime_exception', passed: false }];
       try {
-        await persistFailed(failureCode, checks);
+        await persistFailed(failureCode, checks, resources.resultId);
       } catch {
-        // Persistence failure is bounded: the result record already exists or
-        // the database is unreachable. The launch failure is still reported.
+        // Persistence failure is bounded: the result record may already exist
+        // or the database is unreachable. The launch failure is still reported.
       }
       const errorDetail = e instanceof Error ? e.message : String(e);
-      result = { ok: false, attemptId: job.attemptId, error: failureCode, errorDetail };
+      result = { ok: false, attemptId: job.attemptId, error: failureCode, errorDetail, slotIndex };
     } finally {
-      if (process && process.exitCode === null) {
-        try {
-          process.kill('SIGTERM');
-        } catch {}
+      let cleanupDisposition: CleanupDisposition;
+      try {
+        cleanupDisposition = options.resourceFactory.release(resources);
+      } catch (e) {
+        cleanupDisposition = {
+          attemptRootRemoved: false,
+          workspaceRemoved: false,
+          errors: [e instanceof Error ? e.message : String(e)],
+        };
       }
-      const cleanupDisposition = options.resourceFactory.release(resources);
-      Object.assign(result!, { cleanupDisposition });
+      result = { ...result, cleanupDisposition };
     }
-    return result!;
+    return result;
   }
 
-  async function drain(): Promise<void> {
-    while (true) {
-      const queued = queue.shift();
-      if (!queued) {
-        active = false;
-        if (drainedResolve) {
-          drainedResolve();
-          drainedResolve = null;
-        }
-        return;
-      }
-      const result = await runOne(queued.job);
+  async function runSlot(slotIndex: number, slot: { busy: boolean; attemptId: string | null }, queued: QueuedJob): Promise<void> {
+    try {
+      const result = await runOne(queued.job, slotIndex);
       queued.resolve(result);
+    } finally {
+      // Retain admitted attempt IDs for the process-local runtime lifetime so
+      // sequential duplicates cannot launch or persist again.
+      slot.busy = false;
+      slot.attemptId = null;
+      notifyWaiters();
+      schedule();
+    }
+  }
+
+  function schedule(): void {
+    for (let i = 0; i < slots.length; i += 1) {
+      const slot = slots[i]!;
+      if (!slot.busy) {
+        const queued = queue.shift();
+        if (!queued) break;
+        slot.busy = true;
+        slot.attemptId = queued.job.attemptId;
+        void runSlot(i, slot, queued);
+      }
     }
   }
 
   return {
     async submit(job: ProofJob): Promise<SubmitResult> {
-      if (shuttingDown) return { ok: false, attemptId: job.attemptId, error: 'runtime is shutting down' };
+      if (shuttingDown) {
+        return { ok: false, attemptId: job.attemptId, error: 'POOL_PROOF_RUNTIME_SHUTTING_DOWN' };
+      }
       if (hasFakeAdapter(options.adapterProvenance)) {
         return {
           ok: false,
@@ -214,21 +266,23 @@ export function createMinimalPoolRuntime(options: MinimalPoolRuntimeOptions): Mi
           error: 'POOL_PROOF_FAKE_ADAPTER_REJECTED: production proof entry point rejected a fake adapter',
         };
       }
+      if (admitted.has(job.attemptId)) {
+        return { ok: false, attemptId: job.attemptId, error: 'POOL_PROOF_DUPLICATE_ATTEMPT_ID' };
+      }
 
+      admitted.add(job.attemptId);
       return new Promise((resolve) => {
         queue.push({ job, resolve });
-        if (!active) {
-          active = true;
-          drain();
-        }
+        schedule();
       });
     },
 
     async shutdown(): Promise<void> {
       shuttingDown = true;
-      if (active) {
+      const allIdle = slots.every((slot) => !slot.busy);
+      if (queue.length > 0 || !allIdle) {
         await new Promise<void>((resolve) => {
-          drainedResolve = resolve;
+          idleWaiters.push(resolve);
         });
       }
     },

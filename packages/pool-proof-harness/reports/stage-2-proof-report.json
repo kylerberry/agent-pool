@@ -1,0 +1,297 @@
+{
+  "schema_version": 3,
+  "stage1_provenance": {
+    "report_path": "reports/stage-1-proof-report.json",
+    "report_sha256": "46dcce827cb08ce8db3a62c6305f3a208eae3709c459950fadfa5df9c325daea",
+    "model": "moonshot/kimi-k2.7-code",
+    "base_commit": "fef9c4d1716ed54988a889126b6db0f01e192d5f",
+    "result_commit": "dfe2d85a2f32566d533d8cb98b477b2f4b699e4f"
+  },
+  "slot_count": 2,
+  "attempts": [
+    {
+      "attempt_id": "multi-worker-pool-proof-attempt-a",
+      "node_id": "multi-worker-pool-proof-a",
+      "slot_index": 0,
+      "status": "passed",
+      "builder_model": "moonshot/kimi-k2.7-code",
+      "commit_sha": "9893a51c8f7680a62368ddf28069260470d09bf9",
+      "failure_code": null,
+      "verifier_checks": [
+        {
+          "name": "allowed_paths_only",
+          "passed": true
+        },
+        {
+          "name": "clean_tree",
+          "passed": true
+        },
+        {
+          "name": "commit_resolved",
+          "passed": true
+        },
+        {
+          "name": "exactly_one_commit",
+          "passed": true
+        },
+        {
+          "name": "expected_parent",
+          "passed": true
+        },
+        {
+          "name": "fixture_test_passes",
+          "passed": true
+        },
+        {
+          "name": "git_directory_present",
+          "passed": true
+        },
+        {
+          "name": "isolation_probes_pass",
+          "passed": true
+        },
+        {
+          "name": "no_conflicting_result",
+          "passed": true
+        },
+        {
+          "name": "process_attempt_binding",
+          "passed": true
+        },
+        {
+          "name": "process_exit_success",
+          "passed": true
+        },
+        {
+          "name": "process_node_binding",
+          "passed": true
+        },
+        {
+          "name": "process_nonce_binding",
+          "passed": true
+        },
+        {
+          "name": "process_result_binding",
+          "passed": true
+        },
+        {
+          "name": "workspace_contained",
+          "passed": true
+        }
+      ],
+      "isolation": {
+        "workspace_commitment": "b85adc7a6718ce7a803e99ef9ed99cd7f7bfdcc662a809c74171c2be5fe195ae",
+        "pi_session_commitment": "bb86f018016b385b106777213622e21c2c46ff198f423140c9306ef3a479a5f6",
+        "nonce_commitment": "4b16c7eafc41f8c20eca2143fc6283d5aaeacd878ba0b0406b02e3fe4624624f",
+        "result_id_commitment": "4b2f11ae5cadc48821e94103e9c54030ad08a0249824114fe5c93f7f0049322e",
+        "repository_instance_commitment": "a041c151396a8c85cbe029f089e319716e0ce26b965e801d2c14d22263a6f997",
+        "private_runtime_commitment": "2ef1b2693e9b7e815ab3c3bc736ea74c9bbc98bf961bbabc9425d84f729b446a",
+        "broker_commitment": "55cd878419f1964b7cceeb6f59512e60cb103856ec4b921b7c5839376bd308d9",
+        "resource_inventory_commitment": "b705ba60381c08680cd633a26b9b501533b8c2e806a38f2130ad0411f28d094e",
+        "execution_context_commitment": "c9d9564d1d971c6f20a313034b9567f82e9b39922ebfba614436a0cfc003bcf8",
+        "actor_identity_commitment": "5a767173368228412e8644363167f3d8093d175d751e1d427507e714f93c3f1c",
+        "attempt_contract_commitment": "080cd10d082b779662f5f3446cac77e9d3ad8f948dced0d131c17e282dda8db7",
+        "attempt_binding_hash": "fb880e86db4fb62c86f1957bf238526d794e6a329adde7c8c7e45bd11365db19"
+      }
+    },
+    {
+      "attempt_id": "multi-worker-pool-proof-attempt-b",
+      "node_id": "multi-worker-pool-proof-b",
+      "slot_index": 1,
+      "status": "failed",
+      "builder_model": "moonshot/kimi-k2.7-code",
+      "commit_sha": null,
+      "failure_code": "INJECTED_WORKER_FAILURE",
+      "verifier_checks": [
+        {
+          "name": "allowed_paths_only",
+          "passed": false
+        },
+        {
+          "name": "clean_tree",
+          "passed": true
+        },
+        {
+          "name": "commit_resolved",
+          "passed": true
+        },
+        {
+          "name": "exactly_one_commit",
+          "passed": false
+        },
+        {
+          "name": "expected_parent",
+          "passed": false
+        },
+        {
+          "name": "fixture_test_passes",
+          "passed": false
+        },
+        {
+          "name": "git_directory_present",
+          "passed": true
+        },
+        {
+          "name": "isolation_probes_pass",
+          "passed": true
+        },
+        {
+          "name": "no_conflicting_result",
+          "passed": true
+        },
+        {
+          "name": "process_attempt_binding",
+          "passed": true
+        },
+        {
+          "name": "process_exit_success",
+          "passed": false
+        },
+        {
+          "name": "process_node_binding",
+          "passed": true
+        },
+        {
+          "name": "process_nonce_binding",
+          "passed": true
+        },
+        {
+          "name": "process_result_binding",
+          "passed": true
+        },
+        {
+          "name": "workspace_contained",
+          "passed": true
+        }
+      ],
+      "isolation": {
+        "workspace_commitment": "387306de1f60d9a190a6ae90262d475700831ac507f181d09d7971ff124adebd",
+        "pi_session_commitment": "dbc274f60e024b0c81b7b313cfb0336ca8f5e5d1b1d7483e62b50152b68f744b",
+        "nonce_commitment": "7d37f899e16d43ac23fe54b0b412907f7ac4c6e71464206aaa44a029b8996a8f",
+        "result_id_commitment": "35af7897e175cbbbfaf0cecc7a6fd00f39dc8df80561a5275f3189904c86133d",
+        "repository_instance_commitment": "edf6c7889e288aee391359c08f153f302a06947b6e8ac4a05acd6fd7cff3233b",
+        "private_runtime_commitment": "d51e90ac9f8b989ba029516457ffff6c8bcf270f983b286a2be4b3906e0559c2",
+        "broker_commitment": "8d895ae79e409d348f70227231a5172410be68c71badf07f576730be9a6b611e",
+        "resource_inventory_commitment": "7928edf2f6a0194cfc1bc687f24f718087a716e44c8b64b22e8ed7419318e127",
+        "execution_context_commitment": "6a762bf994618444d27eda30231dde70d42730a0f16a4be9d46660459b80fb00",
+        "actor_identity_commitment": "6f7bab19c941465ebb159392f59f36c1e1c783bdd447e3de1ae03148dae56636",
+        "attempt_contract_commitment": "99463e5b541e108a4e8083196702f5fadb049a28df3e74f15744fda0966fbfef",
+        "attempt_binding_hash": "adaedff7dfd84469317063c4e5bc17bdf06f1298504cf6a04b4400409e89f202"
+      }
+    },
+    {
+      "attempt_id": "multi-worker-pool-proof-attempt-c",
+      "node_id": "multi-worker-pool-proof-c",
+      "slot_index": 1,
+      "status": "passed",
+      "builder_model": "moonshot/kimi-k2.7-code",
+      "commit_sha": "b4a6ec54987b253c6baa70faefd6c812da2ad4ea",
+      "failure_code": null,
+      "verifier_checks": [
+        {
+          "name": "allowed_paths_only",
+          "passed": true
+        },
+        {
+          "name": "clean_tree",
+          "passed": true
+        },
+        {
+          "name": "commit_resolved",
+          "passed": true
+        },
+        {
+          "name": "exactly_one_commit",
+          "passed": true
+        },
+        {
+          "name": "expected_parent",
+          "passed": true
+        },
+        {
+          "name": "fixture_test_passes",
+          "passed": true
+        },
+        {
+          "name": "git_directory_present",
+          "passed": true
+        },
+        {
+          "name": "isolation_probes_pass",
+          "passed": true
+        },
+        {
+          "name": "no_conflicting_result",
+          "passed": true
+        },
+        {
+          "name": "process_attempt_binding",
+          "passed": true
+        },
+        {
+          "name": "process_exit_success",
+          "passed": true
+        },
+        {
+          "name": "process_node_binding",
+          "passed": true
+        },
+        {
+          "name": "process_nonce_binding",
+          "passed": true
+        },
+        {
+          "name": "process_result_binding",
+          "passed": true
+        },
+        {
+          "name": "workspace_contained",
+          "passed": true
+        }
+      ],
+      "isolation": {
+        "workspace_commitment": "33a94e899314d3dfbef8306370c0cdab3230a7c75cca9d29b39f943ef21ef9a1",
+        "pi_session_commitment": "f20b7b172c8bfc21637a701dad8d31df33634b0146b43059edc2bebfa961d611",
+        "nonce_commitment": "3e86f7f7c90c1d5fa84321151825dcddadceca2ce2eb127b7a1b7283cd054442",
+        "result_id_commitment": "4768d15042d3d35f20ab1811d5e74cd360a47f9ceb48200ff7b6a5f7c8c99629",
+        "repository_instance_commitment": "41e73ba24530f890905afa930a157de038a92f08d798f8eb3dd766b0d3be3e1e",
+        "private_runtime_commitment": "e4e27ad0df1c7beeb82e84c6624648914ca15b086c955e90060c823a9cd252af",
+        "broker_commitment": "6ff17e50f363708ea6f6079225dd2821193be52ca2e5af018c7c82bcd922a69e",
+        "resource_inventory_commitment": "e19c60461431d5782aa3872dd831101ecbcb185eed50007ff3e2fee4bdc95743",
+        "execution_context_commitment": "7829f6bf16f6dc68eb2318cccf136b723473bb3b485afb9a83848ad4afb3f2af",
+        "actor_identity_commitment": "15da2f9eb640da4cfb7226e2daf596adb079c4155e6c067c1b4af13c9c4f45d4",
+        "attempt_contract_commitment": "3e1177e2e4810a285a43843457551da7827eb7f653a8b29eed767703a65e7745",
+        "attempt_binding_hash": "945932864e3d9e43274a178b6e7b12686f2416702e107c95be9eca6b41751b9a"
+      }
+    }
+  ],
+  "deferred_work": [
+    "free-form decomposition and Gate 1",
+    "predicted-touch and Graphify scheduling",
+    "full DAG retry/budget/reconciliation/branch policy",
+    "Tier-2 evaluation and builder calibration",
+    "full CRAFTS and revision-history activation",
+    "integration and GitHub delivery/webhooks",
+    "full backup/restore/operational audit work"
+  ],
+  "next_follow_up": "Run one separately reviewed agent-pool dogfood task through the same Minimal Pool Runtime.",
+  "diagnostics": {
+    "started_at": "2026-08-12T02:51:31.778Z",
+    "finished_at": "2026-08-12T02:52:54.941Z",
+    "timing_points": [
+      {
+        "label": "started",
+        "timestamp": "2026-08-12T02:51:31.778Z"
+      },
+      {
+        "label": "finished",
+        "timestamp": "2026-08-12T02:52:54.941Z"
+      }
+    ]
+  },
+  "cleanup_disposition": {
+    "workspace_removed": true,
+    "session_removed": true
+  },
+  "residual_warning": "This controlled fixture proof is not production authorization for arbitrary repositories."
+}

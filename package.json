@@ -7,7 +7,9 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test test/agent-execution/*.test.ts test/codebase-knowledge/*.test.ts test/model-routing-and-evaluation/*.test.ts test/orchestration/*.test.ts test/verification/*.test.ts test/work-intake/*.test.ts",
     "test:pool-proof": "cd packages/pool-proof-harness && npm test",
-    "test:worker": "cd packages/worker-harness && npm test"
+    "test:worker": "cd packages/worker-harness && npm test",
+    "proof:stage2:preflight": "cd packages/pool-proof-harness && npm run proof:stage2:preflight",
+    "proof:stage2": "cd packages/pool-proof-harness && npm run proof:stage2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -39,8 +39,8 @@ These pins are exact for local slices. Fallback models that would violate them a
 | CRAFTS phase | Subagent type | Model | Phase role |
 | --- | --- | --- | --- |
 | C — Conceptualize | `local-craft-planner` | `openai-codex/gpt-5.6-sol` | read-only planning |
-| R — Render | `local-craft-builder` | `moonshot/kimi-k2.7-code` | writer |
-| F — Fix | `local-craft-builder` | `moonshot/kimi-k2.7-code` | writer |
+| R — Render | `local-craft-builder` | `zai/glm-5.2` | writer |
+| F — Fix | `local-craft-builder` | `zai/glm-5.2` | writer |
 | A — Assess | `local-craft-evaluator` | `openai-codex/gpt-5.6-sol` | read-only review |
 | T — Tighten | `local-craft-security` | `openai-codex/gpt-5.6-terra` | read-only security review |
 | S — Sharpen | `local-craft-sharpener` | `openai-codex/gpt-5.6-terra` | read-only docs reviewer |

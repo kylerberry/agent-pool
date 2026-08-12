@@ -1086,7 +1086,7 @@ describe('migration safety', () => {
     const store = await createSqliteStore({ runtimeRoot: root, dbLocation: relative(root, path), backupHook: async () => { backedUp = true; } });
     await store.close();
     assert.ok(backedUp);
-    assert.equal(getSchemaVersion(path), 6);
+    assert.equal(getSchemaVersion(path), 7);
   });
 
   it('fails closed when the backup hook rejects', async () => {
@@ -1127,7 +1127,7 @@ describe('migration safety', () => {
     } catch {}
     const store = await createSqliteStore({ runtimeRoot: root, dbLocation: relative(root, path), backupHook: async () => {} });
     await store.close();
-    assert.equal(getSchemaVersion(path), 6);
+    assert.equal(getSchemaVersion(path), 7);
   });
 
   it('rolls back a failed migration and keeps the prior schema version', async () => {
