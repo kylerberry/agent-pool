@@ -30,3 +30,5 @@ Pi sessions have explicit actors: Repository Builders develop the product throug
 - [[wiki/sources/2026-08-05_pool-proof-specification|Pool Proof Specification (approved build phase)]]
 - [[wiki/sources/2026-07-25_approved-v1-build-dag|Superseded v1 Build DAG history]]
 - [[wiki/architecture/repository-builder-vs-pool-worker|Repository Builder vs Pool Worker]]
+- [[wiki/sources/2026-08-13_adr-035-minimal-coherent-dag-nodes|Minimal Coherent DAG Nodes]]
+- [[wiki/sources/2026-08-13_adr-036-discovered-work-and-dag-amendment|Discovered Work and DAG Amendment]]

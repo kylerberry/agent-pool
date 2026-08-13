@@ -22,7 +22,8 @@
 - Direct tasks skip decomposition and Gate 1 only; Gate 2 remains mandatory.
 - Caller-authored acceptance criteria remain byte-for-byte ordered ground truth with `origin=direct_task`.
 - Amendment preserves lineage and re-requires Gate 1.
-- `runDecomposition()` emits only ADR-018's five node fields and permits at most one schema-only repair under one invocation deadline.
+- A proposed node is the smallest independently verifiable vertical slice: one outcome/oracle, bounded seam, explicit non-goals, and genuine dependencies. Inseparable cross-domain or multi-contract scope requires Gate-1 rationale; it does not widen the ADR-018 emitted five-field node shape.
+- `runDecomposition()` emits only ADR-018's five node fields and permits at most one schema-only repair under one invocation deadline. Scope rationale/non-goals are controller-owned proposal-review metadata, not decomposer output or Worker payload.
 - Decomposition routing selects the provider-qualified model; the injected invoker executes that exact selection without aliasing or fallback.
 - Decomposition provenance is deterministic and immutable, binding sanitized prompt, routing evidence, breadth limits/revision, package identity, and verified Pi executable identity.
 

@@ -68,7 +68,7 @@ Meet only the capacity, concurrency, cost, and execution constraints defined in 
 ## 4. Architecture constraints
 
 - Follow the deterministic-controller boundary in [ADR-001](raw/adr/orchestrator/ADR-001-deterministic-controller-vs-agentic-orchestrator.md): models operate only at named checkpoints; code owns control flow, policy enforcement, and state transitions.
-- Honor every architecture, persistence, orchestration, grading, routing, retrieval, retry, and audit decision in [ADR-001 through ADR-034](raw/adr/orchestrator/).
+- Honor every architecture, persistence, orchestration, grading, routing, retrieval, retry, audit, slicing, and amendment decision in [ADR-001 through ADR-036](raw/adr/orchestrator/).
 - Use the framework, language, infrastructure, API, storage, and integration constraints specified in the canonical orchestrator specification; do not introduce substitutes without an approved ADR.
 - Organize application code as bounded domains under `src/domains/<domain>/`. Each domain owns local business rules and a canonical `AGENTS.md`; its sibling `CLAUDE.md` contains only `@AGENTS.md`. See [Domain-Driven Documentation Convention](raw/context/domain-driven-documentation-convention.md).
 - Read `AGENTS.md`, `docs/AGENTS.md`, `docs/wiki/index.md`, relevant wiki pages, and then exact raw sources before non-trivial work.
@@ -95,4 +95,8 @@ These criteria define complete v1, not the current Pool Proof phase. The final i
 
 ## Delivery behavior
 
-Work in small, reviewable vertical slices. Keep one writer per active worktree unless deliberately using isolated worktrees. Run the relevant verification after every meaningful slice. Stop and ask Kyler before making an unapproved product, security, architecture, cost, or scope decision. At completion, provide a concise evidence-backed summary: changed files, verification commands/results, ADR/spec traceability, residual risks, and remaining approved follow-up work.
+Work in small, reviewable vertical slices. A DAG node is the smallest independently verifiable outcome that preserves correctness, not the smallest edit: state one outcome/oracle, bounded seam, explicit non-goals, and genuine dependencies. Split independently acceptable outcomes and unrelated cleanup, refactoring, documentation, or follow-on capability work. Cross-domain or multi-contract work needs a recorded rationale that the outcome is inseparable.
+
+A Worker never expands its approved node. It may report bounded discovered work; the controller classifies it as adjacent backlog, a correctness/security blocker, or an ADR-024 amendment candidate. Only renewed human Gate 1 approval may alter unmet DAG topology; passed work and evidence remain immutable.
+
+Keep one writer per active worktree unless deliberately using isolated worktrees. Run the relevant verification after every meaningful slice. Stop and ask Kyler before making an unapproved product, security, architecture, cost, or scope decision. At completion, provide a concise evidence-backed summary: changed files, verification commands/results, ADR/spec traceability, residual risks, and remaining approved follow-up work.

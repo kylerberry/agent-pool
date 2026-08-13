@@ -2,6 +2,7 @@
 
 **Status:** Accepted — amended 2026-07-27
 **Amends:** ADR-016 (fixed escalation resolution actions), ADR-003 (DAG as gated checkpoint)
+**Extended by:** ADR-036 (discovered work records and governed DAG amendment)
 
 ## Context
 
@@ -20,5 +21,7 @@ Mechanics:
 Passed work is never discarded. The ADR-003 quarantine principle is preserved, restated precisely: the rule was never "the DAG is immutable" — it is "**the DAG never changes silently**." Every topology change is decomposer-proposed, mechanically validated, human-approved, and audit-logged; re-runs resume from the amended approved DAG.
 
 ## Consequences
+
+ADR-036 defines the bounded Worker discovery record and controller classification that can supply amendment evidence. This ADR remains the sole topology-change mechanism: discovery alone never changes a DAG.
 
 The pipeline has a machine-assisted exit from a bad decomposition that doesn't force whole-DAG cancellation or unassisted manual surgery. Amendment approvals are heavier human reviews than the original Gate 1 (the human is also implicitly ruling on why the original boundary failed) — acceptable, since amendments should be rare when the graph-informed decomposer is doing its job; frequent amendments are themselves a signal the decomposer row needs eval attention (ADR-020).

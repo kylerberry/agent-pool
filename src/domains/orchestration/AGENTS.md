@@ -20,6 +20,7 @@
 - SQLite persistence, schema migrations, audit events, deterministic attempt/job identifiers, and scheduling-decision provenance.
 - Append-only attempt provenance: `attempt_routing_decisions` (one row per attempt, written at dispatch) and `phase_artifacts` (keyed `(attempt_id, phase, revision)`).
 - Escalation/resolution decisions and audit state.
+- Append-only discovered-work records linked to work, node, attempt, and result/failure provenance (future ADR-036 capability).
 
 ## Invariants
 
@@ -31,6 +32,7 @@
 - Predicted-touch serialization is advisory and never rewrites approved dependency edges.
 - Retry counters and failure-class counters are monotonic and budget-bounded.
 - Governed resolutions are one of the five approved actions and are auditable.
+- Discovered work never silently widens an attempt or mutates approved topology. Controller classification is backlog, correctness/security blocker, or recommendation for human-initiated ADR-024 amendment; passed work remains immutable.
 - An attempt cannot exist without canonical builder routing; its routing row is written in the same transaction. Absent or malformed routing rolls the attempt back.
 - `attempt_routing_decisions` and `phase_artifacts` are append-only: no row is ever updated or deleted. This is enforced in the schema, not by the absence of a store method.
 - Revision is allocated inside the INSERT statement, never by an application-level read-modify-write, so concurrent writers cannot observe the same maximum.
@@ -68,6 +70,7 @@
 - Predicted-touch evidence is controller-owned, Gate-1-bound, versioned, and durably recorded. Missing, stale, mismatched, unsupported, or below-policy evidence falls back to optimistic concurrency.
 - Builder provenance is controller-written at dispatch and is never writable from a phase artifact, result submission, or queue envelope. Evaluator independence is deferred until grading has a separate record written at evaluator invocation; it must not be inferred from an agent-authored artifact or builder dispatch.
 - `artifact_path` is agent-authored. It is stored as a validated workspace-relative locator and is never opened by this domain. Percent-encoded traversal is accepted at storage, so consumers must resolve with realpath containment and must not decode first.
+- Future discovery records are untrusted Worker attestations. Validate/redact and persist them separately from node lifecycle; they cannot carry arbitrary plans, priorities, topology edits, credentials, raw provider output, or unbounded transcripts.
 
 ## Verification guidance
 

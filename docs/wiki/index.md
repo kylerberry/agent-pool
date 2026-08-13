@@ -59,6 +59,8 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/sources/2026-07-22_adr-023-failure-class-retry-counters|ADR-023: Failure-Class Retry Counters — Logic vs. Integration]] — `docs/raw/adr/orchestrator/ADR-023-failure-class-retry-counters.md`
 - [[wiki/sources/2026-07-22_adr-024-amend-dag-resolution-action|ADR-024: Amend-DAG — Fifth Escalation Resolution Action]] — `docs/raw/adr/orchestrator/ADR-024-amend-dag-resolution-action.md`
 - [[wiki/sources/2026-07-22_adr-025-red-state-tier1-evidence|ADR-025: Red-State Evidence — The Test Suite Must Prove It Can Fail]] — `docs/raw/adr/orchestrator/ADR-025-red-state-tier1-evidence.md`
+- [[wiki/sources/2026-08-13_adr-035-minimal-coherent-dag-nodes|ADR-035: Minimal Coherent DAG Nodes]] — `docs/raw/adr/orchestrator/ADR-035-minimal-coherent-dag-nodes.md`
+- [[wiki/sources/2026-08-13_adr-036-discovered-work-and-dag-amendment|ADR-036: Discovered Work Records and Governed DAG Amendment]] — `docs/raw/adr/orchestrator/ADR-036-discovered-work-and-dag-amendment.md`
 - [[wiki/sources/2026-07-22_adr-026-failure-context-artifacts|ADR-026: Failure Context Survives Compaction; Transcript Index as Escape Hatch]] — `docs/raw/adr/orchestrator/ADR-026-failure-context-artifacts.md`
 - [[wiki/sources/2026-04-13_adr-027-spec-intake-api|ADR-027: Spec Intake API]]
 - [[wiki/sources/2026-04-13_adr-028-direct-task-path|ADR-028: Direct Task Path]]

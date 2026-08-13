@@ -10,7 +10,7 @@ A Pool Worker executes one assigned DAG node attempt. The supervisor, product sp
 
 - Use `craft-pool` and its sequential `craft-*` phase agents.
 - Treat original acceptance criteria as immutable ground truth.
-- Stay inside the assigned unit; escalate unapproved product, architecture, security, cost, or scope decisions.
+- Stay inside the assigned unit; escalate unapproved product, architecture, security, cost, or scope decisions. A discovery is an attestation to the supervisor, not authority to implement adjacent work, alter priority, or amend the DAG.
 - Emit schema-valid phase artifacts and preserve failure context.
 - Respect phase tool boundaries: R/F may write code, A/T are read-only, and S may write documentation only.
 - When C emits any closed-vocabulary `security_triggers`, require the fresh independent plan-security checkpoint after C and before R; `craft-security` applies `security-and-hardening`, while an empty list keeps the normal flow.

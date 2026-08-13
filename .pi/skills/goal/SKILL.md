@@ -29,7 +29,7 @@ The file is written once, then frozen until Kyler approves or amends it. If it a
 
 ## Steps
 
-1. **Load sources.** Read `docs/goal-prompt.md`, `docs/raw/adr/orchestrator/ADR-018-decomposition-emission-schema.md`, `docs/raw/adr/orchestrator/ADR-034-domain-discovery-before-implementation.md`, `docs/raw/specs/schemas/domain-map-approval.schema.json`, and `docs/raw/specs/templates/domain-map-approval.json`. If a domain map exists, read `docs/raw/context/initial-domain-map.md`.
+1. **Load sources.** Read `docs/goal-prompt.md`, `docs/raw/adr/orchestrator/ADR-018-decomposition-emission-schema.md`, `docs/raw/adr/orchestrator/ADR-034-domain-discovery-before-implementation.md`, `docs/raw/adr/orchestrator/ADR-035-minimal-coherent-dag-nodes.md`, `docs/raw/adr/orchestrator/ADR-036-discovered-work-and-dag-amendment.md`, `docs/raw/specs/schemas/domain-map-approval.schema.json`, and `docs/raw/specs/templates/domain-map-approval.json`. If a domain map exists, read `docs/raw/context/initial-domain-map.md`.
 2. **Propose a flat DAG.** Emit a JSON object with a `nodes` array. Each node is a flat ADR-018 node:
 
 ```json
@@ -42,7 +42,9 @@ The file is written once, then frozen until Kyler approves or amends it. If it a
 }
 ```
 
-3. **Mechanical validation.** Before writing the proposed artifact, verify:
+3. **Slice review and mechanical validation.** Before writing the proposed artifact, review each candidate against ADR-035: it must express one independently verifiable outcome, a primary acceptance oracle, bounded seam, explicit non-goals, and genuine dependencies. Split independently acceptable outcomes; record a concise Gate-1 rationale for any inseparable cross-domain, multi-contract, or multi-suite change. Current ADR-018 proposal JSON stays five-field: do not invent a runtime field for that review metadata until the planned validator/schema work is approved.
+
+   Then verify:
    - The top level contains `schema_version: 1` and `nodes`; `kind` and `source` are optional.
    - `nodes` is an array and every node has exactly `id`, `intent`, `change_spec`, `acceptance_criteria`, `depends_on`.
    - All `id` values are unique.

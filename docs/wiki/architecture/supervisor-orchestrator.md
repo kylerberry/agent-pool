@@ -21,13 +21,13 @@ The approved Pool Proof precedes further supervisor governance. It builds and ve
 
 - Deterministic controller owns sequencing, retries, budgets, escalation, DAG state, and PR assembly.
 - Models are used at named checkpoints: decomposition, phase work, review/adjudication, and deferred failure diagnosis.
-- Decomposition runs through a separate orchestrator-side harness/queue and produces ADR-018 output for deterministic validation and Gate 1; it is not a Pool Worker capability.
+- Decomposition runs through a separate orchestrator-side harness/queue and produces ADR-018 output for deterministic validation and Gate 1; it is not a Pool Worker capability. Each node is the smallest independently verifiable vertical slice that preserves correctness, with explicit non-goals and a review rationale for any inseparable cross-domain or multi-contract scope (ADR-035).
 - The pool receives flat, atomic queue jobs and does not need DAG awareness.
 - Each node launches a fresh Pool Worker Pi session with the explicitly loaded `packages/worker-harness/`; it conducts CRAFTS through sequential `pi-subagents` phase calls.
 - Codebase knowledge is target-repository scoped: bounded controller caches hold regenerable graph data, while prose knowledge is read from the target repository's own docs or approved provider. Missing wiki/docs are non-blocking; Agent Pool product docs are not exposed as knowledge for another target.
 - Orchestration is the sole SQLite writer. It derives deterministic attempt and job IDs, sends identifier-only queue envelopes, rehydrates and deep-freezes one topology-free worker contract at consumption, and uses CAS lifecycle transitions, lease generation/token fencing, idempotent result acceptance, and startup reconciliation to recover interrupted windows.
 - SQLite startup is gated on an owner-only private runtime path, no symlink or non-regular database target, foreign keys/WAL, and fail-closed versioned migrations. Gate-1-bound, versioned controller-owned predicted-touch evidence may serialize confident likely overlaps without changing approved DAG edges; stale, unavailable, mismatched, or low-confidence evidence uses optimistic concurrency and records its decision.
-- Failed nodes freeze only their dependent branch; unrelated ready branches continue.
+- Failed nodes freeze only their dependent branch; unrelated ready branches continue. Workers may report bounded, provenance-linked discovered work but cannot widen their node, alter priorities, or change topology. The controller classifies it as backlog, a blocker, or a human-approved ADR-024 amendment candidate; passed work remains immutable (ADR-036).
 
 ## Gating and evidence
 

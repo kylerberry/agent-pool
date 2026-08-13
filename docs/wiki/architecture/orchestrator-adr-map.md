@@ -49,6 +49,8 @@ This page indexes the initial supervisor-orchestrator ADR set and groups the dec
 - `ADR-032-practical-worker-isolation-baseline.md` — v1 isolates each attempt and keeps secrets out of repository commands.
 - `ADR-033-practical-single-host-operations-baseline.md` — v1 has basic health, recovery, migration, retention, and off-host backup controls.
 - `ADR-034-domain-discovery-before-implementation.md` — a human-approved domain map precedes feature implementation.
+- `ADR-035-minimal-coherent-dag-nodes.md` — a node is the smallest independently verifiable vertical slice that preserves correctness; scope rationale/non-goals are Gate-1 review metadata, not Worker payload.
+- `ADR-036-discovered-work-and-dag-amendment.md` — Workers attest bounded discovered work; controller classification may recommend, but never automatically execute, a human-approved ADR-024 amendment.
 
 ## Main themes
 
@@ -56,7 +58,7 @@ This page indexes the initial supervisor-orchestrator ADR set and groups the dec
 - Model calls are bounded checkpoints with structured outputs.
 - Work is decomposed into an approved DAG, dispatched as node-level queue jobs, and gated by tiered grading.
 - Reliability, routing, and model choice are empirically evaluated rather than guessed.
-- Failure handling preserves context, freezes dependent branches, and records human overrides.
+- Failure handling preserves context, freezes dependent branches, records human overrides, and separates discovered work from unapproved scope expansion.
 
 ## Related
 
