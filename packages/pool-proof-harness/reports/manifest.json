@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "reports": {
+    "stage-1-proof-report.json": "46dcce827cb08ce8db3a62c6305f3a208eae3709c459950fadfa5df9c325daea",
+    "stage-2-proof-report.json": "ebf9840337149ee89b4cbee97fe9306dee9ed2f782ba145de957664fd057a401",
+    "persistent-attempt-sandbox-lifecycle-report.json": "7090af79d1f8c930186cebe82329816289a9e778916eae4ff4f60d719fdbfef8"
+  }
+}

@@ -13,6 +13,7 @@
  * not the primary boundary.
  */
 
+import { posix as path } from 'node:path';
 import {
   createExecutionFailure,
   deepFreeze,
@@ -115,6 +116,8 @@ export type BuildRepositoryCommandEnvOptions = {
    * home would reintroduce file-based credential access.
    */
   readonly workspaceHome: string;
+  /** Trusted absolute root that contains the workspace-scoped home. */
+  readonly workspaceRoot: string;
   /**
    * Extra variable names the attempt needs. Each is still checked against the
    * credential heuristics, so this cannot be used to smuggle a secret through.
@@ -137,7 +140,24 @@ export function buildRepositoryCommandEnv(
   options: BuildRepositoryCommandEnvOptions,
 ): EnvRecord | ExecutionFailure {
   const workspaceHome = options?.workspaceHome;
-  if (typeof workspaceHome !== 'string' || !workspaceHome.startsWith('/') || workspaceHome.includes('/../')) {
+  const workspaceRoot = options?.workspaceRoot;
+  if (
+    typeof workspaceHome !== 'string' ||
+    typeof workspaceRoot !== 'string' ||
+    !path.isAbsolute(workspaceHome) ||
+    !path.isAbsolute(workspaceRoot)
+  ) {
+    return createExecutionFailure('CAPABILITY_DENIED', 'a workspace-scoped absolute home directory is required');
+  }
+  const resolvedHome = path.resolve(workspaceHome);
+  const resolvedRoot = path.resolve(workspaceRoot);
+  const homeRelativeToRoot = path.relative(resolvedRoot, resolvedHome);
+  if (
+    homeRelativeToRoot === '' ||
+    homeRelativeToRoot === '..' ||
+    homeRelativeToRoot.startsWith('../') ||
+    path.isAbsolute(homeRelativeToRoot)
+  ) {
     return createExecutionFailure('CAPABILITY_DENIED', 'a workspace-scoped absolute home directory is required');
   }
 
@@ -158,13 +178,13 @@ export function buildRepositoryCommandEnv(
     if (typeof value === 'string') env[name] = value;
   }
 
-  env.HOME = workspaceHome;
-  env.XDG_CONFIG_HOME = `${workspaceHome}/.config`;
-  env.XDG_CACHE_HOME = `${workspaceHome}/.cache`;
-  env.XDG_DATA_HOME = `${workspaceHome}/.local/share`;
-  env.TMPDIR = `${workspaceHome}/.tmp`;
+  env.HOME = resolvedHome;
+  env.XDG_CONFIG_HOME = `${resolvedHome}/.config`;
+  env.XDG_CACHE_HOME = `${resolvedHome}/.cache`;
+  env.XDG_DATA_HOME = `${resolvedHome}/.local/share`;
+  env.TMPDIR = `${resolvedHome}/.tmp`;
   // Git resolves these before falling back to $HOME/.gitconfig and /etc/gitconfig.
-  env.GIT_CONFIG_GLOBAL = `${workspaceHome}/.gitconfig`;
+  env.GIT_CONFIG_GLOBAL = `${resolvedHome}/.gitconfig`;
   env.GIT_CONFIG_SYSTEM = '/dev/null';
 
   return deepFreeze(env) as EnvRecord;

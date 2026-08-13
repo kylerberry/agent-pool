@@ -7,9 +7,9 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, existsSync, readFileSync, rmSync, mkdtempSync, realpathSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, rmSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
@@ -32,6 +32,7 @@ import { buildStage1Job } from './stage-1-job.ts';
 import { buildReport, validateReport, type Stage1ProofReport } from './report.ts';
 import { runPreflight } from './preflight.ts';
 import { resolvePackageIdentity, resolveProfileIdentity } from './identity-resolution.ts';
+import { publishRetainedReport } from './publish-retained-report.ts';
 import type { GreenEvidence } from '../../../src/domains/verification/pool-proof-verifier.ts';
 
 const FAILURE_CODE_MAX_LEN = 256;
@@ -47,8 +48,18 @@ function sanitizeFailureCode(input: string): string {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const reportsDir = resolve(packageRoot, 'reports');
-const reportPath = resolve(reportsDir, 'stage-1-proof-report.json');
-const failureReportPath = resolve(reportsDir, 'stage-1-preflight-failure.json');
+
+function candidateReportPath(args: readonly string[], filename: string): string {
+  const index = args.indexOf('--report-output');
+  const output = index >= 0 ? args[index + 1] : join(mkdtempSync(join(tmpdir(), 'pool-proof-stage1-candidate-')), filename);
+  if (!output || basename(output) !== filename) throw new Error(`--report-output must end with ${filename}`);
+  const path = resolve(output);
+  mkdirSync(dirname(path), { recursive: true });
+  const candidate = join(realpathSync(dirname(path)), filename);
+  const retained = realpathSync(reportsDir);
+  if (candidate === retained || candidate.startsWith(`${retained}/`)) throw new Error('candidate output must not replace a retained report');
+  return candidate;
+}
 
 const SANDBOX_CPU = '1';
 const SANDBOX_MEMORY = '1g';
@@ -159,7 +170,7 @@ export function writeValidatedReport(report: Stage1ProofReport, path: string): v
   if (!validated.ok) {
     throw new Error(`report validation failed: ${validated.error}`);
   }
-  mkdirSync(reportsDir, { recursive: true });
+  mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(report, null, 2));
 }
 
@@ -173,22 +184,17 @@ async function main(): Promise<void> {
   const model = (modelFlag >= 0 ? args[modelFlag + 1] : 'openai-codex/gpt-5.6-terra') as ApprovedModelId;
   const containerRuntime = (runtimeFlag >= 0 ? args[runtimeFlag + 1] : 'docker') as 'docker' | 'podman';
   const sandboxImage = imageFlag >= 0 ? args[imageFlag + 1] : undefined;
+  const reportPath = candidateReportPath(args, 'stage-1-proof-report.json');
+  const failureReportPath = join(dirname(reportPath), 'stage-1-preflight-failure.json');
 
   if (!sandboxImage) {
     console.error('sandbox image digest/ID is required');
     process.exit(1);
   }
 
-  // Delete any stale report before attempting this run.
-  try {
-    rmSync(reportPath, { force: true });
-  } catch {
-    // ignore
-  }
-
   const preflight = await runPreflight({ piPath, model, containerRuntime, sandboxImage });
   if (!preflight.ok) {
-    mkdirSync(reportsDir, { recursive: true });
+    mkdirSync(dirname(failureReportPath), { recursive: true });
     writeFileSync(failureReportPath, JSON.stringify(preflight.failure, null, 2));
     console.error(`preflight failed: ${preflight.failure.stage} - ${preflight.failure.reason}`);
     process.exit(1);
@@ -450,7 +456,13 @@ async function main(): Promise<void> {
       console.error(`Stage 1 proof failed: ${report.diagnostics.failure_code}`);
       process.exit(1);
     }
-    console.log(`Stage 1 proof passed: ${reportPath}`);
+    if (args.includes('--publish')) {
+      const published = publishRetainedReport({
+        selector: 'stage-1', candidatePath: reportPath, allowSealed: args.includes('--allow-sealed'),
+      });
+      if (!published.ok) throw new Error(`Stage 1 report publication failed: ${published.error}`);
+    }
+    console.log(`Stage 1 proof passed; candidate report: ${reportPath}`);
   } catch (e) {
     const rawFailure = e instanceof Error ? e.message : String(e);
     const failureCode = sanitizeFailureCode(rawFailure);

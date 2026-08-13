@@ -96,4 +96,6 @@ Do not build this projection or remove `depends_on` here. Orchestration needs to
 - Moving duplicate-ID, referential-integrity, or cycle checks into the decomposer confuses emission validation with downstream deterministic DAG validation.
 - Allowing an invoker to select or fallback independently makes routing provenance untrustworthy.
 - Making direct intake async weakens the structural no-model-call guarantee.
-- Source-scanning architecture tests must strip comments before checking forbidden constructs.
+- Static architecture checks must use AST/module analysis rather than source substrings; pair them with executable boundary evidence.
+- `runDecomposition()` receives hostile runtime objects: accept only ordinary or null-prototype own-field records, return bounded `INVALID_JOB` for inherited/class/cyclic inputs, and do not call retrieval or model collaborators first.
+- A one-repair ceiling needs an asserted invocation count; a test with an unused third fake response proves nothing.

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persistent-attempt-sandbox-lifecycle-report.schema.json",
+  "title": "Persistent Attempt Sandbox Lifecycle Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "node_id", "image_digest", "base_image_digest", "generated_at", "verdicts", "timings_ms", "commitments"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "node_id": { "const": "persistent-attempt-sandbox-lifecycle" },
+    "image_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "base_image_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "generated_at": { "type": "string", "minLength": 20, "maxLength": 64 },
+    "repeat_count": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "verdicts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["container_reused_across_calls", "state_persistence_within_attempt", "env_allowlist_no_secrets", "read_only_rootfs", "no_docker_socket", "non_root_uid", "effective_capabilities_dropped", "process_namespace_isolated", "network_isolated", "path_traversal_confined", "symlink_escape_confined", "timeout_cancels_command", "descendants_killed_on_timeout", "container_survives_timeout", "stop_removes_owned_container", "fresh_container_per_attempt", "concurrent_distinct_containers", "peer_survives_peer_teardown", "final_zero_owned_containers"],
+      "properties": {
+        "container_reused_across_calls": { "const": true }, "state_persistence_within_attempt": { "const": true }, "env_allowlist_no_secrets": { "const": true }, "read_only_rootfs": { "const": true }, "no_docker_socket": { "const": true }, "non_root_uid": { "const": true }, "effective_capabilities_dropped": { "const": true }, "process_namespace_isolated": { "const": true }, "network_isolated": { "const": true }, "path_traversal_confined": { "const": true }, "symlink_escape_confined": { "const": true }, "timeout_cancels_command": { "const": true }, "descendants_killed_on_timeout": { "const": true }, "container_survives_timeout": { "const": true }, "stop_removes_owned_container": { "const": true }, "fresh_container_per_attempt": { "const": true }, "concurrent_distinct_containers": { "const": true }, "peer_survives_peer_teardown": { "const": true }, "final_zero_owned_containers": { "const": true }
+      }
+    },
+    "timings_ms": { "type": "object", "additionalProperties": false, "required": ["first_attempt_setup_ms", "concurrent_phase_ms"], "properties": { "first_attempt_setup_ms": { "type": "integer", "minimum": 0 }, "concurrent_phase_ms": { "type": "integer", "minimum": 0 } } },
+    "commitments": { "type": "object", "additionalProperties": false, "required": ["concurrent_attempts", "max_owned_containers_seen", "final_owned_containers"], "properties": { "concurrent_attempts": { "const": 2 }, "max_owned_containers_seen": { "type": "integer", "minimum": 2, "maximum": 10 }, "final_owned_containers": { "const": 0 } } }
+  }
+}

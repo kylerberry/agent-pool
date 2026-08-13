@@ -1,0 +1,24 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Deterministic tests
+        run: npm run test:all
+      - name: Verify retained reports
+        run: npm run proof:reports:verify
+      - name: Docker lifecycle evidence
+        run: npm run test:docker

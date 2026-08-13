@@ -452,6 +452,12 @@ export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLaunche
       // Prepare provider auth in the actual PI_CODING_AGENT_DIR root.
       copyProviderAuth(context.pi_runtime_parent, getProvider(context.selected_model as ApprovedModelId));
       copyProviderModels(context.pi_runtime_parent, getProvider(context.selected_model as ApprovedModelId));
+      let providerArtifactsRemoved = false;
+      const removeProviderArtifacts = () => {
+        if (providerArtifactsRemoved) return;
+        providerArtifactsRemoved = true;
+        removeProviderAuth(context.pi_runtime_parent);
+      };
       if (process.env.POOL_PROOF_DEBUG) {
         const authFile = resolve(context.pi_runtime_parent, 'auth.json');
         const modelsFile = resolve(context.pi_runtime_parent, 'models.json');
@@ -470,6 +476,7 @@ export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLaunche
         try {
           prepareWorkspaceForSandbox(options.brokerOptions.workspacePath, sandboxIdentity);
         } catch (e) {
+          removeProviderArtifacts();
           return createExecutionFailure(
             'POOL_PROOF_LAUNCHER_MISMATCH',
             `workspace sandbox preparation failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -491,7 +498,17 @@ export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLaunche
           })
         : null;
       if (broker) {
-        await broker.start();
+        try {
+          await broker.start();
+        } catch (error) {
+          removeProviderArtifacts();
+          try {
+            await broker.stop();
+          } catch {
+            // Preserve the original broker start failure.
+          }
+          throw error;
+        }
       }
 
       const env: Record<string, string> = {
@@ -550,7 +567,7 @@ export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLaunche
         function cleanup(): Promise<void> {
           if (!cleanupPromise) {
             cleanupPromise = (async () => {
-              removeProviderAuth(context.pi_runtime_parent);
+              removeProviderArtifacts();
               if (broker) {
                 try {
                   await broker.stop();

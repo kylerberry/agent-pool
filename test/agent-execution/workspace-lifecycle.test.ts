@@ -165,6 +165,20 @@ describe('attempt workspace cleanup states', () => {
     }
   });
 
+  it('fails closed when the cleanup clock is non-finite', () => {
+    for (const state of ['extracting', 'audit_incomplete'] as const) {
+      for (const now of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        const workspace = lifecycle(60_000);
+        workspace.beginExtraction();
+        if (state === 'audit_incomplete') workspace.markAuditIncomplete('TRANSCRIPT_PERSIST_FAILED');
+        const decision = workspace.evaluateCleanup(now);
+        assert.equal(decision.decision, 'destroy', `${state} at ${now} must destroy`);
+        assert.equal(decision.auditIncomplete, true);
+        assert.match(decision.reason, /clock.*invalid/i);
+      }
+    }
+  });
+
   it('rejects a non-finite start time that would defeat the quarantine bound', () => {
     // NaN >= NaN is false forever, so an unvalidated startedAt is indefinite
     // retention wearing a bounded-quarantine costume.

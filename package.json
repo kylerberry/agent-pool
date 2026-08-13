@@ -6,10 +6,19 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test test/agent-execution/*.test.ts test/codebase-knowledge/*.test.ts test/model-routing-and-evaluation/*.test.ts test/orchestration/*.test.ts test/verification/*.test.ts test/work-intake/*.test.ts",
-    "test:pool-proof": "cd packages/pool-proof-harness && npm test",
-    "test:worker": "cd packages/worker-harness && npm test",
-    "proof:stage2:preflight": "cd packages/pool-proof-harness && npm run proof:stage2:preflight",
-    "proof:stage2": "cd packages/pool-proof-harness && npm run proof:stage2"
+    "test:root": "npm test",
+    "test:orchestrator": "npm test --prefix packages/orchestrator-harness",
+    "test:worker": "npm test --prefix packages/worker-harness",
+    "test:pool-proof": "npm test --prefix packages/pool-proof-harness",
+    "test:all": "npm run test:root && npm run test:orchestrator && npm run test:worker && npm run test:pool-proof",
+    "test:docker": "npm run proof:sandbox-lifecycle --prefix packages/pool-proof-harness",
+    "proof:reports:verify": "npm run proof:reports:verify --prefix packages/pool-proof-harness",
+    "proof:stage1:preflight": "npm run proof:stage1:preflight --prefix packages/pool-proof-harness",
+    "proof:stage1": "npm run proof:stage1 --prefix packages/pool-proof-harness",
+    "proof:stage1:publish": "npm run proof:stage1:publish --prefix packages/pool-proof-harness",
+    "proof:stage2:preflight": "npm run proof:stage2:preflight --prefix packages/pool-proof-harness",
+    "proof:stage2": "npm run proof:stage2 --prefix packages/pool-proof-harness",
+    "proof:stage2:publish": "npm run proof:stage2:publish --prefix packages/pool-proof-harness"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

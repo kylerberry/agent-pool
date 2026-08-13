@@ -232,6 +232,12 @@ export type FakeDriverOptions = {
   readonly hangMs?: number;
   /** Simulate container death on the Nth tool request. */
   readonly exitOnNthRequest?: number;
+  /** Emit one unmatched response frame immediately before the selected real response. */
+  readonly staleResponseBeforeNthRequest?: {
+    readonly requestNumber: number;
+    readonly id: string;
+    readonly response: BrokerResponse;
+  };
   /** Ignore shutdown frames so forced removal is exercised. */
   readonly ignoreShutdown?: boolean;
   /** spawnPersistent() throws synchronously (runtime missing / spawn error). */
@@ -395,6 +401,9 @@ export function createFakePersistentContainerDriver(opts: FakeDriverOptions = {}
           default: resp = { id, ok: false, error: 'unknown tool' };
         }
         session.onCommandEnd?.();
+        if (opts.staleResponseBeforeNthRequest?.requestNumber === toolCount) {
+          stdout.write(JSON.stringify({ id: opts.staleResponseBeforeNthRequest.id, ...opts.staleResponseBeforeNthRequest.response }) + '\n');
+        }
         stdout.write(JSON.stringify(resp) + '\n');
       }
 

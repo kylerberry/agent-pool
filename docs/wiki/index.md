@@ -23,10 +23,12 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/architecture/repository-builder-vs-pool-worker|Repository Builder vs Pool Worker]]
 - [[wiki/output/agents-building-agents-handoff|Agents Building Agents Handoff]]
 - [[wiki/log|Activity Log]]
+- [[wiki/operations/test-governance|Test Governance]]
 
 ## Source pages
 
 - [[wiki/sources/2026-04-13_domain-driven-documentation-convention|Domain-Driven Documentation Convention]] — `docs/raw/context/domain-driven-documentation-convention.md`
+- [[wiki/sources/2026-08-13_test-governance|Test Governance]] — `docs/raw/context/test-governance.md`
 - [[wiki/sources/2026-04-13_initial-domain-map|Initial Domain Map]] — `docs/raw/context/initial-domain-map.md`
 - [[wiki/sources/2026-04-13_repository-builder-vs-pool-worker|Repository Builder and Pool Worker Role Boundary]] — `docs/raw/context/repository-builder-vs-pool-worker.md`
 - [[wiki/sources/2026-04-13_pool-worker-execution-context-schema|Pool Worker Execution Context Schema]] — `docs/raw/specs/schemas/pool-worker-execution-context.schema.json`

@@ -25,7 +25,7 @@ import {
 } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
@@ -58,14 +58,25 @@ import { attemptBindingHash, buildStage2Report, validateStage2Report, type Stage
 import { deriveCommitments, validateRawObservations, type RawStage2Observation } from './stage-2-isolation.ts';
 import { buildActorIdentity } from '../../../src/domains/agent-execution/actor-context.ts';
 import { runPreflight, type PreflightSuccess } from './preflight.ts';
+import { publishRetainedReport } from './publish-retained-report.ts';
 import type { GreenEvidence } from '../../../src/domains/verification/pool-proof-verifier.ts';
 import type { ApprovedWork } from '../../../src/domains/orchestration/contracts.ts';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const reportsDir = resolve(packageRoot, 'reports');
 const stage1ReportPath = resolve(reportsDir, 'stage-1-proof-report.json');
-const stage2ReportPath = resolve(reportsDir, 'stage-2-proof-report.json');
-const stage2FailurePath = resolve(reportsDir, 'stage-2-preflight-failure.json');
+
+function candidateReportPath(args: readonly string[], filename: string): string {
+  const index = args.indexOf('--report-output');
+  const output = index >= 0 ? args[index + 1] : join(mkdtempSync(join(tmpdir(), 'pool-proof-stage2-candidate-')), filename);
+  if (!output || basename(output) !== filename) throw new Error(`--report-output must end with ${filename}`);
+  const path = resolve(output);
+  mkdirSync(dirname(path), { recursive: true });
+  const candidate = join(realpathSync(dirname(path)), filename);
+  const retained = realpathSync(reportsDir);
+  if (candidate === retained || candidate.startsWith(`${retained}/`)) throw new Error('candidate output must not replace a retained report');
+  return candidate;
+}
 
 const SANDBOX_CPU = '1';
 const SANDBOX_MEMORY = '1g';
@@ -502,7 +513,7 @@ export async function runStage2(options: Stage2Options): Promise<Stage2Result> {
           options.containerRuntime,
           options.sandboxImage,
           options.fixtureSourcePath,
-          ['node', '--test', 'test/message.test.js'],
+          jobs[0]!.job.fixtureTestCommand,
           sandboxIdentity,
         );
     if (!isValidBaseRed(redEvidence)) {
@@ -841,6 +852,8 @@ async function main(): Promise<void> {
   const containerRuntime = (runtimeFlag >= 0 ? args[runtimeFlag + 1] : 'docker') as 'docker' | 'podman';
   const sandboxImage = imageFlag >= 0 ? args[imageFlag + 1] : undefined;
   const injectFaultAttemptId = faultFlag >= 0 ? args[faultFlag + 1] : 'multi-worker-pool-proof-attempt-b';
+  const stage2ReportPath = candidateReportPath(args, 'stage-2-proof-report.json');
+  const stage2FailurePath = join(dirname(stage2ReportPath), 'stage-2-preflight-failure.json');
 
   // Validate and hash-bind the canonical retained Stage 1 report before any
   // side effect: no default fixture mkdtemp, stale report deletion, preflight,
@@ -861,16 +874,9 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Delete any stale report before attempting this run.
-  try {
-    rmSync(stage2ReportPath, { force: true });
-  } catch {
-    // ignore
-  }
-
   const preflight = await runPreflight({ piPath, model, containerRuntime, sandboxImage });
   if (!preflight.ok) {
-    mkdirSync(reportsDir, { recursive: true });
+    mkdirSync(dirname(stage2FailurePath), { recursive: true });
     writeFileSync(stage2FailurePath, JSON.stringify(preflight.failure, null, 2));
     console.error(`preflight failed: ${preflight.failure.stage} - ${preflight.failure.reason}`);
     process.exit(1);
@@ -889,15 +895,21 @@ async function main(): Promise<void> {
   });
 
   if (!result.ok) {
-    mkdirSync(reportsDir, { recursive: true });
+    mkdirSync(dirname(stage2FailurePath), { recursive: true });
     writeFileSync(stage2FailurePath, JSON.stringify({ stage: 'stage2', reason: result.reason, failure_code: result.failureCode, attempt_diagnostics: result.attempt_diagnostics ?? [] }, null, 2));
     console.error(`Stage 2 proof failed: ${result.failureCode ?? 'UNKNOWN'} - ${result.reason}`);
     process.exit(1);
   }
 
-  mkdirSync(reportsDir, { recursive: true });
+  mkdirSync(dirname(stage2ReportPath), { recursive: true });
   writeFileSync(stage2ReportPath, JSON.stringify(result.report, null, 2));
-  console.log(`Stage 2 proof passed: ${stage2ReportPath}`);
+  if (args.includes('--publish')) {
+    const published = publishRetainedReport({
+      selector: 'stage-2', candidatePath: stage2ReportPath, allowSealed: args.includes('--allow-sealed'),
+    });
+    if (!published.ok) throw new Error(`Stage 2 report publication failed: ${published.error}`);
+  }
+  console.log(`Stage 2 proof passed; candidate report: ${stage2ReportPath}`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

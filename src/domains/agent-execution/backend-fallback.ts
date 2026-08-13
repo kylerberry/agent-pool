@@ -156,6 +156,9 @@ export function createBackendFallbackLedger(init: {
       if (consumptions.length >= maxBackends) {
         return createExecutionFailure('FALLBACK_CHAIN_EXHAUSTED');
       }
+      if (input.outcome !== 'succeeded' && input.outcome !== 'failed') {
+        return createExecutionFailure('FALLBACK_OUTCOME_INVALID');
+      }
       const cost = validateCost(input.cost);
       if (isExecutionFailure(cost)) return cost;
       if (!Array.isArray(input.evidence) || input.evidence.some((item) => typeof item !== 'string')) {

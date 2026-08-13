@@ -1,22 +1,32 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import {
   existsSync,
-  mkdtempSync,
+  mkdtempSync as nativeMkdtempSync,
   mkdirSync,
   writeFileSync,
   readFileSync,
   rmSync,
   symlinkSync,
   lstatSync,
-  readdirSync,
   realpathSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
-import { spawnSync, spawn } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { withEnv } from "./helpers/fixture.mjs";
+
+const ownedTempRoots = new Set();
+function mkdtempSync(prefix) {
+  const path = nativeMkdtempSync(prefix);
+  ownedTempRoots.add(path);
+  return path;
+}
+after(() => {
+  for (const path of ownedTempRoots) rmSync(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 });
+});
 
 const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const launchScript = join(packageRoot, "scripts/launch.mjs");
@@ -128,7 +138,7 @@ test("Pi digest is checked before --version executes", async () => {
   assert.ok(!existsSync(marker), "--version was executed before digest check");
 });
 
-test("run-decomposition verifies Pi identity before --list-models", async () => {
+test("run-decomposition verifies Pi identity before --list-models", async (t) => {
   const launcherDir = fakeLauncherDir({ marker: "wrong-digest" });
   const piPath = join(launcherDir, "pi");
   const marker = join(launcherDir, "list-models-executed");
@@ -138,8 +148,9 @@ test("run-decomposition verifies Pi identity before --list-models", async () => 
     { mode: 0o755 },
   );
   const workspace = mkdtempSync(join(tmpdir(), "agent-pool-orch-f-run-"));
-  const { createRuntimeParent } = await import(join(packageRoot, "scripts/runtime-parent.mjs"));
+  const { createRuntimeParent, cleanupRuntimeParent } = await import(join(packageRoot, "scripts/runtime-parent.mjs"));
   const { path: runtimeParent, home, xdg } = createRuntimeParent();
+  t.after(() => cleanupRuntimeParent(runtimeParent));
   const jobPath = join(workspace, "job.json");
   writeFileSync(jobPath, validJob(), "utf8");
   const env = {
@@ -164,34 +175,25 @@ test("run-decomposition verifies Pi identity before --list-models", async () => 
   assert.ok(!existsSync(marker), "--list-models was executed before identity verification");
 });
 
-test("runtime parent ignores hostile TMPDIR", async () => {
+test("runtime parent ignores hostile TMPDIR", async (t) => {
   const hostileDir = mkdtempSync(join(tmpdir(), "agent-pool-hostile-tmp-"));
   const canonicalBase = realpathSync("/tmp");
-  process.env.TMPDIR = hostileDir;
-  process.env.TEMP = hostileDir;
-  process.env.TMP = hostileDir;
-  try {
-    const { createRuntimeParent } = await import(join(packageRoot, "scripts/runtime-parent.mjs"));
-    const runtime = createRuntimeParent();
-    assert.ok(
-      runtime.path.startsWith(`${canonicalBase}/`),
-      `runtime parent under hostile TMPDIR: ${runtime.path}`,
-    );
-    assert.ok(!runtime.path.startsWith(hostileDir), `runtime parent leaked to hostile TMPDIR: ${runtime.path}`);
-  } finally {
-    delete process.env.TMPDIR;
-    delete process.env.TEMP;
-    delete process.env.TMP;
-  }
+  withEnv(t, { TMPDIR: hostileDir, TEMP: hostileDir, TMP: hostileDir });
+  const { createRuntimeParent, cleanupRuntimeParent } = await import(join(packageRoot, "scripts/runtime-parent.mjs"));
+  const runtime = createRuntimeParent();
+  t.after(() => cleanupRuntimeParent(runtime.path));
+  assert.ok(runtime.path.startsWith(`${canonicalBase}/`), `runtime parent under hostile TMPDIR: ${runtime.path}`);
+  assert.ok(!runtime.path.startsWith(hostileDir), `runtime parent leaked to hostile TMPDIR: ${runtime.path}`);
 });
 
 test("preflight rejects HOME with lexical prefix collision outside runtime parent", () => {
   const launcherDir = fakeLauncherDir();
   const workspace = mkdtempSync(join(tmpdir(), "agent-pool-orch-f-collision-"));
-  mkdirSync(join("/tmp", "agent-pool-orch-runtime-collision"), { recursive: true, mode: 0o700 });
-  const parent = join("/tmp", "agent-pool-orch-runtime-collision");
+  const parent = mkdtempSync(join(tmpdir(), "agent-pool-orch-runtime-collision-"));
   // HOME is a sibling path that lexically starts with the parent string.
-  const evilHome = join("/tmp", "agent-pool-orch-runtime-collision-evil", "home");
+  const evilRoot = `${parent}-evil`;
+  ownedTempRoots.add(evilRoot);
+  const evilHome = join(evilRoot, "home");
   mkdirSync(dirname(evilHome), { recursive: true, mode: 0o700 });
   mkdirSync(evilHome, { recursive: true, mode: 0o700 });
   const xdg = join(parent, "xdg");
@@ -215,7 +217,7 @@ test("preflight rejects symlinked runtime parent", () => {
   const launcherDir = fakeLauncherDir();
   const workspace = mkdtempSync(join(tmpdir(), "agent-pool-orch-f-symlink-parent-"));
   const realParent = mkdtempSync(join(tmpdir(), "agent-pool-real-parent-"));
-  const symlinkParent = join(tmpdir(), `agent-pool-symlink-parent-${Date.now()}`);
+  const symlinkParent = join(mkdtempSync(join(tmpdir(), "agent-pool-symlink-parent-")), "runtime-parent-link");
   symlinkSync(realParent, symlinkParent);
   const home = join(realParent, "home");
   const xdg = join(realParent, "xdg");
@@ -276,46 +278,6 @@ test("runtime parent symlink swap is rejected before invoke", async () => {
   );
 });
 
-test("launch cleans actual runtime subtree on SIGTERM", async () => {
-  // Make preflight hang in the model registry call so we can terminate the
-  // launcher while it owns an active child and a runtime parent.
-  const helper = `#!/usr/bin/env node
-const args = process.argv.slice(2);
-if (args[0] === '--version') { console.log('pi 0.81.1'); process.exit(0); }
-if (args[0] === '--list-models') { setTimeout(() => {}, 10000); return; }
-process.exit(0);
-`;
-  const launcherDir = fakeLauncherDir({ helper });
-  const workspace = mkdtempSync(join(tmpdir(), "agent-pool-orch-f-sigterm-"));
-  const jobPath = join(workspace, "job.json");
-  writeFileSync(jobPath, validJob(), "utf8");
-  const env = {
-    ...baseEnv(),
-    AGENT_POOL_ACTOR: "orchestrator-control-plane",
-    AGENT_POOL_HARNESS: "orchestrator-control-plane",
-    AGENT_POOL_LAUNCHER: join(launcherDir, "pi"),
-    AGENT_POOL_WORKSPACE: workspace,
-    AGENT_POOL_JOB_PATH: jobPath,
-    PATH: `${launcherDir}${baseEnv().PATH ? `:${baseEnv().PATH}` : ""}`,
-  };
-  const runtimeBase = realpathSync("/tmp");
-  const runtimePrefix = "agent-pool-orch-runtime-";
-  const before = new Set(readdirSync(runtimeBase).filter((name) => name.startsWith(runtimePrefix)));
-
-  const child = spawn(process.execPath, [launchScript], { env });
-  // Wait for the launcher to create the runtime parent and start preflight.
-  await new Promise((r) => setTimeout(r, 300));
-  const exitPromise = new Promise((resolve) => child.on("exit", (code) => resolve(code)));
-  child.kill("SIGTERM");
-  const exitCode = await exitPromise;
-  assert.notEqual(exitCode, 0);
-
-  const after = readdirSync(runtimeBase).filter(
-    (name) => name.startsWith(runtimePrefix) && !before.has(name),
-  );
-  assert.equal(after.length, 0, `runtime parent subtree leaked: ${after.join(", ")}`);
-});
-
 test("settings has no static subagent defaultModel", () => {
   const settings = JSON.parse(readFileSync(join(packageRoot, "config/settings.json"), "utf8"));
   assert.equal(settings.subagents.defaultModel, undefined, "static defaultModel must be removed");
@@ -348,19 +310,4 @@ process.exit(0);
   const modelIndex = argv.indexOf("--model");
   assert.ok(modelIndex >= 0, "--model flag missing");
   assert.equal(argv[modelIndex + 1], "openai-codex/gpt-5.6-sol", "Sol must be the effective model argv");
-});
-
-test("launch cleans actual runtime subtree after preflight digest failure", () => {
-  const runtimeBase = realpathSync("/tmp");
-  const runtimePrefix = "agent-pool-orch-runtime-";
-  const before = new Set(readdirSync(runtimeBase).filter((name) => name.startsWith(runtimePrefix)));
-  const { result } = runLaunch({}, { job: validJob(), marker: "wrong-digest-for-cleanup-test" });
-  // A mismatched digest causes preflight to fail before run-decomposition is
-  // spawned, exercising the cleanup path for a controlled preflight failure.
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /digest mismatch|preflight failed/);
-  const after = readdirSync(runtimeBase).filter(
-    (name) => name.startsWith(runtimePrefix) && !before.has(name),
-  );
-  assert.equal(after.length, 0, `runtime parent subtree leaked after preflight failure: ${after.join(", ")}`);
 });

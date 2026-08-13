@@ -163,6 +163,25 @@ describe('same-attempt backend fallback', () => {
     assert.equal(chain.snapshot().consumptions.length, 0);
   });
 
+  it('rejects untyped runtime outcomes without mutating the fallback chain', () => {
+    for (const outcome of ['pending' as never, null as never, {} as never]) {
+      const chain = ledger();
+      const before = chain.snapshot();
+      const beforeCanFallback = chain.canFallback();
+      const rejected = chain.record({
+        attemptId: 'attempt-1',
+        model: PRIMARY,
+        outcome,
+        cost: cost(1, 1),
+        evidence: [],
+      });
+      assert.ok(isExecutionFailure(rejected), `${String(outcome)} must be rejected`);
+      assert.equal(rejected.code, 'FALLBACK_OUTCOME_INVALID');
+      assert.deepEqual(chain.snapshot(), before);
+      assert.equal(chain.canFallback(), beforeCanFallback);
+    }
+  });
+
   it('rejects a chain limit above the per-attempt ceiling', () => {
     const rejected = createBackendFallbackLedger({
       attemptId: 'attempt-1',

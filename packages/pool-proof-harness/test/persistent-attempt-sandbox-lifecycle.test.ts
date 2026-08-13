@@ -24,12 +24,12 @@
  * This test FAILS (it does not skip) when Docker or the pinned image is absent.
  */
 
-import { describe, it } from 'node:test';
+import { describe, it, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, realpathSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createRepositorySandbox,
@@ -39,7 +39,29 @@ import {
 } from '../../../src/domains/agent-execution/index.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPORT_PATH = resolve(__dirname, '..', 'reports', 'persistent-attempt-sandbox-lifecycle-report.json');
+const retainedReportsDir = resolve(__dirname, '..', 'reports');
+let generatedCandidateRoot: string | undefined;
+function lifecycleCandidatePath(): string {
+  const candidateRoot = process.env.AGENT_POOL_LIFECYCLE_CANDIDATE_OUTPUT ? undefined : mkdtempSync(join(tmpdir(), 'pool-proof-lifecycle-candidate-'));
+  generatedCandidateRoot = candidateRoot;
+  const output = process.env.AGENT_POOL_LIFECYCLE_CANDIDATE_OUTPUT
+    ?? join(candidateRoot!, 'persistent-attempt-sandbox-lifecycle-report.json');
+  if (basename(output) !== 'persistent-attempt-sandbox-lifecycle-report.json') {
+    throw new Error('lifecycle candidate output must use the approved report filename');
+  }
+  const path = resolve(output);
+  mkdirSync(dirname(path), { recursive: true });
+  const candidate = join(realpathSync(dirname(path)), 'persistent-attempt-sandbox-lifecycle-report.json');
+  const retained = realpathSync(retainedReportsDir);
+  if (candidate === retained || candidate.startsWith(`${retained}/`)) {
+    throw new Error('lifecycle evidence must be written as a candidate, not directly to retained reports');
+  }
+  return candidate;
+}
+const REPORT_PATH = lifecycleCandidatePath();
+after(() => {
+  if (generatedCandidateRoot) rmSync(generatedCandidateRoot, { recursive: true, force: true });
+});
 
 // Truthfully re-pinned after rebuilding the image from the pinned base digest.
 // The base node:24-alpine digest is documented and verified at build time.
@@ -121,6 +143,7 @@ describe('Persistent attempt sandbox — real-Docker lifecycle proof (AC-13)', (
       image_digest: PINNED_SANDBOX_IMAGE,
       base_image_digest: BASE_IMAGE_DIGEST,
       generated_at: new Date().toISOString(),
+      repeat_count: 1,
       verdicts: {} as Record<string, boolean>,
       timings_ms: {} as Record<string, number>,
       commitments: {} as Record<string, number>,

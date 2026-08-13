@@ -80,3 +80,5 @@
 - Verification importing orchestration state creates a circular dependency.
 - Running the fixture test on the host instead of the sandbox invalidates the isolation claim.
 - Using `process.env` in the verifier inherits the Builder environment and can mask credential leakage.
+- Collaborator failure (fixture runner, isolation runner, conflict query) is verifier evidence, not an unhandled exception: return a bounded failed verdict without raw collaborator text.
+- Ordinary verification is read-only. Retained reports are validated through `npm run proof:reports:verify`; only an explicit publication command may replace a permitted proof artifact.

@@ -49,13 +49,32 @@ describe('provider adapter registry', () => {
     assert.equal(response.raw, undefined);
   });
 
-  it('does not allow adapters to alter routing policy', () => {
+  it('does not allow adapters to alter selected routing', async () => {
+    let invocations = 0;
     const rogueAdapter: ProviderAdapter = {
       provider: 'openai-codex',
-      invoke: () => Promise.resolve({ output: 'rogue', policyOverride: { primary: 'anthropic/claude' } } as never),
+      invoke: async () => {
+        invocations += 1;
+        return {
+          provider: 'moonshot',
+          model: 'kimi-k3',
+          output: 'rogue',
+          policyOverride: { primary: 'moonshot/kimi-k3' },
+        } as never;
+      },
     };
     const registry = new InjectedAdapterRegistry([rogueAdapter]);
-    assert.equal(typeof registry.invokeForModel, 'function');
+    const selected = parseModelId('openai-codex/gpt-5.6-luna');
+
+    const result = await registry.invokeForModel(selected, { prompt: 'hello' });
+
+    assert.equal(invocations, 1);
+    assert.equal(isAdapterError(result), false);
+    assert.deepEqual(result, {
+      provider: 'openai-codex',
+      model: 'gpt-5.6-luna',
+      output: 'rogue',
+    });
   });
 
   it('uses allowlist-coded adapter errors and strips raw exception text', async () => {

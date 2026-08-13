@@ -6,13 +6,12 @@
  * failure evidence and exits nonzero on any missing capability.
  */
 
-import { mkdir, writeFile, readFile, access, unlink } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { readFile, access } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dirname } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { lstatSync, realpathSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import {
   resolvePiIdentity,
   resolvePackageIdentity,
@@ -61,12 +60,12 @@ async function readPiAuthEntry(provider: string): Promise<Record<string, unknown
   }
 }
 
-export function hasProviderCredential(provider: string): boolean {
+export function hasProviderCredential(provider: string, env: NodeJS.ProcessEnv = process.env): boolean {
   // openai-codex uses OAuth credentials stored in Pi auth.json; an
   // OPENAI_API_KEY environment value is not a valid Pi 0.83 auth shape and
   // must not be misclassified as Codex OAuth.
   if (provider === 'moonshot') {
-    return typeof process.env.MOONSHOT_API_KEY === 'string' && process.env.MOONSHOT_API_KEY.length > 0;
+    return typeof env.MOONSHOT_API_KEY === 'string' && env.MOONSHOT_API_KEY.length > 0;
   }
   return false;
 }
@@ -124,18 +123,28 @@ function resolveGitPath(): string | { error: string } {
   }
 }
 
-async function deleteStaleFailureEvidence(): Promise<void> {
-  try {
-    await unlink(resolve(reportsDir, 'stage-1-preflight-failure.json'));
-  } catch {
-    // ignore absence
+function failureEvidencePath(args: readonly string[]): string {
+  const index = args.indexOf('--failure-output');
+  const filename = 'stage-1-preflight-failure.json';
+  const output = index >= 0
+    ? args[index + 1]
+    : join(mkdtempSync(join(tmpdir(), 'pool-proof-preflight-failure-')), filename);
+  if (!output || basename(output) !== filename) {
+    throw new Error(`--failure-output must end with ${filename}`);
   }
+  const path = resolve(output);
+  mkdirSync(dirname(path), { recursive: true });
+  const candidate = join(realpathSync(dirname(path)), filename);
+  const retained = realpathSync(reportsDir);
+  if (candidate === retained || candidate.startsWith(`${retained}/`)) {
+    throw new Error('failure evidence must not replace a retained report');
+  }
+  return candidate;
 }
 
 export async function runPreflight(
   config: PreflightConfig,
 ): Promise<{ ok: true; result: PreflightSuccess } | { ok: false; failure: PreflightFailure }> {
-  await deleteStaleFailureEvidence();
   const timestamp = () => new Date().toISOString();
 
   // Pi executable identity.
@@ -242,28 +251,22 @@ async function main(): Promise<void> {
   const sandboxImage = imageFlag >= 0 ? args[imageFlag + 1] : undefined;
 
   if (!sandboxImage) {
-    await mkdir(reportsDir, { recursive: true });
     const failure: PreflightFailure = {
       stage: 'sandbox_image',
       reason: 'sandbox image digest/ID is required (no default)',
       timestamp: new Date().toISOString(),
     };
-    await writeFile(
-      resolve(reportsDir, 'stage-1-preflight-failure.json'),
-      JSON.stringify(failure, null, 2),
-    );
-    console.error(`preflight failed: ${failure.stage} - ${failure.reason}`);
+    const failurePath = failureEvidencePath(args);
+    writeFileSync(failurePath, JSON.stringify(failure, null, 2));
+    console.error(`preflight failed: ${failure.stage} - ${failure.reason}; candidate evidence: ${failurePath}`);
     process.exit(1);
   }
 
   const result = await runPreflight({ piPath, model, containerRuntime, sandboxImage });
   if (!result.ok) {
-    await mkdir(reportsDir, { recursive: true });
-    await writeFile(
-      resolve(reportsDir, 'stage-1-preflight-failure.json'),
-      JSON.stringify(result.failure, null, 2),
-    );
-    console.error(`preflight failed: ${result.failure.stage} - ${result.failure.reason}`);
+    const failurePath = failureEvidencePath(args);
+    writeFileSync(failurePath, JSON.stringify(result.failure, null, 2));
+    console.error(`preflight failed: ${result.failure.stage} - ${result.failure.reason}; candidate evidence: ${failurePath}`);
     process.exit(1);
   }
   console.log('preflight passed');

@@ -56,6 +56,8 @@
 - Do not propagate provider exception text or payloads into public routing errors.
 - Do not treat bootstrap capability ranks as empirical evaluation results.
 - Do not add a model, provider, alias, or fallback outside the approved registry.
+- Adapter tests must invoke hostile provider output and assert that routing remains authoritative; a fixture property such as `policyOverride` is not evidence by itself.
+- Keep split tests organized by production seam (availability, role selection, pair selection, evidence), with shared fixtures that register no tests.
 
 ## Relevant sources
 

@@ -1,11 +1,22 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync as nativeMkdtempSync, writeFileSync, readFileSync, existsSync , rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { withEnv } from "./helpers/fixture.mjs";
+
+const ownedTempRoots = new Set();
+function mkdtempSync(prefix) {
+  const path = nativeMkdtempSync(prefix);
+  ownedTempRoots.add(path);
+  return path;
+}
+after(() => {
+  for (const path of ownedTempRoots) rmSync(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 });
+});
 
 const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -132,7 +143,7 @@ test("invoker aborts when Pi executable changes after creation", async () => {
   );
 });
 
-test("invoker uses trusted absolute interpreter and fixed PATH", async () => {
+test("invoker uses trusted absolute interpreter and fixed PATH", async (t) => {
   const { createPiModelInvoker } = await import(join(packageRoot, "scripts/pi-model-invoker.mjs"));
   const captureDir = mkdtempSync(join(tmpdir(), "agent-pool-argv-cap-"));
   const launcherDir = fakeLauncherDir({ helper: captureHelper(captureDir) });
@@ -143,7 +154,7 @@ test("invoker uses trusted absolute interpreter and fixed PATH", async () => {
   const hostileDir = mkdtempSync(join(tmpdir(), "agent-pool-hostile-"));
   const marker = join(hostileDir, "marker");
   writeFileSync(join(hostileDir, "node"), `#!/usr/bin/env node\nrequire('fs').writeFileSync('${marker}', '');\n`, { mode: 0o755 });
-  process.env.PATH = hostileDir;
+  withEnv(t, { PATH: hostileDir });
 
   await invoker.invoke({ prompt: "test", model: "moonshot/kimi-k3", deadlineMs: 5000, maxOutputTokens: 100 }, new AbortController().signal);
   assert.ok(!existsSync(marker), "hostile PATH shim executed");

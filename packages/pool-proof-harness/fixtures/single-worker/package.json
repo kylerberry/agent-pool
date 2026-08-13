@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test:acceptance": "node --test test/*.test.js",
+    "test:red": "node --test test/*.test.js"
   }
 }

@@ -10,7 +10,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, existsSync, realpathSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, existsSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -71,10 +71,9 @@ function socketPath(): string {
 }
 
 describe('Persistent Sandbox Broker', () => {
-  it('proxies read/write/edit/bash through one persistent sandbox and persists workspace state across calls', async () => {
+  it('forwards calls through one persistent sandbox', async () => {
     const runtimeRoot = mkdtempSync(join(tmpdir(), 'broker-'));
-    const workspacePath = createWorkspace(runtimeRoot, "workspace");
-    mkdirSync(workspacePath, { recursive: true });
+    const workspacePath = createWorkspace(runtimeRoot, 'workspace');
     const sock = socketPath();
     const driver = createFakePersistentContainerDriver();
     const broker = createSandboxBroker({
@@ -88,16 +87,19 @@ describe('Persistent Sandbox Broker', () => {
 
     try {
       await broker.start();
-      // The persistent sandbox is shared: one supervisor process handles all calls.
       assert.equal(driver.spawnCount, 1, 'broker must start exactly one persistent container');
       const session = driver.sessions[0]!;
 
-      // write then read exercises same-attempt workspace persistence.
       await brokerRequest(sock, { tool: 'write', path: 'hello.txt', content: 'world' });
-      // Make the fake supervisor actually read/write on the host workspace so persistence is real.
       const readRes = (await brokerRequest(sock, { tool: 'read', path: 'hello.txt' })) as { ok: boolean; content?: string };
       assert.equal(readRes.ok, true);
-      assert.ok(session.requestFrames.length >= 2);
+      assert.equal(readRes.content, 'fake-read:hello.txt');
+      assert.equal(session.requestFrames.length, 2);
+      const [write, read] = session.requestFrames as Array<Record<string, unknown>>;
+      assert.equal(typeof write.id, 'string');
+      assert.equal(typeof read.id, 'string');
+      assert.deepEqual(write, { id: write.id, tool: 'write', path: 'hello.txt', content: 'world' });
+      assert.deepEqual(read, { id: read.id, tool: 'read', path: 'hello.txt' });
     } finally {
       await broker.stop();
       if (existsSync(sock)) rmSync(sock);

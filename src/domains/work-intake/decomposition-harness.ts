@@ -97,31 +97,41 @@ const ALLOWED_JOB_FIELDS = new Set([
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
-function reject(code: string, reason: string, jobId: string): DecompositionFailure {
-  return Object.freeze({ code, reason, jobId });
+function hasOnlyOwnFields(value: unknown, allowed: ReadonlySet<string>): value is Record<string, unknown> {
+  return isPlainObject(value) && Object.keys(value).every((key) => allowed.has(key));
+}
+
+function boundedJobId(jobId: unknown): string {
+  return typeof jobId === "string" && byteLength(jobId) <= 256 ? jobId : "unknown";
+}
+
+function reject(code: string, reason: string, jobId: unknown): DecompositionFailure {
+  // Invalid inputs must never reflect attacker-controlled field names or ids.
+  return Object.freeze({ code, reason: reason.slice(0, 256), jobId: boundedJobId(jobId) });
 }
 
 function validateJob(job: DecompositionJob, limits: DecompositionLimits): { readonly indexRevision: IndexRevision } | DecompositionFailure {
-  if (!isPlainObject(job)) {
-    return reject("INVALID_JOB", "Job must be an object", "unknown");
+  if (!hasOnlyOwnFields(job, ALLOWED_JOB_FIELDS)) {
+    return reject("INVALID_JOB", "Job must be a plain object with only known fields", "unknown");
   }
-  const unknownFields = Object.keys(job).filter((k) => !ALLOWED_JOB_FIELDS.has(k));
-  if (unknownFields.length > 0) {
-    return reject("INVALID_JOB", `Unknown job fields: ${unknownFields.join(", ")}`, job.jobId ?? "unknown");
-  }
-  if (typeof job.jobId !== "string" || job.jobId === "") {
+  if (!Object.hasOwn(job, "jobId") || typeof job.jobId !== "string" || job.jobId === "") {
     return reject("INVALID_JOB", "jobId is required", "unknown");
   }
-  if (!isPlainObject(job.spec)) {
-    return reject("INVALID_JOB", "spec is required", job.jobId);
+  if ((!Object.hasOwn(job, "rawSpec") && "rawSpec" in job) || (Object.hasOwn(job, "rawSpec") && job.rawSpec !== undefined && typeof job.rawSpec !== "string")) {
+    return reject("INVALID_JOB", "rawSpec must be an own string field when present", job.jobId);
   }
-  if (typeof job.spec.intent !== "string" || job.spec.intent === "") {
+  if (!Object.hasOwn(job, "spec") || !hasOnlyOwnFields(job.spec, new Set(["intent", "acceptanceCriteria", "constraints"]))) {
+    return reject("INVALID_JOB", "spec must be a plain object with only known fields", job.jobId);
+  }
+  if (!Object.hasOwn(job.spec, "intent") || typeof job.spec.intent !== "string" || job.spec.intent === "") {
     return reject("INVALID_JOB", "spec.intent is required", job.jobId);
   }
-  if (!Array.isArray(job.spec.acceptanceCriteria) || job.spec.acceptanceCriteria.length === 0) {
+  if (!Object.hasOwn(job.spec, "acceptanceCriteria") || !Array.isArray(job.spec.acceptanceCriteria) || job.spec.acceptanceCriteria.length === 0) {
     return reject("INVALID_JOB", "spec.acceptanceCriteria must be a non-empty array", job.jobId);
   }
   for (const criterion of job.spec.acceptanceCriteria) {
@@ -129,7 +139,7 @@ function validateJob(job: DecompositionJob, limits: DecompositionLimits): { read
       return reject("INVALID_JOB", "spec.acceptanceCriteria entries must be non-empty strings", job.jobId);
     }
   }
-  if (job.spec.constraints !== undefined) {
+  if ((!Object.hasOwn(job.spec, "constraints") && "constraints" in job.spec) || (Object.hasOwn(job.spec, "constraints") && job.spec.constraints !== undefined)) {
     if (!Array.isArray(job.spec.constraints)) {
       return reject("INVALID_JOB", "spec.constraints must be an array", job.jobId);
     }
@@ -139,11 +149,17 @@ function validateJob(job: DecompositionJob, limits: DecompositionLimits): { read
       }
     }
   }
-  if (!isPlainObject(job.targetRepository) || typeof job.targetRepository.owner !== "string" || job.targetRepository.owner.length === 0 || typeof job.targetRepository.name !== "string" || job.targetRepository.name.length === 0) {
+  const targetRepositoryFields = new Set(["owner", "name"]);
+  if (!Object.hasOwn(job, "targetRepository") || !hasOnlyOwnFields(job.targetRepository, targetRepositoryFields) || !Object.hasOwn(job.targetRepository, "owner") || typeof job.targetRepository.owner !== "string" || job.targetRepository.owner.length === 0 || !Object.hasOwn(job.targetRepository, "name") || typeof job.targetRepository.name !== "string" || job.targetRepository.name.length === 0) {
     return reject("INVALID_JOB", "targetRepository owner/name are required", job.jobId);
   }
-  if (typeof job.head !== "string" || !/^[0-9a-f]{40}$/.test(job.head)) {
+  if (!Object.hasOwn(job, "head") || typeof job.head !== "string" || !/^[0-9a-f]{40}$/.test(job.head)) {
     return reject("INVALID_JOB", "head must be a 40-character hex SHA", job.jobId);
+  }
+  const indexRevisionFields = new Set(["repository", "head", "graphifyVersion", "indexSchemaVersion", "sensitivePathPolicyVersion", "manifestDigest", "indexRevision", "createdAt"]);
+  const repositoryFields = new Set(["owner", "name"]);
+  if (!Object.hasOwn(job, "indexRevision") || !hasOnlyOwnFields(job.indexRevision, indexRevisionFields) || !hasOnlyOwnFields(job.indexRevision.repository, repositoryFields) || !Object.hasOwn(job.indexRevision.repository, "owner") || !Object.hasOwn(job.indexRevision.repository, "name")) {
+    return reject("INVALID_JOB", "indexRevision must be a plain object with only known fields", job.jobId);
   }
   let validatedRevision: IndexRevision;
   try {
@@ -158,7 +174,20 @@ function validateJob(job: DecompositionJob, limits: DecompositionLimits): { read
     return reject("INDEX_REVISION_MISMATCH", "job repository does not match index revision repository", job.jobId);
   }
 
-  const serialized = JSON.stringify(job);
+  // Serialize only the validated primitive projection, never the untrusted
+  // object graph (which may be cyclic despite otherwise plausible fields).
+  const serialized = JSON.stringify({
+    jobId: job.jobId,
+    spec: {
+      intent: job.spec.intent,
+      acceptanceCriteria: job.spec.acceptanceCriteria,
+      ...(job.spec.constraints === undefined ? {} : { constraints: job.spec.constraints }),
+    },
+    ...(job.rawSpec === undefined ? {} : { rawSpec: job.rawSpec }),
+    targetRepository: job.targetRepository,
+    head: job.head,
+    indexRevision: validatedRevision,
+  });
   if (byteLength(serialized) > limits.maxSerializedJobBytes) {
     return reject("JOB_SIZE_EXCEEDED", "Serialized job exceeds limit", job.jobId);
   }

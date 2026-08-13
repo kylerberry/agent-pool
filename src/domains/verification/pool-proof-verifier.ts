@@ -171,33 +171,79 @@ function checkAllowedPaths(changed: readonly string[], allowed: readonly string[
   return true;
 }
 
+type CollaboratorRun = {
+  readonly passed: boolean;
+  readonly evidence: GreenEvidence | null;
+  readonly failureCode: 'FIXTURE_TEST_RUNNER_FAILED' | 'ISOLATION_RUNNER_FAILED' | null;
+};
+
+function failedCollaboratorEvidence(message: string): GreenEvidence {
+  return { command: [], exitCode: 1, stdout: '', stderr: message, timedOut: false };
+}
+
+function isGreenEvidence(value: unknown): value is GreenEvidence {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const evidence = value as Partial<GreenEvidence>;
+  return Array.isArray(evidence.command)
+    && evidence.command.every((part) => typeof part === 'string')
+    && typeof evidence.exitCode === 'number'
+    && Number.isFinite(evidence.exitCode)
+    && typeof evidence.stdout === 'string'
+    && typeof evidence.stderr === 'string'
+    && typeof evidence.timedOut === 'boolean'
+    && (evidence.stdoutTruncated === undefined || typeof evidence.stdoutTruncated === 'boolean')
+    && (evidence.stderrTruncated === undefined || typeof evidence.stderrTruncated === 'boolean');
+}
+
+function isConflictResult(value: unknown): value is { readonly hasConflict: boolean; readonly existingResultId: string | null } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const result = value as { hasConflict?: unknown; existingResultId?: unknown };
+  return typeof result.hasConflict === 'boolean'
+    && (typeof result.existingResultId === 'string' || result.existingResultId === null);
+}
+
 async function runFixtureTest(
   runner: FixtureTestRunner,
   workspacePath: string,
   command: readonly string[],
-): Promise<{ passed: boolean; evidence: GreenEvidence }> {
+): Promise<CollaboratorRun> {
   if (command.length === 0) {
     return {
       passed: false,
       evidence: { command, exitCode: 1, stdout: '', stderr: 'empty fixture test command', timedOut: false },
+      failureCode: null,
     };
   }
-  const evidence = await runner(workspacePath, command);
-  return { passed: evidence.exitCode === 0 && !evidence.timedOut, evidence };
+  try {
+    const evidence: unknown = await runner(workspacePath, command);
+    if (!isGreenEvidence(evidence)) {
+      return { passed: false, evidence: failedCollaboratorEvidence('fixture test runner failed'), failureCode: 'FIXTURE_TEST_RUNNER_FAILED' };
+    }
+    return { passed: evidence.exitCode === 0 && !evidence.timedOut, evidence, failureCode: null };
+  } catch {
+    return { passed: false, evidence: failedCollaboratorEvidence('fixture test runner failed'), failureCode: 'FIXTURE_TEST_RUNNER_FAILED' };
+  }
 }
 
 async function runIsolationProbes(
   runner: FixtureTestRunner,
   workspacePath: string,
   probes: readonly string[],
-): Promise<{ passed: boolean; evidence: GreenEvidence | null }> {
+): Promise<CollaboratorRun> {
   for (const probe of probes) {
-    const evidence = await runner(workspacePath, ['sh', '-c', probe]);
-    if (evidence.exitCode === 0) {
-      return { passed: false, evidence };
+    try {
+      const evidence: unknown = await runner(workspacePath, ['sh', '-c', probe]);
+      if (!isGreenEvidence(evidence)) {
+        return { passed: false, evidence: failedCollaboratorEvidence('isolation runner failed'), failureCode: 'ISOLATION_RUNNER_FAILED' };
+      }
+      if (evidence.exitCode === 0) {
+        return { passed: false, evidence, failureCode: null };
+      }
+    } catch {
+      return { passed: false, evidence: failedCollaboratorEvidence('isolation runner failed'), failureCode: 'ISOLATION_RUNNER_FAILED' };
     }
   }
-  return { passed: true, evidence: null };
+  return { passed: true, evidence: null, failureCode: null };
 }
 
 export function createPoolProofVerifier(options: PoolProofVerifierOptions): PoolProofVerifier {
@@ -273,17 +319,26 @@ export function createPoolProofVerifier(options: PoolProofVerifierOptions): Pool
       const isolationResult = await runIsolationProbes(runner, resources.workspacePath, isolationProbes);
       checks.push({ name: 'isolation_probes_pass', passed: isolationResult.passed });
 
-      const conflict = await conflictQuery(job.attemptId, resources.resultId);
+      let conflict: { hasConflict: boolean; failureCode: 'CONFLICT_QUERY_FAILED' | null };
+      try {
+        const value: unknown = await conflictQuery(job.attemptId, resources.resultId);
+        conflict = isConflictResult(value)
+          ? { hasConflict: value.hasConflict, failureCode: null }
+          : { hasConflict: true, failureCode: 'CONFLICT_QUERY_FAILED' };
+      } catch {
+        conflict = { hasConflict: true, failureCode: 'CONFLICT_QUERY_FAILED' };
+      }
       const noConflictingResult = !conflict.hasConflict;
       checks.push({ name: 'no_conflicting_result', passed: noConflictingResult });
 
       const allPassed = checks.every((c) => c.passed);
+      const collaboratorFailure = fixtureResult.failureCode ?? isolationResult.failureCode ?? conflict.failureCode;
       return {
         status: allPassed ? 'passed' : 'failed',
         // A resolved HEAD is evidence only until every verifier check passes.
         // In particular, a failed launch can still point at the fixture base.
         commitSha: allPassed ? commitSha : null,
-        failureCode: allPassed ? null : (process.failureCode ?? 'VERIFIER_CHECK_FAILED'),
+        failureCode: allPassed ? null : (process.failureCode ?? collaboratorFailure ?? 'VERIFIER_CHECK_FAILED'),
         checks,
         greenEvidence: allPassed ? fixtureResult.evidence : null,
       };

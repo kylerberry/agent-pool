@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { glob } from 'node:fs/promises';
+import { assertNoModuleReferencePrefixes, assertNoModuleReferences, staticModuleReferences } from '../helpers/import-policy.ts';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const domainSourceRoot = join(__dirname, '../../src/domains/work-intake');
+const domainSourceRoot = fileURLToPath(new URL('../../src/domains/work-intake/', import.meta.url));
 
 /** Remove block and line comments so source scans match code, not prose. */
 function stripComments(source: string): string {
@@ -28,9 +28,10 @@ function directIntakeModuleFiles(): string[] {
     if (visited.has(current)) continue;
     visited.add(current);
 
-    const content = readFileSync(current, 'utf8');
-    for (const match of content.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
-      const specifier = match[1] as string;
+    // An empty forbidden list still fails closed on computed module references,
+    // which cannot establish a complete static graph policy.
+    assertNoModuleReferences(current, []);
+    for (const { specifier } of staticModuleReferences(current)) {
       if (specifier.startsWith('node:')) continue;
       assert.ok(
         specifier.startsWith('./') || specifier.startsWith('../'),
@@ -53,31 +54,19 @@ describe('architecture boundaries', () => {
     const files = directIntakeModuleFiles();
     assert.ok(files.length > 0, 'expected direct-intake source files');
     for (const file of files) {
-      const content = readFileSync(file, 'utf8');
-      assert.equal(
-        /from\s+['"].*model-routing-and-evaluation/.test(content),
-        false,
-        `${file} must not import the model routing domain`,
-      );
-      assert.equal(
-        /provider-adapters|selectForRole|AdapterRegistry/.test(content),
-        false,
-        `${file} must not reference a model adapter`,
-      );
-      assert.equal(content.includes('craft-pool'), false, `${file} must not reference craft-pool`);
-      assert.equal(
-        content.includes('packages/worker-harness'),
-        false,
-        `${file} must not reference packages/worker-harness`,
-      );
+      assertNoModuleReferences(file, [
+        '../model-routing-and-evaluation/model-router.ts',
+        '../model-routing-and-evaluation/provider-adapters.ts',
+        'craft-pool',
+        'packages/worker-harness',
+      ]);
     }
   });
 
   it('direct-intake module graph imports no other domain', () => {
     for (const file of directIntakeModuleFiles()) {
-      const content = readFileSync(file, 'utf8');
-      const crossDomain = content.match(/from\s+['"][^'"]*domains\/(?!work-intake)[^'"]+['"]/g);
-      assert.equal(crossDomain, null, `${file} must not import another domain: ${crossDomain?.join(', ')}`);
+      // This graph is local-only: every parent-relative import reaches another domain.
+      assertNoModuleReferencePrefixes(file, ['../']);
     }
   });
 

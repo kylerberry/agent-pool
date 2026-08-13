@@ -77,6 +77,8 @@
 - Mutation-test append-only and allocation guarantees: remove the mechanism, and the test that claims to protect it must fail. Two real defects in this domain were found this way and none by reading.
 - Probe append-only tables from a connection using SQLite's default pragmas, not one this store opened.
 - Run `node --experimental-strip-types --test test/orchestration/*.test.ts`, then `npm test`, `npm run typecheck`, and `npm run test:worker`.
+- Same-process synchronous `Promise.all` is not SQLite concurrency evidence. Name such tests as ordered multi-handle conflict semantics; reserve concurrency claims for independently gated operations with observed overlap and fencing evidence.
+- Architecture import policy uses AST/module checks and must be paired with executable queue, contract, or store behavior—not source substrings or numeric-literal absence.
 
 ## Relevant sources
 

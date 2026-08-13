@@ -29,6 +29,7 @@ S — Sharpen captures durable learning after meaningful work. It updates the re
 
 - [[wiki/architecture/supervisor-orchestrator|Supervisor Orchestrator]]
 - [[wiki/overview|Project Overview]]
+- [[wiki/operations/test-governance|Test Governance]]
 
 ## Raw source
 

@@ -206,6 +206,7 @@ const FAILURE_REASONS: Readonly<Record<string, string>> = Object.freeze({
   FALLBACK_CHAIN_LIMIT: 'Backend fallback chain exceeds the per-attempt limit',
   FALLBACK_LEDGER_SEALED: 'Backend fallback ledger is already sealed',
   FALLBACK_COST_INVALID: 'Consumed cost must be a non-negative finite number',
+  FALLBACK_OUTCOME_INVALID: 'Fallback outcome must be succeeded or failed',
 
   // Transcript retention and cleanup
   TRANSCRIPT_STEP_OUT_OF_ORDER: 'Transcript retention steps must run in the specified order',

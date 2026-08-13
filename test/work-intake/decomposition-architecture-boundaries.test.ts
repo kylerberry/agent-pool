@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertNoModuleReferencePrefixes, assertOnlyModuleReferencePrefixes, staticModuleReferences } from "../helpers/import-policy.ts";
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), "../../..");
 const packageRoot = join(repoRoot, "packages/orchestrator-harness");
@@ -97,11 +98,16 @@ test("emission schema permits only ADR-018 fields", () => {
   assert.deepEqual(actual, allowed);
 });
 
-test("work-intage decomposition source imports only approved domains", () => {
-  const source = readFileSync(join(repoRoot, "src/domains/work-intake/decomposition-harness.ts"), "utf8");
-  assert.ok(source.includes("model-routing-and-evaluation"));
-  assert.ok(source.includes("codebase-knowledge"));
-  assert.ok(!source.includes("worker-harness"));
-  assert.ok(!source.includes("craft-pool"));
-  assert.ok(!source.includes("orchestration"));
+test("work-intake decomposition source imports only approved domains", () => {
+  const source = fileURLToPath(new URL("../../src/domains/work-intake/decomposition-harness.ts", import.meta.url));
+  const specifiers = staticModuleReferences(source).map(({ specifier }) => specifier);
+  assert.ok(specifiers.includes("../model-routing-and-evaluation/model-router.ts"));
+  assert.ok(specifiers.includes("../codebase-knowledge/contracts.ts"));
+  assertOnlyModuleReferencePrefixes(source, [
+    "./",
+    "../model-routing-and-evaluation/",
+    "../codebase-knowledge/",
+    "node:",
+  ]);
+  assertNoModuleReferencePrefixes(source, ["../orchestration/"]);
 });

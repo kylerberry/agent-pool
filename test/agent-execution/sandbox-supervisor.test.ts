@@ -27,7 +27,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,11 +53,11 @@ function waitForExit(child: ChildProcessWithoutNullStreams): Promise<void> {
   return new Promise<void>((r) => child.once('exit', () => r()));
 }
 
-function startSupervisor(workspace: string): Promise<Supervisor> {
+function startSupervisor(workspace: string, childEnv: Record<string, string> = {}): Promise<Supervisor> {
   return new Promise((resolveSup, rejectSup) => {
     const child = spawn(process.execPath, [BROKER_PATH], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { PATH: '/usr/bin:/bin', AGENT_POOL_SANDBOX_WORKSPACE: workspace },
+      env: { PATH: '/usr/bin:/bin', AGENT_POOL_SANDBOX_WORKSPACE: workspace, ...childEnv },
     });
     let buffer = '';
     const pending: Array<(frame: Record<string, unknown>) => void> = [];
@@ -126,16 +126,21 @@ async function forceExit(sup: Supervisor): Promise<void> {
 }
 
 describe('Sandbox supervisor protocol (real broker.mjs on host)', () => {
-  it('emits readiness and executes read/write/bash', async () => {
+  it('emits readiness and executes write→read→edit inside the test-owned workspace', async () => {
     const ws = mkdtempSync(join(tmpdir(), 'sup-proto-'));
     let sup: Supervisor | undefined;
     try {
-      writeFileSync(join(ws, 'hello.txt'), 'supervisor-data', 'utf8');
       sup = await startSupervisor(ws);
-      sup.send({ id: 'r1', tool: 'read', path: 'hello.txt' });
+      sup.send({ id: 'w1', tool: 'write', path: 'nested/hello.txt', content: 'supervisor-data' });
+      assert.equal((await sup.nextFrame()).ok, true);
+      sup.send({ id: 'r1', tool: 'read', path: 'nested/hello.txt' });
       const readFrame = await sup.nextFrame();
       assert.equal(readFrame.ok, true);
       assert.equal(readFrame.content, 'supervisor-data');
+      sup.send({ id: 'e1', tool: 'edit', path: 'nested/hello.txt', oldText: 'supervisor', newText: 'broker' });
+      assert.equal((await sup.nextFrame()).ok, true);
+      sup.send({ id: 'r2', tool: 'read', path: 'nested/hello.txt' });
+      assert.equal((await sup.nextFrame()).content, 'broker-data');
       sup.send({ id: 'b1', tool: 'bash', command: '/bin/echo', args: ['pong'] });
       const bashFrame = await sup.nextFrame();
       assert.equal(bashFrame.ok, true);
@@ -148,6 +153,80 @@ describe('Sandbox supervisor protocol (real broker.mjs on host)', () => {
     } finally {
       if (sup) await forceExit(sup);
       rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects traversal, absolute, Windows, and NUL paths without writing outside the workspace', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'sup-paths-'));
+    let sup: Supervisor | undefined;
+    try {
+      sup = await startSupervisor(ws);
+      for (const [id, path] of [
+        ['traversal', '../escape.txt'],
+        ['absolute', '/tmp/escape.txt'],
+        ['windows-drive', 'C:\\escape.txt'],
+        ['windows-traversal', '..\\escape.txt'],
+        ['nul', 'bad\u0000name'],
+      ]) {
+        sup.send({ id, tool: 'write', path, content: 'must-not-write' });
+        const frame = await sup.nextFrame();
+        assert.equal(frame.ok, false, `${id} path must be rejected`);
+        assert.equal(frame.error, 'path outside workspace');
+      }
+    } finally {
+      if (sup) await forceExit(sup);
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a symlink parent and unknown tool', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'sup-symlink-'));
+    const outside = mkdtempSync(join(tmpdir(), 'sup-outside-'));
+    let sup: Supervisor | undefined;
+    try {
+      symlinkSync(outside, join(ws, 'linked'), 'dir');
+      sup = await startSupervisor(ws);
+      sup.send({ id: 'symlink', tool: 'write', path: 'linked/escape.txt', content: 'must-not-write' });
+      const symlinkFrame = await sup.nextFrame();
+      assert.equal(symlinkFrame.ok, false);
+      assert.equal(symlinkFrame.error, 'parent path contains symlink or special file');
+      assert.equal(existsSync(join(outside, 'escape.txt')), false);
+      sup.send({ id: 'unknown', tool: 'format-disk' });
+      const unknownFrame = await sup.nextFrame();
+      assert.equal(unknownFrame.ok, false);
+      assert.equal(unknownFrame.error, 'unknown tool');
+    } finally {
+      if (sup) await forceExit(sup);
+      rmSync(ws, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('does not pass seeded credential or private environment values to repository commands', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'sup-env-workspace-'));
+    const privateRoot = mkdtempSync(join(tmpdir(), 'sup-env-private-'));
+    let sup: Supervisor | undefined;
+    try {
+      const credential = 'seeded-credential-must-not-reach-command';
+      sup = await startSupervisor(ws, {
+        OPENAI_API_KEY: credential,
+        MOONSHOT_API_KEY: credential,
+        GITHUB_TOKEN: credential,
+        PI_CODING_AGENT_DIR: join(privateRoot, 'pi-runtime'),
+        HOME: join(privateRoot, 'home'),
+        XDG_CONFIG_HOME: join(privateRoot, 'xdg-config'),
+      });
+      sup.send({ id: 'env', tool: 'bash', command: '/usr/bin/env', args: [] });
+      const frame = await sup.nextFrame();
+      assert.equal(frame.ok, true);
+      const output = String(frame.stdout);
+      for (const absent of [credential, 'OPENAI_API_KEY=', 'MOONSHOT_API_KEY=', 'GITHUB_TOKEN=', 'PI_CODING_AGENT_DIR=', privateRoot]) {
+        assert.ok(!output.includes(absent), `repository command leaked ${absent}`);
+      }
+    } finally {
+      if (sup) await forceExit(sup);
+      rmSync(ws, { recursive: true, force: true });
+      rmSync(privateRoot, { recursive: true, force: true });
     }
   });
 

@@ -7,6 +7,7 @@
  */
 
 import { describe, it } from 'node:test';
+import { createTempRoot } from './helpers/temp-root.ts';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -97,8 +98,8 @@ async function runFixtureTestInWorkspace(workspacePath: string): Promise<GreenEv
   };
 }
 
-describe('Stage 2 harness integration', () => {
-  it('bounds high-volume sandbox stream output during receipt and records truncation', () => {
+describe('Stage 2 harness integration', (t) => {
+  it('bounds high-volume sandbox stream output during receipt and records truncation', (t) => {
     const first = appendSandboxOutput('', Buffer.alloc(SANDBOX_OUTPUT_CAP_BYTES * 4, 0x78));
     assert.equal(Buffer.byteLength(first.value), SANDBOX_OUTPUT_CAP_BYTES);
     assert.equal(first.truncated, true);
@@ -106,8 +107,8 @@ describe('Stage 2 harness integration', () => {
     assert.equal(Buffer.byteLength(second.value), SANDBOX_OUTPUT_CAP_BYTES);
     assert.equal(second.truncated, true);
   });
-  it('composes two slots, three jobs, one injected failure, and produces a valid report', async () => {
-    const tmpRoot = mkdtempSync(join(tmpdir(), 'stage2-integration-'));
+  it('composes two slots, three jobs, one injected failure, and produces a valid report', async (t) => {
+    const tmpRoot = createTempRoot(t, 'stage2-integration-');
     const fixtureSourcePath = join(tmpRoot, 'fixture-source');
     const reportsDir = join(tmpRoot, 'reports');
     mkdirSync(reportsDir, { recursive: true });
@@ -284,8 +285,8 @@ describe('Stage 2 harness integration', () => {
     await assertRejected('verifier versus persisted checks drift', (first, second, third) => [{ ...first, verifier: { ...first.verifier, checks: [{ name: 'drift', passed: false }] } }, second, third]);
   });
 
-  it('rejects fake adapters in production mode (no overrides)', async () => {
-    const tmpRoot = mkdtempSync(join(tmpdir(), 'stage2-prod-reject-'));
+  it('rejects fake adapters in production mode (no overrides)', async (t) => {
+    const tmpRoot = createTempRoot(t, 'stage2-prod-reject-');
     const fixtureSourcePath = join(tmpRoot, 'fixture-source');
     const reportsDir = join(tmpRoot, 'reports');
     mkdirSync(reportsDir, { recursive: true });
@@ -316,8 +317,8 @@ describe('Stage 2 harness integration', () => {
     assert.equal(result.failureCode, 'POOL_PROOF_FAKE_ADAPTER_REJECTED');
   });
 
-  it('gates before side effects when Stage 1 report is hostile', async () => {
-    const tmpRoot = mkdtempSync(join(tmpdir(), 'stage2-gate-'));
+  it('gates before side effects when Stage 1 report is hostile', async (t) => {
+    const tmpRoot = createTempRoot(t, 'stage2-gate-');
     const fixtureSourcePath = join(tmpRoot, 'fixture-source');
     const reportsDir = join(tmpRoot, 'reports');
     mkdirSync(reportsDir, { recursive: true });
@@ -360,8 +361,8 @@ describe('Stage 2 harness integration', () => {
     assert.equal(existsSync(join(tmpRoot, 'pool-proof-stage2-runtime-')), false);
   });
 
-  it('observes zero fixture, store, resource, preflight, and adapter effects for every hostile Stage 1 report', async () => {
-    const tmpRoot = mkdtempSync(join(tmpdir(), 'stage2-gate-observable-'));
+  it('observes zero fixture, store, resource, preflight, and adapter effects for every hostile Stage 1 report', async (t) => {
+    const tmpRoot = createTempRoot(t, 'stage2-gate-observable-');
     const fixtureSourcePath = join(tmpRoot, 'fixture-source');
     const reportsDir = join(tmpRoot, 'reports');
     mkdirSync(reportsDir, { recursive: true });
@@ -398,7 +399,7 @@ describe('Stage 2 harness integration', () => {
     }
   });
 
-  it('rejects all-real provenance with raw observation mutation before any side effect', async () => {
+  it('rejects all-real provenance with raw observation mutation before any side effect', async (t) => {
     const result = await runStage2({
       stage1ReportPath: '/does-not-matter-after-gate', stage2ReportPath: '/does-not-write',
       preflight: { pi: { path: '/fake/pi', version: '0.84.1', digest: 'a'.repeat(64) }, package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) }, profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) }, sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true }, gitPath: 'git' },
@@ -409,7 +410,7 @@ describe('Stage 2 harness integration', () => {
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.failureCode, 'STAGE_1_GATE_FAILED', 'the Stage 1 gate must remain first');
 
-    const tmpRoot = mkdtempSync(join(tmpdir(), 'stage2-real-raw-mutation-'));
+    const tmpRoot = createTempRoot(t, 'stage2-real-raw-mutation-');
     const fixtureSourcePath = join(tmpRoot, 'fixture-source');
     const reportsDir = join(tmpRoot, 'reports');
     mkdirSync(reportsDir, { recursive: true });
@@ -426,8 +427,8 @@ describe('Stage 2 harness integration', () => {
     if (!gated.ok) assert.equal(gated.failureCode, 'POOL_PROOF_REAL_RAW_MUTATION_REJECTED');
   });
 
-  it('rejects all-real provenance with adapter overrides (overrides require fake)', async () => {
-    const tmpRoot = mkdtempSync(join(tmpdir(), 'stage2-real-override-'));
+  it('rejects all-real provenance with adapter overrides (overrides require fake)', async (t) => {
+    const tmpRoot = createTempRoot(t, 'stage2-real-override-');
     const fixtureSourcePath = join(tmpRoot, 'fixture-source');
     const reportsDir = join(tmpRoot, 'reports');
     mkdirSync(reportsDir, { recursive: true });
@@ -462,8 +463,8 @@ describe('Stage 2 harness integration', () => {
     assert.equal(result.failureCode, 'POOL_PROOF_REAL_ADAPTER_OVERRIDE_REJECTED');
   });
 
-  it('diagnostics: captures only runner-owned PiProcess exit fields by attempt ID', async () => {
-    const tmpRoot = mkdtempSync(join(tmpdir(), 'stage2-diag-verify-'));
+  it('diagnostics: captures only runner-owned PiProcess exit fields by attempt ID', async (t) => {
+    const tmpRoot = createTempRoot(t, 'stage2-diag-verify-');
     const fixtureSourcePath = join(tmpRoot, 'fixture-source');
     const reportsDir = join(tmpRoot, 'reports');
     mkdirSync(reportsDir, { recursive: true });
@@ -547,8 +548,8 @@ describe('Stage 2 harness integration', () => {
     assert.ok(!JSON.stringify(diags).includes('PI_PROCESS_OUTPUT_MUST_NOT_BE_RETAINED'));
   });
 
-  it('diagnostics: all three launcher rejections (submit failures)', async () => {
-    const tmpRoot = mkdtempSync(join(tmpdir(), 'stage2-diag-launch-'));
+  it('diagnostics: all three launcher rejections (submit failures)', async (t) => {
+    const tmpRoot = createTempRoot(t, 'stage2-diag-launch-');
     const fixtureSourcePath = join(tmpRoot, 'fixture-source');
     const reportsDir = join(tmpRoot, 'reports');
     mkdirSync(reportsDir, { recursive: true });
@@ -596,8 +597,8 @@ describe('Stage 2 harness integration', () => {
     }
   });
 
-  it('diagnostics: errorDetail redaction caps at 300 chars and redacts secrets and paths', async () => {
-    const tmpRoot = mkdtempSync(join(tmpdir(), 'stage2-diag-redact-'));
+  it('diagnostics: errorDetail redaction caps at 300 chars and redacts secrets and paths', async (t) => {
+    const tmpRoot = createTempRoot(t, 'stage2-diag-redact-');
     const fixtureSourcePath = join(tmpRoot, 'fixture-source');
     const reportsDir = join(tmpRoot, 'reports');
     mkdirSync(reportsDir, { recursive: true });
@@ -632,7 +633,7 @@ describe('Stage 2 harness integration', () => {
             return makeFakePiProcess(job.attemptId, 0, null, null, nonce, expectations.resultDestinationId);
           },
         }),
-        verify: async () => {
+        verify: async (t) => {
           throw new Error(secretDetail);
         },
       },

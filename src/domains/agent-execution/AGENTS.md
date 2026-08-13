@@ -83,6 +83,8 @@
 - Run regressions: `npm test`, `npm run typecheck`, and `npm run test:worker`.
 - Cover hostile launch contexts (stale, not-yet-valid, replayed, mismatched, oversized), DAG-topology smuggling at depth, credential leakage into repository environments, phase write denial, fallback cost/evidence continuity, transcript step ordering and persistence failure, and bounded unsafe-workspace cleanup.
 - `packages/worker-harness/test/preflight.test.mjs` is the runtime-gate counterpart; the two must stay behaviourally aligned.
+- Run the explicit Docker lifecycle lane (`npm run test:docker`) for persistent-container, Worker-termination, or real broker/supervisor changes; fakes prove only the state/protocol they simulate. Unit tests own and clean their own runtime roots, sockets, and fake drivers.
+- Repository command homes must be lexically contained in a trusted workspace root. Cleanup clocks, fallback outcomes, and collaborator failures are untrusted runtime values and fail closed rather than relying on TypeScript types or finite-time assumptions.
 
 ## P0 follow-up hardening
 

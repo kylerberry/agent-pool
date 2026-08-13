@@ -2,8 +2,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { assertNoModuleReferences } from '../helpers/import-policy.ts';
 
-const SRC = 'src/domains/orchestration';
+const SRC = fileURLToPath(new URL('../../src/domains/orchestration/', import.meta.url));
 
 describe('architecture boundaries', () => {
   it('orchestration CLAUDE.md is pointer-only', () => {
@@ -12,8 +14,8 @@ describe('architecture boundaries', () => {
   });
 
   it('orchestration source never imports craft-pool', () => {
-    const text = readFileSync(join(SRC, 'index.ts'), 'utf8');
-    assert.equal(text.includes('craft-pool'), false);
+    const source = fileURLToPath(new URL('../../src/domains/orchestration/index.ts', import.meta.url));
+    assertNoModuleReferences(source, ['craft-pool']);
   });
 
   it('orchestration source never emits DAG topology in worker contract', () => {

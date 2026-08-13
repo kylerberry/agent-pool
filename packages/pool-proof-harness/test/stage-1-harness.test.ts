@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
+import { createTempRoot } from './helpers/temp-root.ts';
 import assert from 'node:assert/strict';
-import { mkdtempSync, existsSync, writeFileSync, mkdirSync, realpathSync, readFileSync, readdirSync, statSync, rmSync } from 'node:fs';
+import { mkdtempSync as nativeMkdtempSync, existsSync, writeFileSync, mkdirSync, realpathSync, readFileSync, readdirSync, statSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -98,9 +99,9 @@ process.exit(0);
   return script;
 }
 
-describe('Stage 1 harness', () => {
-  it('initializes a deterministic fixture repository with a base commit', () => {
-    const target = mkdtempSync(join(tmpdir(), 'pool-proof-fixture-test-'));
+describe('Stage 1 harness', (t) => {
+  it('initializes a deterministic fixture repository with a base commit', (t) => {
+    const target = createTempRoot(t, 'pool-proof-fixture-test-');
     const { manifest, baseCommit } = initializeFixtureRepository(target);
     assert.ok(baseCommit.length > 0);
     assert.equal(manifest.fixture_name, 'single-worker');
@@ -108,7 +109,7 @@ describe('Stage 1 harness', () => {
     assert.equal(existsSync(join(target, 'src', 'message.js')), true);
   });
 
-  it('builds an ADR-028-shaped job from the fixture', () => {
+  it('builds an ADR-028-shaped job from the fixture', (t) => {
     const manifest = loadFixtureManifest();
     const job = buildStage1Job(manifest, 'base123', 'node-1', 'attempt-1');
     assert.equal(job.nodeId, 'node-1');
@@ -117,22 +118,22 @@ describe('Stage 1 harness', () => {
     assert.deepEqual(job.allowedChangedPaths, ['src/message.js']);
   });
 
-  it('binds the initialized fixture as the job workspace', () => {
+  it('binds the initialized fixture as the job workspace', (t) => {
     const manifest = loadFixtureManifest();
     const fixturePath = '/tmp/pool-proof-fixture';
     const job = buildStage1Job(manifest, 'base123', 'node-1', 'attempt-1', fixturePath);
     assert.equal(job.workspacePath, fixturePath);
   });
 
-  it('rejects a timed-out or zero-exit base-red as invalid', () => {
+  it('rejects a timed-out or zero-exit base-red as invalid', (t) => {
     assert.equal(isValidBaseRed({ command: ['node'], exitCode: 1, stdout: '', stderr: '', timedOut: false }), true);
     assert.equal(isValidBaseRed({ command: ['node'], exitCode: 124, stdout: '', stderr: '', timedOut: true }), false);
     assert.equal(isValidBaseRed({ command: ['node'], exitCode: 0, stdout: '', stderr: '', timedOut: false }), false);
   });
 
-  it('cleans up private runtime and fixture directories', async () => {
-    const runtimeRoot = realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-cleanup-')));
-    const fixtureTemp = realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-fixture-cleanup-')));
+  it('cleans up private runtime and fixture directories', async (t) => {
+    const runtimeRoot = realpathSync(createTempRoot(t, 'pool-proof-cleanup-'));
+    const fixtureTemp = realpathSync(createTempRoot(t, 'pool-proof-fixture-cleanup-'));
     const store = await createSqliteStore({ runtimeRoot, dbLocation: 'pool-proof.db' });
 
     assert.equal(existsSync(runtimeRoot), true);
@@ -144,9 +145,9 @@ describe('Stage 1 harness', () => {
     assert.equal(existsSync(fixtureTemp), false);
   });
 
-  it('uses one canonical fixture path for launcher, broker, verifier, and cleanup', async () => {
-    const runtimeRoot = realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-runtime-')));
-    const fixtureTemp = realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-fixture-')));
+  it('uses one canonical fixture path for launcher, broker, verifier, and cleanup', async (t) => {
+    const runtimeRoot = realpathSync(createTempRoot(t, 'pool-proof-runtime-'));
+    const fixtureTemp = realpathSync(createTempRoot(t, 'pool-proof-fixture-'));
     const { manifest, baseCommit } = initializeFixtureRepository(fixtureTemp);
 
     const nodeId = 'single-worker-pool-proof';
@@ -301,9 +302,9 @@ describe('Stage 1 harness', () => {
     assert.equal(existsSync(fixtureTemp), false, 'cleanup must remove the fixture workspace');
   });
 
-  it('produces a valid failed report when the verifier rejects a submitted attempt', async () => {
-    const runtimeRoot = realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-runtime-')));
-    const fixturePath = realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-fixture-')));
+  it('produces a valid failed report when the verifier rejects a submitted attempt', async (t) => {
+    const runtimeRoot = realpathSync(createTempRoot(t, 'pool-proof-runtime-'));
+    const fixturePath = realpathSync(createTempRoot(t, 'pool-proof-fixture-'));
     const identity = makeIdentityDirs(runtimeRoot);
     const { manifest, baseCommit } = initializeFixtureRepository(fixturePath);
 
@@ -433,9 +434,9 @@ describe('Stage 1 harness', () => {
     await store.close();
   });
 
-  it('cleans up runtime, fixture, auth, session, and broker residue on runtime exception', async () => {
-    const runtimeRoot = realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-runtime-')));
-    const fixturePath = realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-fixture-')));
+  it('cleans up runtime, fixture, auth, session, and broker residue on runtime exception', async (t) => {
+    const runtimeRoot = realpathSync(createTempRoot(t, 'pool-proof-runtime-'));
+    const fixturePath = realpathSync(createTempRoot(t, 'pool-proof-fixture-'));
     const identity = makeIdentityDirs(runtimeRoot);
     const { manifest, baseCommit } = initializeFixtureRepository(fixturePath);
 
@@ -475,7 +476,7 @@ describe('Stage 1 harness', () => {
 
     const runtime = createMinimalPoolRuntime({
       resourceFactory: createAttemptResourceFactory({ runtimeRoot }),
-      createPiLauncher: () => {
+      createPiLauncher: (t) => {
         throw new Error('simulated launcher explosion');
       },
       selectedModel: model,
@@ -513,7 +514,7 @@ describe('Stage 1 harness', () => {
           { builder: sm, policyVersion: 1 },
         );
       },
-      verify: async () => {
+      verify: async (t) => {
         throw new Error('should not reach verifier');
       },
       persistResult: async (result) => {
@@ -549,9 +550,9 @@ describe('Stage 1 harness', () => {
     assert.equal(existsSync(runtimeRoot), false, 'harness cleanup must remove the runtime root');
   });
 
-  it('captures green evidence through persistResult with real adapters and controlled ports', async () => {
-    const runtimeRoot = realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-runtime-')));
-    const fixturePath = realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-fixture-')));
+  it('captures green evidence through persistResult with real adapters and controlled ports', async (t) => {
+    const runtimeRoot = realpathSync(createTempRoot(t, 'pool-proof-runtime-'));
+    const fixturePath = realpathSync(createTempRoot(t, 'pool-proof-fixture-'));
     const identity = makeIdentityDirs(runtimeRoot);
     const { manifest, baseCommit } = initializeFixtureRepository(fixturePath);
 

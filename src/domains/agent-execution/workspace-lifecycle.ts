@@ -113,6 +113,14 @@ export function createAttemptWorkspaceLifecycle(init: {
     },
     failureReason: () => reason,
     evaluateCleanup(now: number): CleanupDecision {
+      if (!Number.isFinite(now)) {
+        return deepFreeze({
+          decision: 'destroy' as const,
+          state,
+          reason: 'cleanup clock is invalid; workspace must not persist',
+          auditIncomplete: state !== 'audit_complete',
+        });
+      }
       if (state === 'audit_complete') {
         return deepFreeze({
           decision: 'destroy' as const,

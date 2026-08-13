@@ -30,7 +30,7 @@ const HOSTILE_ENV = Object.freeze({
 });
 
 const WORKSPACE_HOME = '/workspace/attempt-1/home';
-const OPTS = { workspaceHome: WORKSPACE_HOME };
+const OPTS = { workspaceHome: WORKSPACE_HOME, workspaceRoot: '/workspace' };
 
 describe('credential isolation for repository commands', () => {
   it('builds the repository-command environment from an allowlist, not a filter', () => {
@@ -62,8 +62,19 @@ describe('credential isolation for repository commands', () => {
 
   it('requires a workspace-scoped absolute home rather than defaulting to the host', () => {
     for (const workspaceHome of ['', 'relative/home', '/workspace/../etc', undefined as unknown as string]) {
-      const result = buildRepositoryCommandEnv(HOSTILE_ENV, { workspaceHome });
+      const result = buildRepositoryCommandEnv(HOSTILE_ENV, { workspaceHome, workspaceRoot: '/workspace' });
       assert.ok(isExecutionFailure(result), `${String(workspaceHome)} must be rejected`);
+      assert.equal(result.code, 'CAPABILITY_DENIED');
+    }
+  });
+
+  it('rejects lexical workspace-home escapes, including terminal traversal', () => {
+    for (const workspaceHome of ['/workspace/..', '/workspace/a/../../outside']) {
+      const result = buildRepositoryCommandEnv(HOSTILE_ENV, {
+        workspaceHome,
+        workspaceRoot: '/workspace',
+      } as never);
+      assert.ok(isExecutionFailure(result), `${workspaceHome} must be rejected`);
       assert.equal(result.code, 'CAPABILITY_DENIED');
     }
   });

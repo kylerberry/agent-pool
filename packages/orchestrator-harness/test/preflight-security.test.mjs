@@ -1,10 +1,20 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync as nativeMkdtempSync, mkdirSync, writeFileSync, readFileSync , rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+
+const ownedTempRoots = new Set();
+function mkdtempSync(prefix) {
+  const path = nativeMkdtempSync(prefix);
+  ownedTempRoots.add(path);
+  return path;
+}
+after(() => {
+  for (const path of ownedTempRoots) rmSync(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 });
+});
 
 const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const script = join(packageRoot, "scripts/preflight.mjs");

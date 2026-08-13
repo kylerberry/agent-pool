@@ -253,6 +253,109 @@ describe('Pool Proof Verifier', () => {
     assert.equal(check?.passed, false);
   });
 
+  it('turns fixture runner rejection into deterministic failed evidence without raw errors', async () => {
+    const workspacePath = mkdtempSync(join(tmpdir(), 'verify-fixture-reject-'));
+    const { baseCommit } = setupRepo(workspacePath, 'src/message.js', "export function getMessage() { return 'world'; }");
+    const verifier = createPoolProofVerifier({
+      gitPath: gitPath(),
+      fixtureTestRunner: async () => { throw new Error('fixture runner secret=do-not-leak'); },
+      hasConflictingResult: async () => ({ hasConflict: false, existingResultId: null }),
+    });
+    const result = await verifier.verify(
+      makeResources(workspacePath),
+      { nodeId: 'n1', attemptId: 'a1', allowedChangedPaths: ['src/message.js'], fixtureTestCommand: ['node'], expectedParentCommit: baseCommit },
+      makeProcess(),
+    );
+    assert.equal(result.status, 'failed');
+    assert.equal(result.failureCode, 'FIXTURE_TEST_RUNNER_FAILED');
+    assert.equal(result.checks.find((check) => check.name === 'fixture_test_passes')?.passed, false);
+    assert.equal(result.greenEvidence, null);
+    assert.ok(!JSON.stringify(result).includes('fixture runner secret=do-not-leak'));
+  });
+
+  it('turns isolation runner rejection into deterministic failed evidence without raw errors', async () => {
+    const workspacePath = mkdtempSync(join(tmpdir(), 'verify-isolation-reject-'));
+    const { baseCommit } = setupRepo(workspacePath, 'src/message.js', "export function getMessage() { return 'world'; }");
+    const verifier = createPoolProofVerifier({
+      gitPath: gitPath(),
+      fixtureTestRunner: async (_cwd, command) => {
+        if (command[0] === 'sh') throw new Error('isolation runner secret=do-not-leak');
+        return { command, exitCode: 0, stdout: '', stderr: '', timedOut: false };
+      },
+      hasConflictingResult: async () => ({ hasConflict: false, existingResultId: null }),
+    });
+    const result = await verifier.verify(
+      makeResources(workspacePath),
+      { nodeId: 'n1', attemptId: 'a1', allowedChangedPaths: ['src/message.js'], fixtureTestCommand: ['node'], expectedParentCommit: baseCommit },
+      makeProcess(),
+    );
+    assert.equal(result.status, 'failed');
+    assert.equal(result.failureCode, 'ISOLATION_RUNNER_FAILED');
+    assert.equal(result.checks.find((check) => check.name === 'isolation_probes_pass')?.passed, false);
+    assert.equal(result.greenEvidence, null);
+    assert.ok(!JSON.stringify(result).includes('isolation runner secret=do-not-leak'));
+  });
+
+  it('turns fulfilled malformed collaborator values into deterministic failed evidence', async () => {
+    const workspacePath = mkdtempSync(join(tmpdir(), 'verify-malformed-collaborator-'));
+    const { baseCommit } = setupRepo(workspacePath, 'src/message.js', "export function getMessage() { return 'world'; }");
+    const job = { nodeId: 'n1', attemptId: 'a1', allowedChangedPaths: ['src/message.js'], fixtureTestCommand: ['node'], expectedParentCommit: baseCommit };
+    const malformedFixture = createPoolProofVerifier({
+      gitPath: gitPath(),
+      fixtureTestRunner: async () => undefined as never,
+      hasConflictingResult: async () => ({ hasConflict: false, existingResultId: null }),
+    });
+    const fixtureResult = await malformedFixture.verify(makeResources(workspacePath), job, makeProcess());
+    assert.equal(fixtureResult.status, 'failed');
+    assert.equal(fixtureResult.failureCode, 'FIXTURE_TEST_RUNNER_FAILED');
+    assert.equal(fixtureResult.checks.find((check) => check.name === 'fixture_test_passes')?.passed, false);
+    assert.equal(fixtureResult.greenEvidence, null);
+
+    const malformedIsolation = createPoolProofVerifier({
+      gitPath: gitPath(),
+      fixtureTestRunner: async (_cwd, command) => command[0] === 'sh'
+        ? ({ exitCode: 1 } as never)
+        : ({ command, exitCode: 0, stdout: '', stderr: '', timedOut: false }),
+      hasConflictingResult: async () => ({ hasConflict: false, existingResultId: null }),
+    });
+    const isolationResult = await malformedIsolation.verify(makeResources(workspacePath), job, makeProcess());
+    assert.equal(isolationResult.status, 'failed');
+    assert.equal(isolationResult.failureCode, 'ISOLATION_RUNNER_FAILED');
+    assert.equal(isolationResult.checks.find((check) => check.name === 'isolation_probes_pass')?.passed, false);
+    assert.equal(isolationResult.greenEvidence, null);
+
+    const malformedConflict = createPoolProofVerifier({
+      gitPath: gitPath(),
+      fixtureTestRunner: async (_cwd, command) => ({ command, exitCode: command[0] === 'sh' ? 1 : 0, stdout: '', stderr: '', timedOut: false }),
+      hasConflictingResult: async () => ({ hasConflict: 'no' } as never),
+    });
+    const conflictResult = await malformedConflict.verify(makeResources(workspacePath), job, makeProcess());
+    assert.equal(conflictResult.status, 'failed');
+    assert.equal(conflictResult.failureCode, 'CONFLICT_QUERY_FAILED');
+    assert.equal(conflictResult.checks.find((check) => check.name === 'no_conflicting_result')?.passed, false);
+    assert.equal(conflictResult.greenEvidence, null);
+  });
+
+  it('turns conflict query rejection into deterministic failed evidence without raw errors', async () => {
+    const workspacePath = mkdtempSync(join(tmpdir(), 'verify-conflict-reject-'));
+    const { baseCommit } = setupRepo(workspacePath, 'src/message.js', "export function getMessage() { return 'world'; }");
+    const verifier = createPoolProofVerifier({
+      gitPath: gitPath(),
+      fixtureTestRunner: async (_cwd, command) => ({ command, exitCode: command[0] === 'sh' ? 1 : 0, stdout: '', stderr: '', timedOut: false }),
+      hasConflictingResult: async () => { throw new Error('conflict query secret=do-not-leak'); },
+    });
+    const result = await verifier.verify(
+      makeResources(workspacePath),
+      { nodeId: 'n1', attemptId: 'a1', allowedChangedPaths: ['src/message.js'], fixtureTestCommand: ['node'], expectedParentCommit: baseCommit },
+      makeProcess(),
+    );
+    assert.equal(result.status, 'failed');
+    assert.equal(result.failureCode, 'CONFLICT_QUERY_FAILED');
+    assert.equal(result.checks.find((check) => check.name === 'no_conflicting_result')?.passed, false);
+    assert.equal(result.greenEvidence, null);
+    assert.ok(!JSON.stringify(result).includes('conflict query secret=do-not-leak'));
+  });
+
   it('rejects readable host/root credential exposure through default isolation probes', async () => {
     const workspacePath = mkdtempSync(join(tmpdir(), 'verify-isolation-'));
     const { baseCommit } = setupRepo(

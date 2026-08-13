@@ -19,25 +19,8 @@ import {
   createPersistentContainerDriver,
   createFakePersistentContainerDriver,
   resolveRuntimeExecutable,
-  type ContainerDriver,
-  type RepositorySandbox,
 } from '../../src/domains/agent-execution/index.ts';
-
-const PINNED_IMAGE = 'sha256:' + '1'.repeat(64);
-const SAFE_IDENTITY = { uid: 1001, gid: 1001, isPinned: true };
-
-function baseOptions(driver: ContainerDriver) {
-  return {
-    image: PINNED_IMAGE,
-    workspacePath: '/tmp/fake-workspace',
-    sandboxIdentity: SAFE_IDENTITY,
-    driver,
-    toolTimeoutMs: 1000,
-    cpuLimit: '1',
-    memoryLimit: '512m',
-    pidsLimit: 64,
-  };
-}
+import { PINNED_IMAGE, baseOptions } from './repository-sandbox.fixtures.ts';
 
 describe('Repository Sandbox lifecycle driver (fake driver)', () => {
   it('creates exactly one persistent container on start and reuses it for every runTool', async () => {
@@ -156,11 +139,21 @@ describe('Repository Sandbox lifecycle driver (fake driver)', () => {
   });
 
   it('routes response frames by internal id and rejects stale/foreign ids', async () => {
-    const driver = createFakePersistentContainerDriver();
+    const driver = createFakePersistentContainerDriver({
+      staleResponseBeforeNthRequest: {
+        requestNumber: 1,
+        id: 'foreign-response-id',
+        response: { ok: false, error: 'foreign' },
+      },
+    });
     const sandbox = createRepositorySandbox(baseOptions(driver) as never);
     await sandbox.start();
-    const res = await sandbox.runTool({ tool: 'read', path: 'a' });
-    assert.equal(res.ok, true);
+    const first = await sandbox.runTool({ tool: 'read', path: 'a' });
+    assert.equal(first.ok, true);
+    assert.equal(first.content, 'fake-read:a');
+    const second = await sandbox.runTool({ tool: 'read', path: 'b' });
+    assert.equal(second.ok, true);
+    assert.equal(second.content, 'fake-read:b');
     await sandbox.stop();
   });
 
@@ -290,170 +283,5 @@ describe('Repository Sandbox lifecycle driver (fake driver)', () => {
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
-  });
-});
-
-describe('Repository Sandbox start/stop race and cancel correctness', () => {
-  it('shares one start promise across concurrent start() callers (never resolves before ready)', async () => {
-    const driver = createFakePersistentContainerDriver();
-    const sandbox = createRepositorySandbox(baseOptions(driver) as never);
-    const p1 = sandbox.start();
-    // A second concurrent start must share the in-flight start, so resolving it
-    // implies the container is ready (state must be 'started' before p2 settles).
-    const p2 = sandbox.start();
-    await p2;
-    // p2 must not have resolved until the container was actually started, so a
-    // tool call right after p2 settles must succeed.
-    assert.equal(driver.spawnCount, 1, 'concurrent starts must spawn exactly one container');
-    const res = await sandbox.runTool({ tool: 'read', path: 'a' });
-    assert.equal(res.ok, true, 'a shared start promise must not resolve before readiness');
-    await p1;
-    await sandbox.stop();
-  });
-
-  it('stop during an in-flight start settles boundedly, leaves the sandbox terminal, and removes the captured owned id', async () => {
-    const driver = createFakePersistentContainerDriver({ blockReady: true });
-    const sandbox = createRepositorySandbox(baseOptions(driver) as never);
-    const startP = sandbox.start();
-    // Let the start capture the owned id and enter the readiness wait.
-    await new Promise((r) => setTimeout(r, 60));
-    const t0 = Date.now();
-    await sandbox.stop();
-    const elapsed = Date.now() - t0;
-    assert.ok(elapsed < 3_000, `stop during start must settle boundedly, took ${elapsed}ms`);
-    // The sandbox must be terminal (not 'started') so no command is accepted.
-    await assert.rejects(() => sandbox.runTool({ tool: 'read', path: 'a' } as never), /stopped|teardown|terminal|not started/i);
-    // The half-started owned container must have been removed.
-    assert.equal(driver.removedIds.length, 1, 'half-started owned id must be removed when captured');
-    // The in-flight start must have settled (rejected), with no pending promise.
-    await assert.rejects(() => startP, /readiness|cancelled|start|exited/i);
-  });
-
-  it('starts even when supervisor readiness is parsed before the readiness resolver is bound (fast-readiness race)', async () => {
-    const driver = createFakePersistentContainerDriver({ fastReady: true });
-    const sandbox = createRepositorySandbox(baseOptions(driver) as never);
-    // A fast real supervisor can emit readiness the instant the host attaches
-    // its stdout listener — before doStart assigns the readiness resolver.
-    // That frame must never be dropped: start must resolve, not time out.
-    await sandbox.start();
-    const res = await sandbox.runTool({ tool: 'read', path: 'a' });
-    assert.equal(res.ok, true, 'fast readiness must not be dropped before the resolver is bound');
-    await sandbox.stop();
-  });
-
-  it('fast readiness is never lost across many repeated concurrent starts', async () => {
-    // Prove the fast-readiness race is closed deterministically: many distinct
-    // sandboxes starting concurrently, each delivering readiness synchronously
-    // on attach, all become ready and stay usable — repeated several runs.
-    for (let run = 0; run < 5; run++) {
-      const drivers = Array.from({ length: 6 }, () => createFakePersistentContainerDriver({ fastReady: true }));
-      const sandboxes = drivers.map((d) => createRepositorySandbox(baseOptions(d) as never));
-      await Promise.all(sandboxes.map((s) => s.start()));
-      const results = await Promise.all(sandboxes.map((s) => s.runTool({ tool: 'read', path: 'a' })));
-      assert.ok(results.every((r) => r.ok), `run ${run}: every fast-ready sandbox must be usable`);
-      await Promise.all(sandboxes.map((s) => s.stop()));
-    }
-  });
-
-  it('removes the AbortSignal listener on settlement and never emits a stale cancel afterwards', async () => {
-    const driver = createFakePersistentContainerDriver();
-    const sandbox = createRepositorySandbox(baseOptions(driver) as never);
-    await sandbox.start();
-    const controller = new AbortController();
-    const res = await sandbox.runTool({ tool: 'read', path: 'a' }, { signal: controller.signal });
-    assert.equal(res.ok, true);
-    // The listener must have been removed on settlement, so a later abort is a
-    // no-op that cannot emit a stale cancel frame.
-    controller.abort();
-    // A subsequent command must still succeed (no stale state).
-    const res2 = await sandbox.runTool({ tool: 'read', path: 'b' });
-    assert.equal(res2.ok, true);
-    // Only the two real request frames were issued; no extra cancel frame.
-    const session = driver.sessions[0]!;
-    assert.equal(session.requestFrames.length, 2);
-    await sandbox.stop();
-  });
-});
-
-describe('Repository Sandbox cancellation and shared teardown regressions', () => {
-  it('pre-aborted cancellation targets the dispatched command and leaves no orphan run', async () => {
-    const driver = createFakePersistentContainerDriver({ hangMs: 5_000 });
-    const sandbox = createRepositorySandbox(baseOptions(driver) as never);
-    await sandbox.start();
-    const controller = new AbortController();
-    controller.abort();
-    const result = await sandbox.runTool({ tool: 'bash', command: 'sleep', args: ['30'] }, { signal: controller.signal });
-    assert.equal(result.ok, false);
-    assert.match((result as { error: string }).error, /cancel/i);
-    assert.equal(driver.sessions[0]!.requestFrames.length, 1, 'one command is paired with its cancellation');
-    assert.equal((await sandbox.runTool({ tool: 'read', path: 'after' })).ok, true, 'no orphan command blocks the next call');
-    await sandbox.stop();
-  });
-
-  it('concurrent stop callers share one completion promise', async () => {
-    const driver = createFakePersistentContainerDriver({ ignoreShutdown: true });
-    const sandbox = createRepositorySandbox(baseOptions(driver) as never);
-    await sandbox.start();
-    const first = sandbox.stop();
-    const second = sandbox.stop();
-    assert.equal(first, second);
-    await Promise.all([first, second]);
-    assert.equal(driver.removedIds.length, 1);
-  });
-});
-
-describe('Repository Sandbox fault-injection settlement (AC-11)', () => {
-  it('create/spawn failure settles deterministically and leaves no command accepted', async () => {
-    const driver = createFakePersistentContainerDriver({ failSpawn: true });
-    const sandbox = createRepositorySandbox(baseOptions(driver) as never);
-    await assert.rejects(() => sandbox.start(), /not found|spawn/i);
-    // No owned container was captured (spawn failed before any cidfile), so
-    // there is nothing to remove; teardown is a no-op terminal state.
-    assert.equal(driver.spawnCount, 0, 'no successful spawn was captured');
-    assert.equal(driver.removedIds.length, 0);
-    await assert.rejects(() => sandbox.runTool({ tool: 'read', path: 'a' } as never), /stopped|teardown|terminal/i);
-    // A second start must not resurrect a terminal sandbox.
-    await assert.rejects(() => sandbox.start(), /cannot start from state/i);
-  });
-
-  it('readiness failure (supervisor dies before ready) best-effort removes the owned container and rejects commands', async () => {
-    const driver = createFakePersistentContainerDriver({ neverReady: true });
-    const sandbox = createRepositorySandbox(baseOptions(driver) as never);
-    await assert.rejects(() => sandbox.start(), /readiness|did not report|exited/i);
-    // The owned container was created (cidfile written) so best-effort cleanup
-    // must remove exactly that owned id, never another target.
-    assert.equal(driver.removedIds.length, 1, 'half-started owned container must be removed on readiness failure');
-    await assert.rejects(() => sandbox.runTool({ tool: 'read', path: 'a' } as never), /stopped|teardown|terminal/i);
-  });
-
-  it('remove failure during stop settles boundedly without leaving a pending promise and remains idempotent', async () => {
-    const driver = createFakePersistentContainerDriver({ removeRejects: true, hangMs: 5_000 });
-    const sandbox = createRepositorySandbox({ ...baseOptions(driver), toolTimeoutMs: 30_000 } as never);
-    await sandbox.start();
-    // start an active, long-running command, then stop while it is in flight.
-    const pending = sandbox.runTool({ tool: 'bash', command: 'sleep', args: ['30'] });
-    // stop must not hang even though forced removal rejects.
-    const t0 = Date.now();
-    await assert.rejects(() => sandbox.stop(), /sandbox cleanup failed/i);
-    const elapsed = Date.now() - t0;
-    assert.ok(elapsed < 5_000, `stop must settle boundedly even when removal rejects, took ${elapsed}ms`);
-    // The in-flight command must receive one terminal response (no pending promise).
-    const res = await pending;
-    assert.equal(res.ok, false);
-    assert.ok(/stopped|terminal|cancel|exited/i.test((res as { error: string }).error), `unexpected error: ${(res as { error: string }).error}`);
-    // Repeated teardown settles idempotently and never targets another container.
-    await assert.rejects(() => sandbox.stop(), /sandbox cleanup failed/i);
-    assert.equal(driver.removedIds.length, 0, 'removeRejects records no successful removals and no foreign targets');
-  });
-
-  it('stop during an active command closes intake and rejects further commands (no command after teardown)', async () => {
-    const driver = createFakePersistentContainerDriver({ hangMs: 5_000 });
-    const sandbox = createRepositorySandbox({ ...baseOptions(driver), toolTimeoutMs: 30_000 } as never);
-    await sandbox.start();
-    const pending = sandbox.runTool({ tool: 'bash', command: 'sleep', args: ['30'] });
-    await sandbox.stop();
-    const res = await pending;
-    assert.equal(res.ok, false);
-    await assert.rejects(() => sandbox.runTool({ tool: 'read', path: 'a' } as never), /stopped|teardown|terminal/i);
   });
 });

@@ -1,4 +1,5 @@
-import test from "node:test";
+import test, { after } from "node:test";
+import { createCopiedPackageFixture } from "./helpers/copied-package-fixture.mjs";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -6,6 +7,15 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { checkSchemaIntegrity, findDagTopology, validateInstance } from "../lib/json-schema-subset.mjs";
+
+const ownedTempRoots = new Set();
+const nativeMkdtempSync = mkdtempSync;
+function ownedMkdtempSync(prefix) {
+  const path = nativeMkdtempSync(prefix);
+  ownedTempRoots.add(path);
+  return path;
+}
+after(() => { for (const path of ownedTempRoots) rmSync(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 }); });
 
 const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repoRoot = resolve(packageRoot, "../..");
@@ -68,7 +78,7 @@ function workspaceWith({
   omitContract = false,
   extraControlFiles = {},
 } = {}) {
-  const workspace = mkdtempSync(join(tmpdir(), "agent-pool-worker-"));
+  const workspace = ownedMkdtempSync(join(tmpdir(), "agent-pool-worker-"));
   mkdirSync(join(workspace, ".agent-pool"));
   mkdirSync(join(workspace, ".pi", "skills", "graphify"), { recursive: true });
   writeFileSync(
@@ -87,8 +97,8 @@ function workspaceWith({
   return workspace;
 }
 
-function run(workspace, actor = "pool-worker") {
-  return spawnSync(process.execPath, [script], {
+function run(workspace, actor = "pool-worker", preflightScript = script) {
+  return spawnSync(process.execPath, [preflightScript], {
     encoding: "utf8",
     env: {
       ...process.env,
@@ -254,7 +264,7 @@ test("rejects an expiry that outruns the marker's own freshness budget", () => {
 });
 
 test("rejects a marker bound to a different workspace", () => {
-  const other = mkdtempSync(join(tmpdir(), "agent-pool-other-"));
+  const other = ownedMkdtempSync(join(tmpdir(), "agent-pool-other-"));
   const result = run(workspaceWith({ marker: () => validMarker(other) }));
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /workspace does not match/);
@@ -282,7 +292,7 @@ test("rejects a symlinked control directory", () => {
   const workspace = workspaceWith();
   // Move the (otherwise entirely valid) control directory outside the workspace
   // and symlink it back in, so only the symlink itself distinguishes this launch.
-  const outside = mkdtempSync(join(tmpdir(), "agent-pool-outside-"));
+  const outside = ownedMkdtempSync(join(tmpdir(), "agent-pool-outside-"));
   const relocated = join(outside, ".agent-pool");
   mkdirSync(relocated);
   for (const name of ["execution-context.json", "attempt-contract.json"]) {
@@ -345,61 +355,43 @@ test("rejects an attempt contract with no acceptance criteria", () => {
   assert.match(result.stderr, /attempt contract is invalid/);
 });
 
-test("rejects a missing bundled contract schema", () => {
+test("rejects a missing bundled contract schema", (t) => {
   const workspace = workspaceWith();
-  const schemaPath = join(packageRoot, "contracts/pool-worker-attempt-contract.schema.json");
-  const original = readFileSync(schemaPath, "utf8");
-  rmSync(schemaPath);
-  try {
-    const result = run(workspace);
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /contract schema missing/);
-  } finally {
-    writeFileSync(schemaPath, original);
-  }
+  const fixture = createCopiedPackageFixture(t);
+  rmSync(join(fixture.packagePath, "contracts/pool-worker-attempt-contract.schema.json"));
+  const result = run(workspace, "pool-worker", fixture.script);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /contract schema missing/);
 });
 
-test("rejects a corrupted contract schema before any paid work", () => {
+test("rejects a corrupted contract schema before any paid work", (t) => {
   const workspace = workspaceWith();
-  const schemaPath = join(packageRoot, "contracts/pool-worker-attempt-contract.schema.json");
-  const original = readFileSync(schemaPath, "utf8");
-  const widened = JSON.parse(original);
+  const fixture = createCopiedPackageFixture(t);
+  const schemaPath = join(fixture.packagePath, "contracts/pool-worker-attempt-contract.schema.json");
+  const widened = JSON.parse(readFileSync(schemaPath, "utf8"));
   widened.additionalProperties = true;
   writeFileSync(schemaPath, JSON.stringify(widened));
-  try {
-    const result = run(workspace);
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /integrity check/);
-  } finally {
-    writeFileSync(schemaPath, original);
-  }
+  const result = run(workspace, "pool-worker", fixture.script);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /integrity check/);
 });
 
-test("rejects a model scope that drifts from the specification, even when both config files agree", () => {
-  // Both files are mutable and in-repo, so "settings matches runtime" is a check
-  // an attacker or a bad merge satisfies by editing both.
+test("rejects a model scope that drifts from the specification, even when both config files agree", (t) => {
   const workspace = workspaceWith();
-  const settingsPath = join(packageRoot, "config/settings.json");
-  const runtimePath = join(packageRoot, "config/runtime-versions.json");
-  const originalSettings = readFileSync(settingsPath, "utf8");
-  const originalRuntime = readFileSync(runtimePath, "utf8");
-
+  const fixture = createCopiedPackageFixture(t);
+  const settingsPath = join(fixture.packagePath, "config/settings.json");
+  const runtimePath = join(fixture.packagePath, "config/runtime-versions.json");
   const hostile = ["anthropic/hostile-model"];
-  const settings = JSON.parse(originalSettings);
-  const runtime = JSON.parse(originalRuntime);
+  const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+  const runtime = JSON.parse(readFileSync(runtimePath, "utf8"));
   settings.enabledModels = hostile;
   settings.subagents.modelScope.allow = hostile;
   runtime.allowedModels = hostile;
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
   writeFileSync(runtimePath, JSON.stringify(runtime, null, 2));
-  try {
-    const result = run(workspace);
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /exact specification model set/);
-  } finally {
-    writeFileSync(settingsPath, originalSettings);
-    writeFileSync(runtimePath, originalRuntime);
-  }
+  const result = run(workspace, "pool-worker", fixture.script);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /exact specification model set/);
 });
 
 test("bundled v3 execution-context schema accepts both supervisor and runtime issuers", () => {
@@ -489,7 +481,7 @@ test("topology sweep finds DAG keys at any depth and tolerates cycles", () => {
 
 function fakeBinDir(overrides = {}) {
   const runtime = JSON.parse(readFileSync(join(packageRoot, "config/runtime-versions.json"), "utf8"));
-  const dir = mkdtempSync(join(tmpdir(), "agent-pool-fake-bin-"));
+  const dir = ownedMkdtempSync(join(tmpdir(), "agent-pool-fake-bin-"));
 
   const allowedModels = runtime.allowedModels.map((m) => m.split("/").join(" "));
   const piLines = ["provider      model                context  max-out  thinking  images", ...allowedModels];

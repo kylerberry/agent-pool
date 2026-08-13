@@ -1,15 +1,26 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, writeFileSync, symlinkSync } from "node:fs";
+import { existsSync, mkdtempSync as nativeMkdtempSync, writeFileSync, symlinkSync , rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const ownedTempRoots = new Set();
+function mkdtempSync(prefix) {
+  const path = nativeMkdtempSync(prefix);
+  ownedTempRoots.add(path);
+  return path;
+}
+after(() => {
+  for (const path of ownedTempRoots) rmSync(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 });
+});
+
 const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
-test("creates a private runtime parent with HOME and XDG beneath it", async () => {
-  const { createRuntimeParent } = await import(join(packageRoot, "scripts/runtime-parent.mjs"));
+test("creates a private runtime parent with HOME and XDG beneath it", async (t) => {
+  const { createRuntimeParent, cleanupRuntimeParent } = await import(join(packageRoot, "scripts/runtime-parent.mjs"));
   const runtime = createRuntimeParent();
+  t.after(() => cleanupRuntimeParent(runtime.path));
   assert.ok(existsSync(runtime.path), "runtime parent missing");
   assert.ok(existsSync(runtime.home), "HOME missing");
   assert.ok(existsSync(runtime.xdg), "XDG missing");
@@ -17,9 +28,10 @@ test("creates a private runtime parent with HOME and XDG beneath it", async () =
   assert.ok(runtime.xdg.startsWith(runtime.path), "XDG not under parent");
 });
 
-test("cleanup removes the whole runtime subtree and refuses external paths", async () => {
+test("cleanup removes the whole runtime subtree and refuses external paths", async (t) => {
   const { createRuntimeParent, cleanupRuntimeParent } = await import(join(packageRoot, "scripts/runtime-parent.mjs"));
   const runtime = createRuntimeParent();
+  t.after(() => cleanupRuntimeParent(runtime.path));
   const childFile = join(runtime.home, "child.txt");
   writeFileSync(childFile, "data");
   assert.ok(existsSync(childFile));
@@ -36,7 +48,7 @@ test("cleanup removes the whole runtime subtree and refuses external paths", asy
 test("cleanup refuses symlinked or non-absolute paths", async () => {
   const { cleanupRuntimeParent } = await import(join(packageRoot, "scripts/runtime-parent.mjs"));
   const external = mkdtempSync(join(tmpdir(), "agent-pool-external-"));
-  const symlink = join(tmpdir(), `agent-pool-symlink-${Date.now()}`);
+  const symlink = join(mkdtempSync(join(tmpdir(), "agent-pool-symlink-")), "runtime");
   symlinkSync(external, symlink);
   cleanupRuntimeParent(symlink);
   assert.ok(existsSync(external), "symlink target was wrongly removed");

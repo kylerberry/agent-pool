@@ -55,6 +55,10 @@ Every domain directory must contain a canonical `AGENTS.md` with actionable doma
 
 The CRAFTS S — Sharpen phase keeps domain instructions and affected wiki pages current when work creates durable knowledge. Canonical decisions and requirements are added to `docs/raw/` first; do not record transient implementation noise.
 
+## Test Governance
+
+Use the explicit lanes in `docs/raw/context/test-governance.md`: `npm run test:all` for deterministic aggregate evidence, `npm run test:docker` for non-skipping Docker evidence, `npm run proof:reports:verify` for retained-report verification, and explicit Stage 1/2 commands for real-model proof only. Tests immediately clean only resources they create, never mutate tracked fixtures/configuration, and never claim isolation, persistence, or concurrency from source scans, timing sleeps, or synchronous `Promise.all`.
+
 ## Code Changes
 
 Respect ADRs before changing architecture, runtime, persistence, orchestration semantics, model routing, grading, retry policy, storage, or integration boundaries.
