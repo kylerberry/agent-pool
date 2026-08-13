@@ -106,7 +106,14 @@ function validateSlotCount(value: unknown): number {
   return value;
 }
 
-export function createMinimalPoolRuntime(options: MinimalPoolRuntimeOptions): MinimalPoolRuntime {
+function createMinimalPoolRuntimeWithPolicy(
+  options: MinimalPoolRuntimeOptions,
+  allowFakeAdapters: boolean,
+): MinimalPoolRuntime {
+  if (allowFakeAdapters && !hasFakeAdapter(options.adapterProvenance)) {
+    throw new Error('POOL_PROOF_TEST_RUNTIME_REQUIRES_FAKE_ADAPTER: test-only runtime requires explicit fake adapter provenance');
+  }
+
   const slotCount = validateSlotCount(options.slotCount);
   const queue: QueuedJob[] = [];
   const slots: { busy: boolean; attemptId: string | null }[] = Array.from(
@@ -259,11 +266,18 @@ export function createMinimalPoolRuntime(options: MinimalPoolRuntimeOptions): Mi
       if (shuttingDown) {
         return { ok: false, attemptId: job.attemptId, error: 'POOL_PROOF_RUNTIME_SHUTTING_DOWN' };
       }
-      if (hasFakeAdapter(options.adapterProvenance)) {
+      if (hasFakeAdapter(options.adapterProvenance) && !allowFakeAdapters) {
         return {
           ok: false,
           attemptId: job.attemptId,
           error: 'POOL_PROOF_FAKE_ADAPTER_REJECTED: production proof entry point rejected a fake adapter',
+        };
+      }
+      if (!hasFakeAdapter(options.adapterProvenance) && allowFakeAdapters) {
+        return {
+          ok: false,
+          attemptId: job.attemptId,
+          error: 'POOL_PROOF_TEST_RUNTIME_REQUIRES_FAKE_ADAPTER: test-only runtime requires explicit fake adapter provenance',
         };
       }
       if (admitted.has(job.attemptId)) {
@@ -287,6 +301,18 @@ export function createMinimalPoolRuntime(options: MinimalPoolRuntimeOptions): Mi
       }
     },
   };
+}
+
+export function createMinimalPoolRuntime(options: MinimalPoolRuntimeOptions): MinimalPoolRuntime {
+  return createMinimalPoolRuntimeWithPolicy(options, false);
+}
+
+/**
+ * Test-only runtime factory. It requires explicit fake adapter provenance and
+ * must never be used by production pool-proof composition.
+ */
+export function createMinimalPoolRuntimeForTest(options: MinimalPoolRuntimeOptions): MinimalPoolRuntime {
+  return createMinimalPoolRuntimeWithPolicy(options, true);
 }
 
 function buildExpectations(

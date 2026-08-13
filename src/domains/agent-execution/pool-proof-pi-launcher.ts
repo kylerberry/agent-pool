@@ -36,6 +36,7 @@ import {
 } from './pool-proof-fault-directive.ts';
 import type { ProofJob } from './minimal-pool-runtime.ts';
 import { createSandboxBroker } from './sandbox-broker.ts';
+import type { ContainerDriver } from './repository-sandbox.ts';
 import { getProvider } from '../model-routing-and-evaluation/approved-models.ts';
 import { createHash } from 'node:crypto';
 import {
@@ -97,6 +98,8 @@ export type PiLauncherOptions = {
     readonly pidsLimit?: number;
     /** Launcher-owned sandbox UID:GID mapping. Resolved from the host when omitted. */
     readonly sandboxIdentity?: SandboxIdentity;
+    /** Trusted launcher-internal test seam; production leaves unset (real Docker). */
+    readonly driver?: ContainerDriver;
   };
   /**
    * Proof-only immutable fault directive. If supplied as a bound attempt ID,
@@ -484,6 +487,7 @@ export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLaunche
             memoryLimit: options.brokerOptions.memoryLimit,
             pidsLimit: options.brokerOptions.pidsLimit,
             sandboxIdentity,
+            driver: options.brokerOptions.driver,
           })
         : null;
       if (broker) {
@@ -532,6 +536,33 @@ export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLaunche
       const nodeInterpreter = process.execPath;
 
       return new Promise((resolveLaunch, rejectLaunch) => {
+        // All terminal paths share one cleanup completion. In particular, a
+        // broker server failure after listen starts owned teardown even while
+        // Pi is still running; normal Worker exit then awaits that same work.
+        let cleanupPromise: Promise<void> | null = null;
+        // cleanup() must never reject: it is awaited inside async EventEmitter
+        // callbacks (child 'exit'/'error') where an escaping rejection would
+        // neither settle the launch promise nor be observed as an unhandled
+        // rejection. Broker/container removal failures are captured here so
+        // every terminal handler still deterministically resolves or rejects
+        // launch. The bounded removal error itself is already surfaced to direct
+        // callers by RepositorySandbox.stop (AC-11).
+        function cleanup(): Promise<void> {
+          if (!cleanupPromise) {
+            cleanupPromise = (async () => {
+              removeProviderAuth(context.pi_runtime_parent);
+              if (broker) {
+                try {
+                  await broker.stop();
+                } catch {
+                  // Best-effort owned teardown failed; launch still settles.
+                }
+              }
+            })();
+          }
+          return cleanupPromise;
+        }
+
         const child: ChildProcessByStdio<null, Readable, Readable> = spawn(
           nodeInterpreter,
           [piScript, ...args],
@@ -582,12 +613,10 @@ export function createPoolProofPiLauncher(options: PiLauncherOptions): PiLaunche
           attemptFaultInjection(child, directive, options.expectations.attemptId, faultState);
         });
 
-        async function cleanup(): Promise<void> {
-          removeProviderAuth(context.pi_runtime_parent);
-          if (broker) {
-            await broker.stop();
-          }
-        }
+        // terminalFailure resolves only after listen and invokes the shared
+        // launcher cleanup path; it is intentionally not awaited here because
+        // the Pi child may still be unwinding.
+        if (broker) void broker.terminalFailure.then(() => cleanup()).catch(() => {});
 
         function resolveOnce(exitCode: number | null) {
           if (resolved) return;

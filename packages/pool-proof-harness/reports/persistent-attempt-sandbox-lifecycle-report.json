@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "node_id": "persistent-attempt-sandbox-lifecycle",
+  "image_digest": "sha256:5da4e8cabae067be3e323f74a659d5813ccd659dba026d5dd62aabe952e21e75",
+  "base_image_digest": "sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43",
+  "generated_at": "2026-08-13T13:35:25.724Z",
+  "verdicts": {
+    "container_reused_across_calls": true,
+    "state_persistence_within_attempt": true,
+    "env_allowlist_no_secrets": true,
+    "read_only_rootfs": true,
+    "no_docker_socket": true,
+    "non_root_uid": true,
+    "effective_capabilities_dropped": true,
+    "process_namespace_isolated": true,
+    "network_isolated": true,
+    "path_traversal_confined": true,
+    "symlink_escape_confined": true,
+    "timeout_cancels_command": true,
+    "descendants_killed_on_timeout": true,
+    "container_survives_timeout": true,
+    "stop_removes_owned_container": true,
+    "fresh_container_per_attempt": true,
+    "concurrent_distinct_containers": true,
+    "peer_survives_peer_teardown": true,
+    "final_zero_owned_containers": true
+  },
+  "timings_ms": {
+    "first_attempt_setup_ms": 3536,
+    "concurrent_phase_ms": 1900
+  },
+  "commitments": {
+    "concurrent_attempts": 2,
+    "max_owned_containers_seen": 3,
+    "final_owned_containers": 0
+  }
+}

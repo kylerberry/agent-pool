@@ -12,6 +12,9 @@
 - **Phase capability grant**: The tool/write authorization a phase holds, scoped per phase rather than per container.
 - **Backend fallback**: Degrading to an approved lower-capability backend *within the same attempt*; the whole chain is still one attempt against the retry ceiling.
 - **Cleanup state**: `ready`, `extracting`, `audit_complete`, `audit_incomplete`.
+- **Persistent attempt sandbox**: One fresh long-lived repository container per broker/attempt, created at `SandboxBroker.start()` and torn down at every terminal path. All `runTool` calls within an attempt reuse the same container; a new attempt always gets a fresh container, workspace, HOME/XDG, and ownership binding. Capacity slots never own reusable containers.
+- **Sandbox broker**: The launcher-owned Unix-socket server (`createSandboxBroker`) that fronts one persistent `RepositorySandbox`. It owns the container lifecycle, frames the newline JSON tool protocol, and exposes a `terminalFailure` channel for post-listen server failure.
+- **Container driver**: The internal Docker/Podman adapter that validates a pinned sha256 image, builds the direct runtime argv (non-root, `network none`, `--init`, `cap-drop ALL`, `no-new-privileges`, read-only root, limits, one workspace mount), and owns exact-once removal. Real in production; a labeled fake driver is test-only.
 
 ## Owned state
 
@@ -39,6 +42,11 @@
 - Cleanup has no indefinite-retention outcome: an unresolved or failed extraction is destroyed once the bounded quarantine expires, preserving the failure record. `startedAt` must be finite, or the deadline comparison never fires.
 - `markAuditComplete()` requires the verified retention record for that attempt. Authorizing destruction is bound to evidence, not to a caller's assertion.
 - Pool Proof reports retain bounded commitments and verifier outcomes, never raw session, private-runtime, broker, nonce, result, workspace, task, credential, prompt, or transcript values.
+- One persistent repository container exists per accepted attempt; it is reused across every `runTool` call in that attempt and is never reused by another attempt, capacity slot, or Pi session. Persistent capacity slots hold only scheduling state.
+- The launcher tears down the owned container on every terminal path: Worker success, Worker failure, injected termination, launcher timeout, Pi spawn error, broker failure or premature disconnect, attempt release, and orderly shutdown. No command is accepted once teardown begins.
+- Launcher `cleanup()` never rejects: it is awaited inside async child `exit`/`error` EventEmitter callbacks, so a rejection would leave `launch` pending. Broker/container removal failures are captured internally; the bounded removal error is still surfaced to the direct `RepositorySandbox.stop` caller.
+- Tool output is bounded by UTF-8 bytes (raw `Buffer` accounting with fatal-decode backoff), never by character slicing. A pre-aborted `AbortSignal` registers the command and waiter before any cancel frame, so it cannot orphan a command that runs after the caller receives cancellation.
+- Neither Workers nor ordinary callers receive a container ID, PID, generic kill primitive, or arbitrary container/process targeting capability. Container identity is captured internally from a private cidfile and validated before use.
 
 ## Public interfaces
 
@@ -48,6 +56,7 @@
 - `getPhaseGrant()` / `phaseHasCapability()` / `authorizeWrite()` for ADR-029 phase scoping.
 - `createBackendFallbackLedger()` for same-attempt fallback cost and evidence continuity.
 - `retainTranscript()` for the ADR-026 retention pipeline; `createAttemptWorkspaceLifecycle()` for bounded cleanup.
+- `RepositorySandbox` (`start`/`runTool`/`stop`) and `createSandboxBroker` (plus `terminalFailure`) for the persistent per-attempt container lifecycle. Production uses the real container driver; `createFakePersistentContainerDriver` and the `_testOnly*` seams are test-only and must never enter production composition.
 
 ## Dependencies
 
@@ -115,3 +124,9 @@ Implemented here is the ADR-032 baseline. The following remain approved roadmap 
 - A fresh launcher-owned `PI_CODING_AGENT_DIR` combined with `PI_OFFLINE=1` cannot resolve non-native (host-configured) providers such as `moonshot` — their definitions live in the host `~/.pi/agent/models.json`, not Pi's built-ins. The launcher must carry the selected provider's `models.json` entry (`copyProviderModels`), not only its auth, or the pinned model resolves as unavailable offline.
 - Spawning the headless `--print` Pi Worker with an open stdin pipe blocks indefinitely with **zero output** until the wall-clock kill. Always spawn with `stdio: ['ignore', 'pipe', 'pipe']` so stdin is not a pipe.
 - Comparing an observed isolation value with an “expected” value derived from the same mutable source proves nothing. Preserve independently sourced allocator, launcher-context, inventory, verifier, persistence, ownership, and freshness bindings. Retained-report redaction tests must derive fixture-sensitive values and prove detection by contaminating the serialized report one value at a time.
+- Awaiting `cleanup()` (which calls `broker.stop()`) inside an async child `exit`/`error` callback lets a container-removal rejection escape the EventEmitter and leave `launch` pending forever. Launcher cleanup must capture the rejection and always settle the launch promise.
+- A `broker.start` rollback that rethrows `sandbox.stop()` failure masks the real listen error (e.g. an over-long socket path). Make startup rollback best-effort and surface the original error.
+- macOS `AF_UNIX` socket paths are capped near 104 bytes; per-attempt broker sockets must live under a short, owner-only temp root, or `listen` fails with `EINVAL`.
+- Slicing decoded output strings by a “byte” constant is character slicing in disguise: multibyte UTF-8 floods run past the cap and mid-code-point cuts corrupt output. Bound raw `Buffer` bytes and back off with a fatal decode.
+- Sending a cancel frame for an already-aborted signal before the command is registered hits no-such-target and lets the command run after the caller received cancellation. Register the command and waiter first.
+- A lifecycle test that drives `RepositorySandbox` directly proves `stop` removes the owned container — it does not prove Worker-kill cleanup. Real Worker-termination→container teardown is proven at the launcher layer (`INJECTED_WORKER_FAILURE`).

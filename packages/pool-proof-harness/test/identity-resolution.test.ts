@@ -10,10 +10,10 @@ import {
 } from '../src/identity-resolution.ts';
 
 describe('Identity Resolution', () => {
-  it('resolves the real Pi executable and reports 0.83.0', () => {
+  it('resolves the real Pi executable and reports 0.84.1', () => {
     const identity = resolvePiIdentity('/Users/kylerberry/.nvm/versions/node/v24.18.0/bin/pi');
     assert.ok(!('error' in identity), 'expected Pi identity');
-    assert.equal(identity.version.includes('0.83.0'), true);
+    assert.equal(identity.version.includes('0.84.1'), true);
     assert.equal(identity.digest.length, 64);
   });
 

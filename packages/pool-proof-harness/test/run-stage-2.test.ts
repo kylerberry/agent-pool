@@ -124,7 +124,7 @@ describe('Stage 2 harness integration', () => {
       stage1ReportPath: stage1Path,
       stage2ReportPath: join(reportsDir, 'stage-2-proof-report.json'),
       preflight: {
-        pi: { path: '/fake/pi', version: '0.83.0', digest: 'a'.repeat(64) },
+        pi: { path: '/fake/pi', version: '0.84.1', digest: 'a'.repeat(64) },
         package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) },
         profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) },
         sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true },
@@ -297,7 +297,7 @@ describe('Stage 2 harness integration', () => {
       stage1ReportPath: stage1Path,
       stage2ReportPath: join(reportsDir, 'stage-2-proof-report.json'),
       preflight: {
-        pi: { path: '/fake/pi', version: '0.83.0', digest: 'a'.repeat(64) },
+        pi: { path: '/fake/pi', version: '0.84.1', digest: 'a'.repeat(64) },
         package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) },
         profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) },
         sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true },
@@ -334,7 +334,7 @@ describe('Stage 2 harness integration', () => {
       stage1ReportPath: stage1Path,
       stage2ReportPath: join(reportsDir, 'stage-2-proof-report.json'),
       preflight: {
-        pi: { path: '/fake/pi', version: '0.83.0', digest: 'a'.repeat(64) },
+        pi: { path: '/fake/pi', version: '0.84.1', digest: 'a'.repeat(64) },
         package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) },
         profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) },
         sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true },
@@ -383,7 +383,7 @@ describe('Stage 2 harness integration', () => {
         stage1ReportPath: stage1Path,
         stage2ReportPath: join(reportsDir, 'stage-2-proof-report.json'),
         preflight: {
-          pi: { path: '/fake/pi', version: '0.83.0', digest: 'a'.repeat(64) },
+          pi: { path: '/fake/pi', version: '0.84.1', digest: 'a'.repeat(64) },
           package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) },
           profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) },
           sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true }, gitPath: 'git',
@@ -401,7 +401,7 @@ describe('Stage 2 harness integration', () => {
   it('rejects all-real provenance with raw observation mutation before any side effect', async () => {
     const result = await runStage2({
       stage1ReportPath: '/does-not-matter-after-gate', stage2ReportPath: '/does-not-write',
-      preflight: { pi: { path: '/fake/pi', version: '0.83.0', digest: 'a'.repeat(64) }, package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) }, profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) }, sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true }, gitPath: 'git' },
+      preflight: { pi: { path: '/fake/pi', version: '0.84.1', digest: 'a'.repeat(64) }, package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) }, profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) }, sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true }, gitPath: 'git' },
       model: 'moonshot/kimi-k2.7-code', containerRuntime: 'docker', sandboxImage: 'sha256:fake',
       adapterProvenance: { launcher: 'real', sandbox: 'real', verifier: 'real', persistence: 'real' }, injectFaultAttemptId: 'multi-worker-pool-proof-attempt-b', fixtureSourcePath: '/does-not-matter',
       mutateRawObservationsForTest: (observations) => observations,
@@ -417,7 +417,7 @@ describe('Stage 2 harness integration', () => {
     const stage1Path = writeStage1Report(reportsDir, buildFakeStage1Report());
     const gated = await runStage2({
       stage1ReportPath: stage1Path, stage2ReportPath: join(reportsDir, 'stage-2-proof-report.json'),
-      preflight: { pi: { path: '/fake/pi', version: '0.83.0', digest: 'a'.repeat(64) }, package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) }, profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) }, sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true }, gitPath: 'git' },
+      preflight: { pi: { path: '/fake/pi', version: '0.84.1', digest: 'a'.repeat(64) }, package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) }, profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) }, sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true }, gitPath: 'git' },
       model: 'moonshot/kimi-k2.7-code', containerRuntime: 'docker', sandboxImage: 'sha256:fake',
       adapterProvenance: { launcher: 'real', sandbox: 'real', verifier: 'real', persistence: 'real' }, injectFaultAttemptId: 'multi-worker-pool-proof-attempt-b', fixtureSourcePath,
       mutateRawObservationsForTest: (observations) => observations,
@@ -439,7 +439,7 @@ describe('Stage 2 harness integration', () => {
       stage1ReportPath: stage1Path,
       stage2ReportPath: join(reportsDir, 'stage-2-proof-report.json'),
       preflight: {
-        pi: { path: '/fake/pi', version: '0.83.0', digest: 'a'.repeat(64) },
+        pi: { path: '/fake/pi', version: '0.84.1', digest: 'a'.repeat(64) },
         package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) },
         profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) },
         sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true },
@@ -474,7 +474,7 @@ describe('Stage 2 harness integration', () => {
       stage1ReportPath: stage1Path,
       stage2ReportPath: join(reportsDir, 'stage-2-proof-report.json'),
       preflight: {
-        pi: { path: '/fake/pi', version: '0.83.0', digest: 'a'.repeat(64) },
+        pi: { path: '/fake/pi', version: '0.84.1', digest: 'a'.repeat(64) },
         package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) },
         profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) },
         sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true },
@@ -559,7 +559,7 @@ describe('Stage 2 harness integration', () => {
       stage1ReportPath: stage1Path,
       stage2ReportPath: join(reportsDir, 'stage-2-proof-report.json'),
       preflight: {
-        pi: { path: '/fake/pi', version: '0.83.0', digest: 'a'.repeat(64) },
+        pi: { path: '/fake/pi', version: '0.84.1', digest: 'a'.repeat(64) },
         package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) },
         profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) },
         sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true },
@@ -610,7 +610,7 @@ describe('Stage 2 harness integration', () => {
       stage1ReportPath: stage1Path,
       stage2ReportPath: join(reportsDir, 'stage-2-proof-report.json'),
       preflight: {
-        pi: { path: '/fake/pi', version: '0.83.0', digest: 'a'.repeat(64) },
+        pi: { path: '/fake/pi', version: '0.84.1', digest: 'a'.repeat(64) },
         package: { path: '/fake/package', profile: 'pool-proof-builder', digest: 'b'.repeat(64) },
         profile: { name: 'pool-proof-builder', path: '/fake/profile', digest: 'c'.repeat(64) },
         sandboxImage: { image: 'sha256:fake', runtime: 'docker', verified: true },

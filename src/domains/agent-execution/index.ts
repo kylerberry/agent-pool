@@ -108,12 +108,23 @@ export {
 } from './broker-socket.ts';
 
 export type {
+  BrokerResponse,
+  ContainerDriver,
+  FakeContainerDriver,
+  FakeDriverOptions,
+  PersistentContainerChild,
+  PersistentDriverOptions,
   RepositorySandbox,
   RepositorySandboxOptions,
-  SandboxProcess,
-  BrokerResponse,
+  RunToolOptions,
+  SpawnPersistentInput,
 } from './repository-sandbox.ts';
-export { createRepositorySandbox } from './repository-sandbox.ts';
+export {
+  createFakePersistentContainerDriver,
+  createPersistentContainerDriver,
+  createRepositorySandbox,
+  resolveRuntimeExecutable,
+} from './repository-sandbox.ts';
 
 export type {
   SandboxIdentity,
@@ -162,4 +173,7 @@ export type {
   ProofJob,
   SubmitResult,
 } from './minimal-pool-runtime.ts';
-export { createMinimalPoolRuntime } from './minimal-pool-runtime.ts';
+export {
+  createMinimalPoolRuntime,
+  createMinimalPoolRuntimeForTest,
+} from './minimal-pool-runtime.ts';

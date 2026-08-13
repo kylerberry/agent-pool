@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createMinimalPoolRuntime,
+  createMinimalPoolRuntimeForTest,
   createAttemptResourceFactory,
   createPoolProofPiLauncher,
   type ProofJob,
@@ -83,7 +84,7 @@ function makeLaunchIdentity(): PoolProofLaunchExpectations {
     piRuntimeParent: '/tmp/fake/pi',
     piSessionDir: '/tmp/fake/session',
     piExecutablePath: '/opt/pi/pi',
-    piExecutableVersion: '0.83.0',
+    piExecutableVersion: '0.84.1',
     piExecutableDigest: 'pinned-pi-digest',
     packagePath: '/opt/agent-pool-worker-harness',
     packageProfile: 'pool-proof-builder',
@@ -173,6 +174,46 @@ describe('Minimal Pool Runtime', () => {
     const result = await runtime.submit(job);
     assert.equal(result.ok, false);
     assert.ok(result.error.includes('fake'));
+  });
+
+  it('rejects all-real provenance at test-only factory construction', () => {
+    assert.throws(
+      () =>
+        createMinimalPoolRuntimeForTest({
+          resourceFactory: createAttemptResourceFactory({ runtimeRoot: mkdtempSync(join(tmpdir(), 'runtime-')) }),
+          createPiLauncher: () => ({ launch: async () => makeFakeProcess('att-1', 'n1', 'nonce', 'r1') }),
+          selectedModel: 'moonshot/kimi-k2.7-code',
+          launchIdentity: makeLaunchIdentity(),
+          adapterProvenance: { launcher: 'real', sandbox: 'real', verifier: 'real', persistence: 'real' },
+          persistAttempt: async () => {},
+          verify: async () => ({ status: 'passed', commitSha: null, failureCode: null, checks: [], greenEvidence: null }),
+          persistResult: async () => {},
+        }),
+      /POOL_PROOF_TEST_RUNTIME_REQUIRES_FAKE_ADAPTER/,
+    );
+  });
+
+  it('executes explicit fake provenance through the test-only factory', async () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'runtime-'));
+    const fixturePath = mkdtempSync(join(tmpdir(), 'fixture-'));
+    const job = makeJob(fixturePath);
+    let persisted = false;
+    const runtime = createMinimalPoolRuntimeForTest({
+      resourceFactory: createAttemptResourceFactory({ runtimeRoot }),
+      createPiLauncher: () => ({
+        launch: async () => makeFakeProcess(job.attemptId, job.nodeId, 'nonce', 'result-1'),
+      }),
+      selectedModel: 'moonshot/kimi-k2.7-code',
+      launchIdentity: makeLaunchIdentity(),
+      adapterProvenance: { launcher: 'fake', sandbox: 'real', verifier: 'real', persistence: 'real' },
+      persistAttempt: async () => {},
+      verify: async () => ({ status: 'passed', commitSha: null, failureCode: null, checks: [], greenEvidence: null }),
+      persistResult: async () => { persisted = true; },
+    });
+
+    const result = await runtime.submit(job);
+    assert.equal(result.ok, true);
+    assert.equal(persisted, true);
   });
 
   it('runs at most one active attempt at a time', async () => {

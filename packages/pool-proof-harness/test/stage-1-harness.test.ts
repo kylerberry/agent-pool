@@ -10,7 +10,9 @@ import { buildStage1Job } from '../src/stage-1-job.ts';
 import { createSqliteStore, createPoolProofPersistence } from '../../../src/domains/orchestration/index.ts';
 import {
   createMinimalPoolRuntime,
+  createMinimalPoolRuntimeForTest,
   createAttemptResourceFactory,
+  createFakePersistentContainerDriver,
   createPoolProofPiLauncher,
   type PoolProofLaunchExpectations,
   type PackageProfileVerifier,
@@ -159,7 +161,7 @@ describe('Stage 1 harness', () => {
     let capturedBrokerWorkspace: string | undefined;
     let capturedVerifierWorkspace: string | undefined;
 
-    const runtime = createMinimalPoolRuntime({
+    const runtime = createMinimalPoolRuntimeForTest({
       resourceFactory: createAttemptResourceFactory({ runtimeRoot }),
       createPiLauncher: (expectations, runtimeJob) => {
         capturedLauncherWorkspace = expectations.workspacePath;
@@ -175,6 +177,7 @@ describe('Stage 1 harness', () => {
             cpuLimit: '1',
             memoryLimit: '1g',
             pidsLimit: 64,
+            driver: createFakePersistentContainerDriver(),
           },
           _testOnlyFakeProcess: {
             pid: 12345,
@@ -200,7 +203,7 @@ describe('Stage 1 harness', () => {
         piRuntimeParent: join(runtimeRoot, 'pi-runtime'),
         piSessionDir: join(runtimeRoot, 'pi-session'),
         piExecutablePath: '/opt/pi/pi',
-        piExecutableVersion: '0.83.0',
+        piExecutableVersion: '0.84.1',
         piExecutableDigest: 'd'.repeat(64),
         packagePath: '/opt/pkg',
         packageProfile: 'pool-proof-builder',
@@ -213,8 +216,8 @@ describe('Stage 1 harness', () => {
         resultDestinationId: attemptId,
       },
       adapterProvenance: {
-        launcher: 'real',
-        sandbox: 'real',
+        launcher: 'fake',
+        sandbox: 'fake',
         verifier: 'real',
         persistence: 'real',
       },
@@ -325,7 +328,7 @@ describe('Stage 1 harness', () => {
       piRuntimeParent: join(runtimeRoot, 'pi-runtime'),
       piSessionDir: join(runtimeRoot, 'pi-session'),
       piExecutablePath: piPath,
-      piExecutableVersion: '0.83.0',
+      piExecutableVersion: '0.84.1',
       piExecutableDigest: piDigest,
       packagePath: identity.packagePath,
       packageProfile: 'pool-proof-builder',
@@ -338,7 +341,7 @@ describe('Stage 1 harness', () => {
       resultDestinationId: attemptId,
     };
 
-    const runtime = createMinimalPoolRuntime({
+    const runtime = createMinimalPoolRuntimeForTest({
       resourceFactory: createAttemptResourceFactory({ runtimeRoot }),
       createPiLauncher: (runtimeExpectations, runtimeJob) =>
         createPoolProofPiLauncher({
@@ -352,6 +355,7 @@ describe('Stage 1 harness', () => {
             cpuLimit: '1',
             memoryLimit: '1g',
             pidsLimit: 64,
+            driver: createFakePersistentContainerDriver(),
           },
           verifyPackageAndProfile: identity.verify,
         }),
@@ -359,7 +363,7 @@ describe('Stage 1 harness', () => {
       launchIdentity,
       adapterProvenance: {
         launcher: 'real',
-        sandbox: 'real',
+        sandbox: 'fake',
         verifier: 'real',
         persistence: 'real',
       },
@@ -456,7 +460,7 @@ describe('Stage 1 harness', () => {
       piRuntimeParent: join(runtimeRoot, 'pi-runtime'),
       piSessionDir: join(runtimeRoot, 'pi-session'),
       piExecutablePath: piPath,
-      piExecutableVersion: '0.83.0',
+      piExecutableVersion: '0.84.1',
       piExecutableDigest: piDigest,
       packagePath: identity.packagePath,
       packageProfile: 'pool-proof-builder',
@@ -587,7 +591,7 @@ describe('Stage 1 harness', () => {
       piRuntimeParent: join(runtimeRoot, 'pi-runtime'),
       piSessionDir: join(runtimeRoot, 'pi-session'),
       piExecutablePath: piPath,
-      piExecutableVersion: '0.83.0',
+      piExecutableVersion: '0.84.1',
       piExecutableDigest: piDigest,
       packagePath: identity.packagePath,
       packageProfile: 'pool-proof-builder',
@@ -602,7 +606,7 @@ describe('Stage 1 harness', () => {
 
     let capturedGreenEvidence: GreenEvidence | null = null;
 
-    const runtime = createMinimalPoolRuntime({
+    const runtime = createMinimalPoolRuntimeForTest({
       resourceFactory: createAttemptResourceFactory({ runtimeRoot }),
       createPiLauncher: (runtimeExpectations, runtimeJob) =>
         createPoolProofPiLauncher({
@@ -616,6 +620,7 @@ describe('Stage 1 harness', () => {
             cpuLimit: '1',
             memoryLimit: '1g',
             pidsLimit: 64,
+            driver: createFakePersistentContainerDriver(),
           },
           verifyPackageAndProfile: identity.verify,
         }),
@@ -623,7 +628,7 @@ describe('Stage 1 harness', () => {
       launchIdentity,
       adapterProvenance: {
         launcher: 'real',
-        sandbox: 'real',
+        sandbox: 'fake',
         verifier: 'real',
         persistence: 'real',
       },

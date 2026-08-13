@@ -1,14 +1,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, existsSync, readFileSync, readdirSync, statSync, realpathSync, rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createPoolProofPiLauncher,
+  createFakePersistentContainerDriver,
   type ProofJob,
   type PoolProofLaunchExpectations,
   type PackageProfileVerifier,
+  type FakeContainerDriver,
 } from '../../src/domains/agent-execution/index.ts';
 
 
@@ -142,7 +144,7 @@ function makeExpectations(workspacePath: string, piPath: string, identity: Ident
     piRuntimeParent: join(workspacePath, '..', 'pi-runtime'),
     piSessionDir: join(workspacePath, '..', 'pi-runtime', 'session'),
     piExecutablePath: piPath,
-    piExecutableVersion: '0.83.0',
+    piExecutableVersion: '0.84.1',
     piExecutableDigest: digestFile(piPath),
     packagePath: identity.packagePath,
     packageProfile: 'pool-proof-builder',
@@ -224,7 +226,7 @@ describe('Pool Proof Pi Launcher', () => {
       pi_session_dir: join(fixturePath, '..', 'pi-runtime', 'session'),
       pi_executable_identity: {
         path: piPath,
-        version: '0.83.0',
+        version: '0.84.1',
         digest: digestFile(piPath),
       },
       package_identity: {
@@ -321,7 +323,7 @@ describe('Pool Proof Pi Launcher', () => {
       pi_session_dir: expectations.piSessionDir,
       pi_executable_identity: {
         path: piPath,
-        version: '0.83.0',
+        version: '0.84.1',
         digest: digestFile(piPath),
       },
       package_identity: {
@@ -414,7 +416,7 @@ process.exit(0);
         pi_session_dir: expectations.piSessionDir,
         pi_executable_identity: {
           path: piPath,
-          version: '0.83.0',
+          version: '0.84.1',
           digest: digestFile(piPath),
         },
         package_identity: {
@@ -493,7 +495,7 @@ process.exit(0);
       pi_session_dir: expectations.piSessionDir,
       pi_executable_identity: {
         path: piPath,
-        version: '0.83.0',
+        version: '0.84.1',
         digest: digestFile(piPath),
       },
       package_identity: {
@@ -557,7 +559,7 @@ process.exit(0);
       pi_session_dir: expectations.piSessionDir,
       pi_executable_identity: {
         path: piPath,
-        version: '0.83.0',
+        version: '0.84.1',
         digest: digestFile(piPath),
       },
       package_identity: {
@@ -628,7 +630,7 @@ process.exit(0);
       pi_session_dir: expectations.piSessionDir,
       pi_executable_identity: {
         path: piPath,
-        version: '0.83.0',
+        version: '0.84.1',
         digest: digestFile(piPath),
       },
       package_identity: {
@@ -716,7 +718,7 @@ process.exit(0);
       pi_session_dir: expectations.piSessionDir,
       pi_executable_identity: {
         path: piPath,
-        version: '0.83.0',
+        version: '0.84.1',
         digest: digestFile(piPath),
       },
       package_identity: {
@@ -779,7 +781,7 @@ process.exit(0);
       pi_session_dir: expectations.piSessionDir,
       pi_executable_identity: {
         path: piPath,
-        version: '0.83.0',
+        version: '0.84.1',
         digest: digestFile(piPath),
       },
       package_identity: {
@@ -944,5 +946,220 @@ process.exit(0);
     assert.equal(peer.signalCode, null);
     assert.equal(peer.failureCode, null);
     assert.equal(peer.exitCode, 0);
+  });
+});
+
+describe('Launcher broker/container teardown is awaited on every terminal path (AC-10)', () => {
+  function hostIdentity() {
+    if (typeof process.getuid !== 'function' || typeof process.getgid !== 'function') {
+      throw new Error('uid/gid required for sandbox identity');
+    }
+    return { uid: process.getuid(), gid: process.getgid(), isPinned: false };
+  }
+
+  function brokerSetup(runtimeRoot: string): { driver: FakeContainerDriver; workspacePath: string; socketPath: string } {
+    const workspacePath = realpathSync(mkdtempSync(join(runtimeRoot, 'ws-')));
+    const socketPath = join(runtimeRoot, `broker-${Math.random().toString(36).slice(2)}.sock`);
+    const driver = createFakePersistentContainerDriver();
+    return { driver, workspacePath, socketPath };
+  }
+
+  function writeExitPi(runtimeRoot: string, exitCode: number): string {
+    const script = join(runtimeRoot, `pi-exit-${exitCode}`);
+    writeFileSync(
+      script,
+      `#!${process.execPath}
+console.log(JSON.stringify({ done: true }));
+process.exit(${exitCode});
+`,
+      { mode: 0o700 },
+    );
+    return script;
+  }
+
+  function makeBrokerLauncher(opts: {
+    runtimeRoot: string;
+    driver: FakeContainerDriver;
+    workspacePath: string;
+    socketPath: string;
+    piPath: string;
+    identity: IdentityDirs;
+    timeoutMs?: number;
+    injectFault?: boolean;
+  }) {
+    const expectations = makeExpectations(opts.workspacePath, opts.piPath, opts.identity);
+    return createPoolProofPiLauncher({
+      expectations,
+      job: makeJob(),
+      verifyPackageAndProfile: opts.identity.verify,
+      timeoutMs: opts.timeoutMs,
+      injectFaultForAttemptId: opts.injectFault ? expectations.attemptId : undefined,
+      brokerOptions: {
+        socketPath: opts.socketPath,
+        workspacePath: opts.workspacePath,
+        containerRuntime: 'docker',
+        image: 'sha256:' + 'a'.repeat(64),
+        sandboxIdentity: hostIdentity(),
+        cpuLimit: '1',
+        memoryLimit: '512m',
+        pidsLimit: 64,
+        driver: opts.driver,
+      },
+    });
+  }
+
+  it('awaits container teardown on normal Worker exit before launch resolves', async () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'launcher-teardown-ok-'));
+    try {
+      const identity = makeIdentityDirs(runtimeRoot);
+      const bs = brokerSetup(runtimeRoot);
+      const piPath = writeExitPi(runtimeRoot, 0);
+      const launcher = makeBrokerLauncher({ ...bs, runtimeRoot, piPath, identity });
+      const launched = await launcher.launch(buildMarker(makeExpectations(bs.workspacePath, piPath, identity)));
+      assert.ok(!('code' in launched), 'launch must succeed');
+      if ('code' in launched) return;
+      assert.equal(launched.exitCode, 0);
+      assert.equal(bs.driver.spawnCount, 1, 'broker started one container');
+      assert.equal(bs.driver.removedIds.length, 1, 'container must be removed before launch resolves');
+      assert.equal(bs.driver.removedIds[0], bs.driver.lastContainerId);
+    } finally {
+      rmSync(runtimeRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('awaits container teardown on nonzero Worker exit', async () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'launcher-teardown-nz-'));
+    try {
+      const identity = makeIdentityDirs(runtimeRoot);
+      const bs = brokerSetup(runtimeRoot);
+      const piPath = writeExitPi(runtimeRoot, 1);
+      const launcher = makeBrokerLauncher({ ...bs, runtimeRoot, piPath, identity });
+      const launched = await launcher.launch(buildMarker(makeExpectations(bs.workspacePath, piPath, identity)));
+      assert.ok(!('code' in launched));
+      if ('code' in launched) return;
+      assert.notEqual(launched.exitCode, 0);
+      assert.equal(bs.driver.removedIds.length, 1, 'nonzero exit must still tear down the container');
+    } finally {
+      rmSync(runtimeRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('awaits container teardown on launcher timeout', async () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'launcher-teardown-to-'));
+    try {
+      const identity = makeIdentityDirs(runtimeRoot);
+      const bs = brokerSetup(runtimeRoot);
+      const piPath = makeFakePiScript(runtimeRoot, { timeoutMs: 60_000, includePrompt: 'Attempt contract' });
+      const launcher = makeBrokerLauncher({ ...bs, runtimeRoot, piPath, identity, timeoutMs: 50 });
+      const launched = await launcher.launch(buildMarker(makeExpectations(bs.workspacePath, piPath, identity)));
+      assert.ok(!('code' in launched));
+      if ('code' in launched) return;
+      assert.equal(launched.timedOut, true);
+      assert.equal(bs.driver.removedIds.length, 1, 'timeout path must tear down the container');
+    } finally {
+      rmSync(runtimeRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('awaits container teardown on injected Worker termination', async () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'launcher-teardown-inj-'));
+    try {
+      const identity = makeIdentityDirs(runtimeRoot);
+      const bs = brokerSetup(runtimeRoot);
+      const piPath = makeFakePiScript(runtimeRoot, { timeoutMs: 60_000, includePrompt: 'Attempt contract' });
+      const launcher = makeBrokerLauncher({ ...bs, runtimeRoot, piPath, identity, injectFault: true });
+      const launched = await launcher.launch(buildMarker(makeExpectations(bs.workspacePath, piPath, identity)));
+      assert.ok(!('code' in launched));
+      if ('code' in launched) return;
+      assert.equal(launched.failureCode, 'INJECTED_WORKER_FAILURE');
+      assert.equal(bs.driver.removedIds.length, 1, 'injected-termination path must tear down the container');
+    } finally {
+      rmSync(runtimeRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('broker-start failure rejects launch and leaks no container', async () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'launcher-teardown-bfail-'));
+    try {
+      const identity = makeIdentityDirs(runtimeRoot);
+      const workspacePath = realpathSync(mkdtempSync(join(runtimeRoot, 'ws-')));
+      const socketPath = join(runtimeRoot, `broker-${Math.random().toString(36).slice(2)}.sock`);
+      const driver = createFakePersistentContainerDriver({ failSpawn: true });
+      const piPath = writeExitPi(runtimeRoot, 0);
+      const expectations = makeExpectations(workspacePath, piPath, identity);
+      const launcher = createPoolProofPiLauncher({
+        expectations,
+        job: makeJob(),
+        verifyPackageAndProfile: identity.verify,
+        brokerOptions: {
+          socketPath, workspacePath, containerRuntime: 'docker',
+          image: 'sha256:' + 'a'.repeat(64), sandboxIdentity: hostIdentity(),
+          cpuLimit: '1', memoryLimit: '512m', pidsLimit: 64, driver,
+        },
+      });
+      await assert.rejects(() => launcher.launch(buildMarker(expectations)));
+      assert.equal(driver.removedIds.length, 0, 'no container was ever created, so none leaks');
+    } finally {
+      rmSync(runtimeRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('launch settles deterministically when owned container removal fails on Worker exit', async () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'launcher-rm-fail-'));
+    try {
+      const identity = makeIdentityDirs(runtimeRoot);
+      const workspacePath = realpathSync(mkdtempSync(join(runtimeRoot, 'ws-')));
+      const socketPath = join(runtimeRoot, `broker-${Math.random().toString(36).slice(2)}.sock`);
+      // Removal fails on every teardown attempt (B3 surfaces a bounded error;
+      // the launcher must still settle rather than leave launch pending).
+      const driver = createFakePersistentContainerDriver({ removeRejects: true });
+      const piPath = writeExitPi(runtimeRoot, 0);
+      const expectations = makeExpectations(workspacePath, piPath, identity);
+      const launcher = createPoolProofPiLauncher({
+        expectations,
+        job: makeJob(),
+        verifyPackageAndProfile: identity.verify,
+        brokerOptions: {
+          socketPath, workspacePath, containerRuntime: 'docker',
+          image: 'sha256:' + 'a'.repeat(64), sandboxIdentity: hostIdentity(),
+          cpuLimit: '1', memoryLimit: '512m', pidsLimit: 64, driver,
+        },
+      });
+      // Must resolve (not hang) even though container removal rejects.
+      const settled = await Promise.race([
+        launcher.launch(buildMarker(expectations)).then((r) => r),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('launch hung on removal failure')), 15_000)),
+      ]);
+      assert.ok(!('code' in settled), `launch must succeed when removal fails: ${(settled as { code: string }).code}`);
+      if ('code' in settled) return;
+      assert.equal(settled.exitCode, 0, 'Worker exit outcome is still reported');
+      assert.equal(driver.removedIds.length, 0, 'failed removal records no successful removal');
+    } finally {
+      rmSync(runtimeRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('peer-safe concurrent attempts keep distinct containers; tearing one down does not remove the other', async () => {
+    const runtimeRoot = mkdtempSync(join(tmpdir(), 'launcher-teardown-peer-'));
+    try {
+      const identity = makeIdentityDirs(runtimeRoot);
+      const bsA = brokerSetup(runtimeRoot);
+      const bsB = brokerSetup(runtimeRoot);
+      const piPath = writeExitPi(runtimeRoot, 0);
+      const launcherA = makeBrokerLauncher({ ...bsA, runtimeRoot, piPath, identity });
+      const launcherB = makeBrokerLauncher({ ...bsB, runtimeRoot, piPath, identity });
+      const [a, b] = await Promise.all([
+        launcherA.launch(buildMarker(makeExpectations(bsA.workspacePath, piPath, identity))),
+        launcherB.launch(buildMarker(makeExpectations(bsB.workspacePath, piPath, identity))),
+      ]);
+      assert.ok(!('code' in a) && !('code' in b));
+      assert.equal(bsA.driver.lastContainerId !== bsB.driver.lastContainerId, true, 'concurrent attempts get distinct containers');
+      assert.equal(bsA.driver.removedIds.length, 1);
+      assert.equal(bsB.driver.removedIds.length, 1);
+      assert.equal(bsA.driver.removedIds[0], bsA.driver.lastContainerId, 'each teardown removes only its own owned id');
+      assert.equal(bsB.driver.removedIds[0], bsB.driver.lastContainerId);
+    } finally {
+      rmSync(runtimeRoot, { recursive: true, force: true });
+    }
   });
 });

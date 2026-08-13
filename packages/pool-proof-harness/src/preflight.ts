@@ -143,12 +143,12 @@ export async function runPreflight(
   if ('error' in piIdentity) {
     return { ok: false, failure: { stage: 'pi_executable', reason: piIdentity.error, timestamp: timestamp() } };
   }
-  if (!piIdentity.version.includes('0.83.0')) {
+  if (!piIdentity.version.includes('0.84.1')) {
     return {
       ok: false,
       failure: {
         stage: 'pi_version',
-        reason: `Pi version mismatch: expected 0.83.0, got ${piIdentity.version}`,
+        reason: `Pi version mismatch: expected 0.84.1, got ${piIdentity.version}`,
         timestamp: timestamp(),
       },
     };
