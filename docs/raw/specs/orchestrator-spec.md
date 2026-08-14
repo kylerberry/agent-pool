@@ -104,6 +104,9 @@ The warm pool is the DAG-unaware execution layer of this greenfield system:
 
 ### 3.4 Spec Intake (ADR-027)
 
+> Proposed ADR-037 would make a GitHub planning PR (merged, deterministically validated) the Gate 1 approval surface instead of `POST /specs/{id}/approve`. Until accepted, the API/CLI path below remains authoritative.
+
+
 Intake is an **HTTP API, not a form** — submission is a machine interface; the human touchpoint is Gate 1 approval. `POST /specs` takes raw markdown plus target repo/branch and an optional `Idempotency-Key`, returns `202 {spec_id, status: "decomposing"}`, and enqueues a decomposition job. Decomposition can't complete in-request (model call + retrieval), so intake is necessarily async.
 
 ```
@@ -198,6 +201,8 @@ Composite thresholds are **empirical** (ADR-009): derived per task class from Ph
 - **A node's `passed` is provisional.** Before PR assembly, tier 1 re-runs against the final merged suite. A sibling's suite change that breaks a previously-green node surfaces at integration and returns that node to `failed`/retry. Branch-integrated green is the real gate.
 
 ## 8. PR Assembly & the Revision Loop (ADR-015)
+
+> Proposed ADR-038 would supersede this section: each independently safe node would merge to `main` via its own short-lived reviewed PR, rather than one PR per connected component. Until accepted, this section remains authoritative.
 
 - **Granularity = DAG connected component.** Independent subtrees ship as separate PRs; a dependency chain is one PR with **one commit per node**, each commit carrying that node's scorecard, cost, and model rationale. Every PR includes the originating spec intent.
 - **Review-comment revisions are governed continuations.** A PR comment fires the GitHub Action → orchestrator continuation endpoint → comment maps to a node (via its commit; PR-level comments map to the **latest affected node**; unmappable → escalate, don't guess) → dispatched as a normal node attempt: re-graded, counted against retry ceiling and budget, audit-logged. No write path to the PR bypasses grading.
@@ -297,3 +302,7 @@ ADR-033 defines the practical operations baseline: health/readiness checks, corr
 | 032 | Practical v1 worker isolation baseline |
 | 033 | Practical v1 single-host operations baseline |
 | 034 | Domain discovery before implementation |
+| 035 | Minimal coherent DAG nodes; scope rationale is Gate-1 review metadata |
+| 036 | Discovered-work records; controller may recommend but never auto-execute amendment |
+| 037 | **Proposed:** GitHub planning PRs as editable Gate 1 manifests |
+| 038 | **Proposed:** node-level mainline integration (supersedes 015 if accepted) |

@@ -3,7 +3,7 @@ title: Supervisor Orchestrator — Consolidated Specification
 type: source
 tags: [source, ingest]
 created: 2026-07-22
-updated: 2026-07-22
+updated: 2026-08-13
 sources:
   - docs/raw/specs/orchestrator-spec.md
 ---

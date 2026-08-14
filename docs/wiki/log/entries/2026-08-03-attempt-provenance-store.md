@@ -55,7 +55,7 @@ is per-connection and the suite stayed green without it. Migration v4 replaces i
 with schema-level `BEFORE INSERT` conflict guards. Migration v5 removes the
 preemptive evaluator column entirely and makes phase artifacts referentially
 valid while preserving the guards. Recorded canonically in
-[[docs/raw/context/append-only-persistence-in-sqlite|Append-Only Persistence in SQLite]].
+`docs/raw/context/append-only-persistence-in-sqlite.md` (Append-Only Persistence in SQLite).
 
 ## Verification
 

@@ -3,7 +3,7 @@ title: Project Overview
 type: overview
 tags: [overview]
 created: 2026-07-22
-updated: 2026-08-05
+updated: 2026-08-13
 sources:
   - docs/raw/specs/orchestrator-spec.md
   - docs/raw/adr/orchestrator/
@@ -32,3 +32,6 @@ Pi sessions have explicit actors: Repository Builders develop the product throug
 - [[wiki/architecture/repository-builder-vs-pool-worker|Repository Builder vs Pool Worker]]
 - [[wiki/sources/2026-08-13_adr-035-minimal-coherent-dag-nodes|Minimal Coherent DAG Nodes]]
 - [[wiki/sources/2026-08-13_adr-036-discovered-work-and-dag-amendment|Discovered Work and DAG Amendment]]
+- [[wiki/sources/2026-08-13_adr-037-github-planning-pr-gate1|ADR-037: GitHub Planning PRs as Gate 1 (Proposed)]]
+- [[wiki/sources/2026-08-13_adr-038-node-level-mainline-integration|ADR-038: Node-Level Mainline Integration (Proposed)]]
+- [[wiki/sources/2026-08-13_probe-node-workflow-proposal|Probe Node Workflow (Proposed)]]
