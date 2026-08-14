@@ -29,7 +29,7 @@ The file is written once, then frozen until Kyler approves or amends it. If it a
 
 ## Steps
 
-1. **Load sources.** Read `docs/goal-prompt.md`, `docs/raw/adr/orchestrator/ADR-018-decomposition-emission-schema.md`, `docs/raw/adr/orchestrator/ADR-034-domain-discovery-before-implementation.md`, `docs/raw/adr/orchestrator/ADR-035-minimal-coherent-dag-nodes.md`, `docs/raw/adr/orchestrator/ADR-036-discovered-work-and-dag-amendment.md`, `docs/raw/specs/schemas/domain-map-approval.schema.json`, and `docs/raw/specs/templates/domain-map-approval.json`. If a domain map exists, read `docs/raw/context/initial-domain-map.md`.
+1. **Load sources.** Read `docs/goal-prompt.md`, `docs/raw/adr/orchestrator/ADR-018-decomposition-emission-schema.md`, `docs/raw/adr/orchestrator/ADR-034-domain-discovery-before-implementation.md`, `docs/raw/adr/orchestrator/ADR-035-minimal-coherent-dag-nodes.md`, `docs/raw/adr/orchestrator/ADR-036-discovered-work-and-dag-amendment.md`, `docs/raw/adr/orchestrator/ADR-039-agent-assisted-probe-execution.md`, `docs/raw/specs/functional-pool-deployment.md` when present, `docs/raw/specs/schemas/domain-map-approval.schema.json`, and `docs/raw/specs/templates/domain-map-approval.json`. If a domain map exists, read `docs/raw/context/initial-domain-map.md`.
 2. **Propose a flat DAG.** Emit a JSON object with a `nodes` array. Each node is a flat ADR-018 node:
 
 ```json
@@ -52,7 +52,7 @@ The file is written once, then frozen until Kyler approves or amends it. If it a
    - The graph has no cycles (run a topological sort; fail closed on cycle).
    - At least one node has `depends_on.length === 0` (ready nodes exist).
 4. **Write the durable proposal.** Save it to `docs/raw/plans/proposed-build-dag.json`. This pre-approval structural check is intentionally separate from `goal-plan.mjs`, whose full validator requires human approval metadata.
-5. **Stop for Kyler approval.** Present the artifact path, node count, ready nodes, the ADR-034 gate status, and whether a valid domain-map approval record exists. Do not begin implementation until Kyler approves. On approval, add the required `approval` object and run `node .pi/scripts/validate-goal-plan.mjs`; the approved artifact must pass the full `goal-plan.mjs` schema and hash validation.
+5. **Stop for Kyler approval.** Present the artifact path, node count, ready nodes, the ADR-034 gate status, and whether a valid domain-map approval record exists. Do not begin implementation until Kyler approves. For the functional-pool deployment candidate, generic approval notes are insufficient: `validate-goal-plan.mjs` requires a detached record conforming to `functional-pool-deployment-approval.schema.json` and exact candidate/source/scope-review/completed-plan-archive bytes. On valid approval, add the required canonical-plan `approval` object and run `node .pi/scripts/validate-goal-plan.mjs`; the approved artifact must pass the full schema and hash validation.
 6. **On approval: reserve one ready node.** A node is ready when all of its `depends_on` nodes have passed in the local ledger. By default, reserve and execute exactly one node per `/goal` invocation, then stop and report the new frontier.
 
 ## ADR-034 domain-map approval seam

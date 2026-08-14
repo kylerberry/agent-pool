@@ -1,8 +1,8 @@
 # Supervisor Orchestrator — Consolidated Specification
 
-**Version:** 0.1-draft
+**Version:** 0.2-draft
 **Author:** Kyler Berry
-**Status:** Design complete (34 ADRs, including production-harness readiness decisions); pre-implementation
+**Status:** Design complete through ADR-039; Pool Proof complete; direct-task-first functional deployment proposed
 **Canonical scope:** This document is the current specification for both the supervisor and its warm-pool execution substrate. Earlier pool drafts are historical only.
 
 ---
@@ -134,7 +134,7 @@ A **flat list of nodes** with edge arrays — not a tree (convergence: a node ma
 
 Per-node fields emitted: `id`, `intent`, `change_spec`, `acceptance_criteria`, `depends_on`.
 
-Explicitly **not** emitted: runtime state (`status`, `retry_count`, `budget_spent`, suite `path`/`hash` — controller-owned), `required_role` (meaningless when every node runs full CRAFTS internally; swarm-build property), `complexity` (owned by C, the phase that reasons about implementation; feeds both C's full-vs-lite routing and the model router).
+Explicitly **not** emitted: runtime state (`status`, `retry_count`, `budget_spent`, suite `path`/`hash` — controller-owned), `required_role` or execution profile (normal nodes run CRAFTS; only a separately approved controller-tagged ADR-039 probe uses one-call execution), and `complexity` (owned by C for normal implementation work; feeds process and model routing).
 
 Validation before Gate 1: duplicate ids, self/missing dependencies, cycle detection (topological sort).
 
@@ -212,9 +212,11 @@ Composite thresholds are **empirical** (ADR-009): derived per task class from Ph
 
 ### 9.1 Role-Indexed Routing (ADR-020)
 
-Every model-call role is its own routing decision with its own eval task class: decomposition, planning (C), building (R/F), assessing (A), tightening (T), sharpening (S—likely no dedicated eval). Different rows, different winners; no single benchmark generalizes across roles.
+Every model-call role is its own routing decision with its own eval task class: decomposition, probing (ADR-039), planning (C), building (R/F), assessing (A), tightening (T), and sharpening (S—likely no dedicated eval). Different rows, different winners; no single benchmark generalizes across roles.
 
-Until eval-derived winners exist, routing is split by actor boundary: `packages/orchestrator-harness/config/model-routing.bootstrap.json` owns the control-plane decomposition row (Kimi K3), while `packages/worker-harness/config/model-routing.bootstrap.json` owns only node-conductor and CRAFTS roles (Terra plans/conducts/diagnoses; Kimi K2.7 Code builds; Sol assesses and tightens; Luna sharpens). Sol is reserved from normal building so a different equal-or-higher evaluator remains available. Every launch passes an exact provider/model ID and fails closed if it is unavailable.
+Until eval-derived winners exist, routing is split by actor boundary: `packages/orchestrator-harness/config/model-routing.bootstrap.json` owns control-plane roles, while `packages/worker-harness/config/model-routing.bootstrap.json` owns node-conductor and CRAFTS roles. Bootstrap capability uses tie-capable tiers: lower (Luna), standard (GLM-5.2, Terra, Kimi K2.7 Code), and high (GLM-5.3, Sol, Kimi K3). Building routes to GLM-5.2; the post-launch ADR-039 probing role routes to GLM-5.3. Every exact Z.ai model must pass real Pool Worker qualification before eligibility.
+
+Moonshot is fallback-only across all roles and policy sources: Kimi K2.7 Code is the building fallback and Kimi K3 is the probing fallback. Bootstrap and eval-derived policy may measure Moonshot but cannot promote it to primary. Evaluator and builder must differ; evaluator is never lower tier, a higher qualified tier is preferred, and a tied different model is permitted only when no higher qualified evaluator is available. Every launch passes an exact provider/model ID and fails closed according to its explicit-selection/fallback policy. The existing Kimi-primary configuration is legacy until the approved Z.ai migration/qualification node passes.
 
 ### 9.2 Harness Scope — Builder First (ADR-021, ADR-005, ADR-006, ADR-008)
 
@@ -222,9 +224,9 @@ Build the **R/F row only** first: self-graded (tests are the oracle — zero gra
 
 - **Dataset:** real tickets from kkchat and subba that already have tests (no retrofitting untested history); grows forward as new tickets land with acceptance tests (ADR-005).
 - **Reps:** N=3 per task×model; raise selectively where results are inconsistent (ADR-006).
-- **Matrix, phased (ADR-008):** Phase 1 = mid-tier Chinese lineup (Kimi K2.6, GLM-4.7, Qwen-Plus) — chosen on measured cost/benchmark strength; Phase 2 = full 3×3 across those providers; Phase 3 = Anthropic/OpenAI/Google. Harness measures a model *bare* — **"bare" means without CRAFTS phase structure, not without tools (ADR-030)**: eval runs get the same tool surface as a production builder, so the table measures the capability actually deployed (tool-use reliability included) rather than a configuration that never runs.
+- **Matrix, phased (ADR-008):** historical Phase 1 named the then-current mid-tier Chinese lineup; concrete eval runs use exact currently approved model IDs and retain provider/model/version provenance. Moonshot remains measurable but fallback-only. Harness measures a model *bare* — **"bare" means without CRAFTS phase structure, not without tools (ADR-030)**: eval runs get the same tool surface as a production builder, so the table measures the capability actually deployed (tool-use reliability included) rather than a configuration that never runs.
 - **Provider-agnostic adapter (ADR-007):** all model calls go through one normalized contract; providers are config, not architecture.
-- Deferred rows each have a named grader approach: decomposition & A = reference/fixture-based, C & S = judge, T = planted vulnerabilities.
+- Deferred rows each have a named grader approach: decomposition and A = reference/fixture-based; probing = deterministic evidence/downstream-usefulness fixtures; C and S = judge; T = planted vulnerabilities.
 
 SWE-bench and similar public benchmarks were rejected as the eval basis (representativeness, contamination, interview signal, shape mismatch) — retained only as an optional external sanity check.
 
@@ -246,7 +248,7 @@ Decomposer vs. C on the same knowledge: **breadth vs. depth** — the decomposer
 
 TypeScript end to end (shares runtime/types/job schema with BullMQ/Redis). No orchestration framework (§3.1). Thin per-provider adapters (§9.2). Single Hetzner-class host, Docker Compose, ~$10/month infrastructure posture.
 
-The worker image pins Node, Pi, Graphify, Pi extension packages, and application dependencies. `packages/worker-harness/config/runtime-versions.json` is the Pool Worker baseline; the image digest and dependency lockfiles are recorded with every attempt. Startup performs a capability preflight. `packages/worker-harness/config/settings.json` enforces five exact models: GPT-5.6 Luna, Terra, and Sol through `openai-codex`, plus Moonshot Kimi K2.7 Code and Kimi K3. Anthropic and all unlisted models are excluded. `packages/worker-harness/config/model-routing.bootstrap.json` defines only Pool Worker role mappings; `packages/orchestrator-harness/config/model-routing.bootstrap.json` defines control-plane decomposition routing. Eval-derived routing replaces both bootstrap policies when evidence exists.
+The worker image pins Node, Pi, Graphify, Pi extension packages, and application dependencies. `packages/worker-harness/config/runtime-versions.json` is the Pool Worker baseline; the image digest and dependency lockfiles are recorded with every attempt. Startup performs a capability preflight. The approved target scope is seven exact models: GPT-5.6 Luna, Terra, and Sol through `openai-codex`; Z.ai GLM-5.2 and GLM-5.3; and Moonshot Kimi K2.7 Code and Kimi K3. Anthropic and all unlisted IDs are excluded. Z.ai eligibility requires real qualification; Moonshot is fallback-only. Current runtime files remain implementation evidence, not authorization to skip the approved migration node. Worker and orchestrator bootstrap files own only their actor roles. Eval-derived routing replaces bootstrap tiers only after sufficient post-launch evidence and cannot violate fallback-only provider policy.
 
 ADR-033 defines the practical operations baseline: health/readiness checks, correlated structured logs, queue/disk/provider/cost visibility, WAL-safe encrypted off-host backups, tested restore guidance, migrations, and retention. Formal SLOs and a dedicated observability platform are fast-follow.
 
@@ -259,8 +261,9 @@ ADR-033 defines the practical operations baseline: health/readiness checks, corr
 | Mutation testing (hardening beyond red-state evidence, ADR-025) | Deferred; tautology class already killed deterministically |
 | Graceful mid-node budget abort (phase-gate stop checks) | Deferred; overage accepted as bounded (§4.4) |
 | HITL surface | CLI/API clients for v1; a dashboard is out of scope |
-| Decomposition schema-invalid retry/repair loop | Implementation-level |
-| Repo onboarding / Graphify index build | Required implementation slice: pin Graphify in the worker image; build per workspace and refresh after re-derivation |
+| Decomposition schema-invalid retry/repair loop | Implementation-level; deferred until free-form intake |
+| Agent-assisted probing | Accepted ADR-039 design; post-launch one-call profile, evidence schema, and downstream C projection |
+| Repo onboarding / Graphify index build | Post-launch implementation slice: pin Graphify in the worker image; build per workspace and refresh after re-derivation |
 | GitHub Action for comment→continuation | Operational TODO (§8) |
 | Swarm-pattern build | Separate future project — see `swarm-pattern-open-questions.md` and its handoff |
 
@@ -304,5 +307,6 @@ ADR-033 defines the practical operations baseline: health/readiness checks, corr
 | 034 | Domain discovery before implementation |
 | 035 | Minimal coherent DAG nodes; scope rationale is Gate-1 review metadata |
 | 036 | Discovered-work records; controller may recommend but never auto-execute amendment |
-| 037 | **Proposed:** GitHub planning PRs as editable Gate 1 manifests |
-| 038 | **Proposed:** node-level mainline integration (supersedes 015 if accepted) |
+| 037 | **Proposed/deferred:** GitHub planning PRs as editable Gate 1 manifests |
+| 038 | **Proposed/deferred:** node-level mainline integration (supersedes 015 if accepted) |
+| 039 | Agent-assisted one-call probe execution outside CRAFTS |

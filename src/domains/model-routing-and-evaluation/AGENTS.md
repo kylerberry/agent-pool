@@ -2,7 +2,7 @@
 
 ## Terms
 
-- **Approved model**: One of the five exact provider-qualified IDs in the frozen registry.
+- **Approved model**: One exact provider-qualified ID in the active canonical registry. The current implementation has the legacy five-model registry. The proposed target adds `zai/glm-5.2` and `zai/glm-5.3`; neither is active or eligible before exact-hash plan activation and real qualification.
 - **Availability snapshot**: A strictly validated caller-provided set of currently usable approved models.
 - **Routing policy**: A versioned, actor-scoped mapping of roles to approved primary and fallback models.
 - **Routing decision**: Immutable, credential-free evidence of a deterministic role selection.
@@ -10,7 +10,7 @@
 
 ## Owned state
 
-- Exact approved-model registry and canonical capability ordering.
+- Active exact-model registry and capability policy. The proposed migration replaces the legacy unique total rank with tie-capable tiers; array position is never capability evidence.
 - Strict worker and orchestrator bootstrap-policy parsers/loaders.
 - Validated availability snapshots, role routing, and builder/evaluator pair selection.
 - Provider-neutral injected adapter registry and public decision/error projections.
@@ -19,7 +19,8 @@
 
 - Only approved provider-qualified IDs may enter policies, availability, adapters, or decisions.
 - A malformed availability snapshot fails closed; an unavailable explicit model never falls back.
-- Builder/evaluator selection is atomic, distinct, and the evaluator capability is never lower.
+- Builder/evaluator selection is atomic and distinct. The evaluator is never lower tier, prefers a higher qualified tier, and may use a tied different model only when no higher qualified evaluator is available.
+- The approved target policy makes Moonshot fallback-only in bootstrap and eval-derived policies. After activation/qualification, building bootstraps GLM-5.2→Kimi K2.7 Code; ADR-039's post-launch probing route is GLM-5.3→Kimi K3. Until node 1 passes, current five-model/unique-rank files remain legacy implementation state, not evidence that the target is active.
 - Routing evidence is allowlisted, deeply immutable, credential-free, and defensively serialized.
 - The worker bootstrap owns worker roles only; the orchestrator bootstrap owns decomposition only.
 - Eval-derived publications are actor-scoped, source-bearing, `status=eval-derived`, and cannot expand approved scope.
@@ -54,8 +55,9 @@
 
 - Do not load a generic production fixture in place of actor-bound policy loaders.
 - Do not propagate provider exception text or payloads into public routing errors.
-- Do not treat bootstrap capability ranks as empirical evaluation results.
-- Do not add a model, provider, alias, or fallback outside the approved registry.
+- Do not treat bootstrap capability tiers as empirical evaluation results or force false uniqueness between tied models.
+- Do not add a model, provider, alias, or fallback outside the approved exact registry; approval alone does not make a Z.ai model eligible before qualification.
+- Do not allow availability, eval score, explicit requests, or fallback handling to promote Moonshot to primary.
 - Adapter tests must invoke hostile provider output and assert that routing remains authoritative; a fixture property such as `policyOverride` is not evidence by itself.
 - Keep split tests organized by production seam (availability, role selection, pair selection, evidence), with shared fixtures that register no tests.
 
@@ -65,3 +67,4 @@
 - `docs/raw/adr/orchestrator/ADR-009-empirical-routing-threshold.md`
 - `docs/raw/adr/orchestrator/ADR-020-role-indexed-routing-table.md`
 - `docs/raw/adr/orchestrator/ADR-021-eval-scope-builder-first.md`
+- `docs/raw/adr/orchestrator/ADR-039-agent-assisted-probe-execution.md`

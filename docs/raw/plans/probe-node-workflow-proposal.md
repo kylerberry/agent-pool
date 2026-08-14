@@ -1,30 +1,73 @@
 ---
 audience: repository-builder
 subject: product-runtime
-status: proposed
+status: accepted-design-implementation-deferred
 created: 2026-08-13
+updated: 2026-08-13
+sources:
+  - docs/raw/adr/orchestrator/ADR-039-agent-assisted-probe-execution.md
 ---
 
-# Probe Node Workflow Proposal
+# Agent-Assisted Probe Workflow
 
 ## Scope
 
-A **probe** is a bounded empirical experiment that resolves a material uncertainty before dependent work begins. It is not limited to API stubs: integrations, platform behavior, data migrations, concurrency, UI feasibility, infrastructure, performance, security boundaries, and model/algorithm quality may all justify one.
+A **probe** is a bounded agent-assisted experiment that resolves a material uncertainty before dependent work begins. Its purpose is to mock boundaries, discover unknowns, falsify assumptions, and give later CRAFTS sessions durable evidence that prevents drift and over-engineering.
 
-This proposal does not add a DAG node type, queue type, phase, subagent, or controller diagnostic role.
+A probe is not a DAG node type, CRAFTS phase, miniature feature build, grader, or controller diagnosis action. It is a normal ADR-018 node with a controller-owned `probe` execution profile in proposal/runtime metadata.
 
-## DAG probe
+## Why probes do not run CRAFTS
 
-A probe becomes a normal DAG node only when its evidence defines a shared boundary, unlocks multiple nodes, or could invalidate the approved decomposition. Its `intent` is explicitly labelled `Probe: …`; its existing `change_spec`, criteria, and `depends_on` fields describe the hypothesis, required evidence, durable output, and consumers.
+Full CRAFTS adds planning, independent assessment, security review, repair, and documentation calls intended for production implementation. Even the R→S lite path assumes an implementation plus documentation outcome. A simple uncertainty-resolution node does not justify that cost and can become over-designed by the process intended to constrain it.
 
-The node runs ordinary `craft-pool` CRAFTS. C selects lite or full flow using existing complexity and security rules; a probe is not inherently low-risk. The node must produce a durable, repository-visible, production-safe output that later nodes can use: for example a fixture, contract test, interface, migration rehearsal, benchmark script/result, architecture note, feature-flag seam, or non-routable adapter.
+Per ADR-039, an agent-assisted probe runs one fresh Worker session and exactly one `probing` model call. Bootstrap routing is `zai/glm-5.3` primary and `moonshot/kimi-k3` fallback; Moonshot is never primary.
 
-A passing probe confirms the planned boundary and unlocks its dependents only after its node PR is merged and verified on `main`. A probe that disproves the assumed boundary fails with bounded diagnostic evidence; it does not pass merely because it learned something, and it does not unlock implementation work. It follows the governed amendment path.
+## Approved probe input
 
-## Local experiment
+The Gate 1/direct-plan review records:
 
-A disposable experiment that answers only one node's implementation question stays inside that node as an optional C.2 probe sub-phase. It is not queued, does not create a DAG dependency, and may be deleted. It must not become a hidden route around the node's normal acceptance and CRAFTS gates.
+- uncertainty or falsifiable hypothesis;
+- boundary to mock or behavior to observe;
+- known assumptions;
+- permitted files, tools, and write surfaces;
+- required evidence and deterministic validation command;
+- wall-time, token, tool, and cost limits;
+- downstream decisions or node criteria the result informs; and
+- explicit non-goals, including the feature work the probe may not implement.
 
-## Deferral
+Security-sensitive, production-routed, credential-bearing, or expanded work cannot use this profile. It is resliced or escalated to normal CRAFTS before mutation.
 
-Focused controller-side failure diagnosis is deferred. Existing phase failure artifacts, discovered-work records, human amendment, and bounded retry policy remain the first implementation scope.
+## Execution and durable output
+
+The probe agent may produce a contract test, fixture, mock adapter, migration rehearsal, benchmark, evidence report, feature-flagged seam, or non-routable interface. Throwaway spike code may be deleted after evidence extraction; durable consumers receive only production-safe artifacts.
+
+The schema-valid probe artifact records:
+
+- status: `supported`, `disproved`, or `inconclusive`;
+- bounded commands and observations;
+- assumptions confirmed/rejected;
+- discovered constraints, failure modes, and dead ends;
+- durable artifact paths and SHA-256 hashes;
+- model/tool/cost/repository/commit provenance; and
+- bounded non-authoritative downstream or amendment implications.
+
+A deterministic host-owned validator checks scope, paths, commands, artifact hashes, commit shape, credentials, isolation, and cleanup. The probe cannot grade itself, alter routing, dispatch work, amend topology, or broaden acceptance criteria.
+
+## DAG behavior
+
+A supported probe unlocks approved dependents only after its durable artifact is integrated and reverified under the accepted delivery model. A disproved probe preserves its evidence but blocks the planned dependents and recommends ADR-024 amendment. An inconclusive probe fails without authorizing speculative implementation.
+
+Future Conceptualize calls receive the approved probe artifact through a bounded evidence reference or repository artifact. C must state which conclusions it adopted, which uncertainty it will not reopen, any contradictory new evidence, and how the plan avoids documented dead ends. Raw probe transcripts are never forwarded.
+
+## Implementation status
+
+Implementation is deferred until after the nine-node direct-task-first functional deployment. Required work is:
+
+1. a dedicated probe Worker profile and probe agent;
+2. the ADR-020 `probing` routing row;
+3. strict probe input/output schemas;
+4. deterministic evidence validation and persistence;
+5. bounded projection into dependent C payloads; and
+6. hostile tests proving probe output cannot become controller authority.
+
+Focused autonomous failure diagnosis remains separately deferred. ADR-036 discovered-work records and human amendment remain the governing paths for scope/topology consequences.

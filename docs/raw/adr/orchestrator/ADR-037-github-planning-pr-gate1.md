@@ -1,6 +1,6 @@
 # ADR-037: GitHub Planning PRs as Editable Gate 1 Manifests
 
-**Status:** Proposed
+**Status:** Proposed — deferred until after direct-task-first deployment (2026-08-13)
 **Amends:** ADR-003 (DAG as gated checkpoint), ADR-024 (amend-DAG)
 
 ## Context
@@ -18,6 +18,8 @@ Gate 1 is satisfied only when the planning PR merges. The merge commit, manifest
 A failed probe or other topology/scope discovery may cause the controller to open an amendment planning PR containing the last approved manifest plus bounded discovery evidence. A human or authorized user agent edits the unmet remainder directly; invoking the decomposer is optional. The amended manifest receives the same deterministic validation and a new merged Gate 1 revision before its new nodes dispatch. Workers never edit or approve DAG topology.
 
 ## Consequences
+
+This proposal is not part of the nine-node functional deployment path. Direct tasks do not use decomposition or Gate 1, so planning PRs add no launch value. Reassess only when free-form specification intake and Gate 1 implementation begins.
 
 GitHub becomes the collaboration and audit surface for DAG construction without making GitHub permissions controller policy. The controller trusts only immutable merged-manifest evidence, not comments, mutable PR state, or a Worker report.
 

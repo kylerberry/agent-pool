@@ -3,7 +3,7 @@ title: Warm Agent Pool
 type: product
 tags: [agent-pool, github, execution]
 created: 2026-07-22
-updated: 2026-08-05
+updated: 2026-08-13
 sources:
   - docs/raw/specs/orchestrator-spec.md
 ---
@@ -12,14 +12,14 @@ sources:
 
 The warm agent pool is the DAG-unaware execution substrate: ready capacity slots accept atomic jobs and start a fresh Pool Worker Pi process/session and workspace for every attempt. Slots may persist; conversational state never does. These runtime workers are distinct from Repository Builder sessions developing this codebase.
 
-The current approved Pool Proof first exercises a builder-only Worker Harness profile against a deterministic fixture, with runner-owned verification and no evaluator or CRAFTS phase history. Full CRAFTS, grading, and GitHub delivery remain later v1 work.
+Pool Proof is complete. The proposed next build phase first qualifies Z.ai and dogfoods a parameterized real-repository runner, then activates the direct-task service, full CRAFTS/grading, recovery, accepted ADR-015 GitHub Gate 2, and single-host deployment. The candidate remains unapproved; full free-form supervision and probing implementation are post-launch.
 
 ## Key constraints
 
 - Self-hosted low-cost infrastructure target.
 - API intake supports specs, direct tasks, and hand-authored DAGs.
 - GitHub PRs are the reviewed output surface.
-- The orchestrator pins role models; workers may use an intra-attempt backend fallback while preserving workspace progress.
+- The orchestrator pins exact role models; Z.ai is cost-prioritized primary and Moonshot is always fallback-only. Workers may use bounded same-attempt fallback while preserving workspace progress and failed-primary cost/evidence.
 - Each attempt runs in an isolated workspace/session and credential-free repository sandbox with deterministic runner-owned result handling.
 
 ## Relationship to orchestrator
@@ -30,3 +30,4 @@ The supervisor orchestrator builds on the pool by dispatching DAG nodes as ordin
 
 - [[wiki/architecture/supervisor-orchestrator|Supervisor Orchestrator]]
 - [[wiki/architecture/orchestrator-adr-map|Orchestrator ADR Map]]
+- [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment]]

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "kind": "repository-builder-pool-proof-build-dag-candidate",
+  "source": "docs/raw/specs/pool-proof.md",
+  "nodes": [
+    {
+      "id": "single-worker-pool-proof",
+      "intent": "Prove one real headless Pool Worker can complete and independently verify an atomic fixture-repository change",
+      "change_spec": "Implement the first vertical slice of the Minimal Pool Runtime and its separate Pool Proof Harness: direct fixture-job submission, a process-local queue with one ready slot, minimal SQLite attempt/builder-routing/result persistence, a thin Node launcher for a fresh headless Pi CLI session, a separate fail-closed builder-only Worker Harness profile, launcher-owned structural actor identity and actor_identity introspection, a trusted Pi control zone with workspace-confined tool adapters into an unprivileged per-attempt repository sandbox, and deterministic runner-owned verification of the resulting commit and fixture outcome. Retain the existing full CRAFTS preflight unchanged and leave phase-artifact storage dormant.",
+      "acceptance_criteria": [
+        "A Repository Builder remains a product-development actor; the Minimal Pool Runtime creates a separate launcher-verified Pool Worker process and no prompt, environment variable, marker file, target instruction, or directory change alone can confer Worker authority.",
+        "One ADR-028-shaped atomic fixture job runs end to end through the real Minimal Pool Runtime using the pinned headless Pi CLI and one real approved builder model; the fixture's intended tests are independently shown failing at the known base commit and passing after the verified attempt commit, while fake process adapters are allowed only in automated tests and do not count as proof evidence.",
+        "The Pool Proof Harness invokes the public Minimal Pool Runtime boundary and does not simulate the queue, slot, Worker launcher, Pi process, repository sandbox, commit, or result path during the acceptance run.",
+        "Before paid model work, independent launcher expectations validate one topology-free attempt contract and an immutable actor context binding actor, node, attempt, nonce, repository, branch, canonical workspace, private Pi runtime/session paths, exact Pi executable, Worker package/profile, selected model, tool grants, and result destination.",
+        "The Pi control process uses fresh launcher-owned PI_CODING_AGENT_DIR, PI_CODING_AGENT_SESSION_DIR, HOME, and XDG paths with ambient discovery disabled; it explicitly loads only the builder-only Pool Proof profile and trusted bootstrap, while actor_identity returns launcher-captured sanitized identity and target AGENTS.md content has no authority over actor or capabilities.",
+        "Repository reads, edits, commands, and tests run only through workspace-realpath-confined tool adapters in a pinned non-root unprivileged per-attempt sandbox with no host Docker socket, no privileged mode, no external fixture network, explicit CPU/memory/process/time limits, no unrelated mounts, and no provider or GitHub credentials; environment, file, process-inspection, absolute-path, traversal, and symlink escape probes fail.",
+        "The runner—not Worker prose—records a passing result only after binding the launched process and nonce to the attempt and independently verifying exit status, canonical workspace containment, one expected commit with the expected parent, allowed changed paths, clean repository state, fixture tests and observable outcome, credential/resource isolation, and absence of a conflicting result.",
+        "The proof persists the attempt, actual builder routing, bounded verifier result, commit SHA, failure code, and diagnostic timings in SQLite; it writes no evaluator provenance and no CRAFTS phase-artifact revision.",
+        "Every attempted Worker uses a fresh workspace, repository sandbox, Pi process/session, private runtime, workspace HOME/XDG, actor context, nonce, and result identity; raw sessions/transcripts and mutable workspaces are removed through bounded cleanup and are not treated as proof evidence.",
+        "Automated positive tests pass for the Minimal Pool Runtime, thin launcher and builder-only profile, trusted repository sandbox/tool adapters, Pool Proof Harness, deterministic verifier, and minimal persistence; automated negative tests cover forged or stale identity, mismatched targets/resources/results, ambient Builder or global Pi resource discovery, target-instruction role confusion, credential and host-resource access, path escape, reused attempt state, malformed commits, out-of-manifest changes, failed fixture verification, and Worker prose claiming success despite verifier failure.",
+        "A retained Stage 1 proof report identifies the real approved builder model, attempt and commit, deterministic verifier checks, bounded diagnostics, and residual warning that the controlled fixture proof is not production authorization for arbitrary repositories."
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "multi-worker-pool-proof",
+      "intent": "Prove pooled execution capacity continues unrelated fixture work after one real Worker process fails",
+      "change_spec": "Extend the passing single-Worker vertical slice to two persistent ready Worker slots and three queued atomic fixture jobs. Keep every Pi conversation, workspace, sandbox, identity, and result attempt-scoped. Add one Harness-owned deterministic fault directive that terminates a real spawned Worker process after launch, persist that failure, continue the other active job, dispatch the remaining queued job, independently verify both successful results, and emit the final Pool Proof report. Do not add Runner crash recovery, retry policy, durable queue recovery, evaluator grading, CRAFTS activation, GitHub delivery, or other deferred supervisor governance.",
+      "acceptance_criteria": [
+        "Stage 2 cannot execute or pass unless the retained real-model Stage 1 proof report has passed.",
+        "The real Minimal Pool Runtime exposes two persistent ready capacity slots, accepts three process-local queued fixture jobs, and runs at most one active attempt per slot while every attempt still receives a fresh Pi process/session, workspace, sandbox, private runtime, actor context, nonce, and result identity.",
+        "The Harness deterministically terminates one real spawned Worker process after launch through a proof-only fault seam; it does not substitute a fake Worker or use a prompt intended to fail unpredictably.",
+        "The terminated attempt is durably recorded as failed, the other active attempt continues, the remaining queued job is dispatched, and both unrelated jobs complete with independently verified commits and fixture outcomes.",
+        "No repository, workspace, Pi session, resource inventory, actor identity, task content, commit, result, or mutable conversational state leaks between the three attempts or the two slots.",
+        "The process-local queue and Pool Proof Runtime remain alive through the injected Worker failure and produce a complete terminal report; if the Runtime itself terminates, the proof run fails and is restarted manually rather than reconciled or inferred from partial state.",
+        "SQLite inspection shows the actual selected builder for every attempt, one bounded non-conflicting terminal proof result per attempt, two verified successful commit SHAs, and one injected-failure code, with no evaluator or phase-artifact provenance.",
+        "The final report records timing points only as diagnostics, makes no latency claim, explicitly lists the deferred free-form decomposition and Gate 1, predicted-touch and Graphify scheduling, full DAG retry/budget/reconciliation/branch policy, Tier-2 evaluation and builder calibration, full CRAFTS and revision-history activation, integration and GitHub delivery/webhooks, and full backup/restore/operational audit work, and names one separately reviewed agent-pool dogfood task as the next follow-up rather than a Pool Proof completion requirement."
+      ],
+      "depends_on": [
+        "single-worker-pool-proof"
+      ]
+    }
+  ],
+  "approval": {
+    "approved_by": "Kyler Berry",
+    "approved_at": "2026-08-05T16:24:38Z",
+    "notes": "Approved exact-hash Pool Proof package: candidate_path=docs/raw/plans/pool-proof-build-dag.candidate.json candidate_sha256=9e176ea505cff322f1cd864b4aead3b158b5c5ad04b828b01d5f0968dc9f792e source_path=docs/raw/specs/pool-proof.md source_sha256=96d8ece41dd820c04b45b8c3468a8c1b1bcf8ce8ffabec82d1f258ce08125de5. Activate through canonical validation and archive-reset."
+  }
+}

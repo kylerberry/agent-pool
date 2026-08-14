@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "candidate_path": "docs/raw/plans/functional-pool-deployment-dag.candidate.json",
+  "candidate_sha256": "846b7d7de37563e6e43abc659569b8736a2b7605e3fee0295da63bda1dc61017",
+  "nodes": {
+    "model-policy-zai-qualification": {
+      "observable_outcome": "Both exact Z.ai models become eligible only after deterministic policy validation and real Pool Worker qualification.",
+      "primary_invariant": "Only exact qualified models route; Moonshot is fallback-only and evaluator tier is never lower than builder tier.",
+      "acceptance_oracle": "Focused registry/policy/preflight suites plus retained real qualification reports for GLM-5.2 and GLM-5.3.",
+      "production_seam": "Canonical model registry, tie-capable Worker routing/preflight configuration, and real provider qualification boundary; probing runtime remains post-launch.",
+      "blast_radius": "Model Routing and Evaluation, Worker preflight, launcher authentication/usage evidence, and paid qualification commands.",
+      "non_goals": [
+        "Empirical model calibration or threshold derivation.",
+        "Approval of aliases, wildcards, future Z.ai models, or new providers.",
+        "Modification of retained Pool Proof evidence."
+      ],
+      "exceptions": {
+        "cross_domain": "Exact authorization is unsafe without both deterministic Model Routing policy and executable Agent Execution qualification.",
+        "multi_contract": "Registry, capability-tier, routing, preflight, and qualification-report contracts jointly define one model's eligibility.",
+        "multi_suite": "Policy/preflight tests and real paid qualification evidence establish different halves of the same eligibility claim."
+      }
+    },
+    "parameterized-agent-pool-dogfood-runner": {
+      "observable_outcome": "One reviewed Agent Pool task runs through the public Minimal Pool Runtime using only validated manifest parameters.",
+      "primary_invariant": "Repository-specific behavior exists only in a bounded immutable manifest and independent verifier, never hard-coded runner policy.",
+      "acceptance_oracle": "A parameterized repository fixture completes red-to-green with exact commit/path/cleanup verification while hostile manifests fail before paid work.",
+      "production_seam": "Pool Proof Harness composition over public Minimal Pool Runtime, launcher, sandbox, persistence, and Verification interfaces.",
+      "blast_radius": "Harness manifest parsing, runner composition, target verifier, candidate reports, and focused tests.",
+      "non_goals": [
+        "Implementing the credential-strip task.",
+        "Authorizing arbitrary repositories or commands.",
+        "Activating CRAFTS, grading, GitHub delivery, or production service operation."
+      ],
+      "exceptions": {
+        "cross_domain": "Harness, Agent Execution, and Verification must be exercised together to prove parameterization is real.",
+        "multi_contract": "Task and verifier manifests are separate because Worker instructions cannot define their own acceptance oracle.",
+        "multi_suite": null
+      }
+    },
+    "credential-strip-zai-dogfood": {
+      "observable_outcome": "A qualified Z.ai Worker produces an independently verified Agent Pool commit that strips copied provider credentials without breaking offline resolution.",
+      "primary_invariant": "Private models.json contains only required provider metadata; authentication remains solely in private auth storage.",
+      "acceptance_oracle": "Credential-canary red/green test plus runner-owned commit, path, isolation, resolution, and cleanup verification.",
+      "production_seam": "Launcher provider-metadata projection exercised through the reviewed dogfood manifest.",
+      "blast_radius": "copyProviderModels implementation, focused launcher tests, one paid dogfood attempt, and one separate report.",
+      "non_goals": [
+        "Generic secret scanning or provider-token rotation.",
+        "Full CRAFTS, grading, delivery, or arbitrary-repository authorization.",
+        "Unrelated launcher or sandbox cleanup."
+      ],
+      "exceptions": {
+        "cross_domain": null,
+        "multi_contract": "The security fix and dogfood report are one outcome because the real run is the acceptance oracle for safe self-improvement.",
+        "multi_suite": null
+      }
+    },
+    "direct-task-first-service": {
+      "observable_outcome": "An authenticated caller submits a bounded direct task and observes a durably identified real Pool Worker result without decomposition.",
+      "primary_invariant": "Direct tasks skip only decomposition/Gate 1; criteria, identity, persistence, readiness, topology-free dispatch, and mandatory Gate 2 remain authoritative.",
+      "acceptance_oracle": "HTTP/domain/store/dispatch tests and one service-level real fixture execution.",
+      "production_seam": "POST /tasks through Work Intake, Orchestration persistence/frontier, identifier-only queue, and Agent Execution composition.",
+      "blast_radius": "Work Intake HTTP/domain boundary, orchestration composition/status, runtime adapter, authentication, and tests.",
+      "non_goals": [
+        "POST /specs, decomposition, Gate 1, or Graphify scheduling.",
+        "CRAFTS/grading implementation.",
+        "GitHub delivery or broad public tenancy."
+      ],
+      "exceptions": {
+        "cross_domain": "Intake, persistence, and execution are inseparable for the user-observable service outcome.",
+        "multi_contract": "HTTP input, accepted work, queue envelope, and attempt contracts deliberately narrow at each trust boundary.",
+        "multi_suite": "Each domain suite plus a service-level test is required to prove the vertical slice."
+      }
+    },
+    "full-crafts-attempt-runtime": {
+      "observable_outcome": "A production direct-task attempt completes the governed CRAFTS lifecycle with schema-valid append-only artifacts.",
+      "primary_invariant": "No phase advances without valid durable predecessor evidence, correct capabilities, and valid model independence.",
+      "acceptance_oracle": "Full Worker fixture proving sequencing, security checkpoint, bounded repair loops, capability denial, artifact revisions, transcript handling, and cleanup.",
+      "production_seam": "Fresh Worker conductor and Orchestration phase-artifact persistence.",
+      "blast_radius": "Full Worker profile/skill/agents/contracts, attempt runtime, artifact store, transcript adapter, and focused tests.",
+      "non_goals": [
+        "Composite grading or empirical thresholds.",
+        "Graphify and target-provided extension onboarding.",
+        "GitHub delivery."
+      ],
+      "exceptions": {
+        "cross_domain": "Agent Execution sequencing and Orchestration append-only persistence form one phase-gate invariant.",
+        "multi_contract": "Execution context, attempt, phase artifact, security checkpoint, and transcript-object contracts are required handoffs in one lifecycle.",
+        "multi_suite": "Worker preflight and domain behavior tests cover independent enforcement layers."
+      }
+    },
+    "grading-and-audit-verdicts": {
+      "observable_outcome": "Every completed CRAFTS attempt receives one tamper-evident composite verdict traceable to criteria, models, commits, suites, evidence, and cost.",
+      "primary_invariant": "No agent claim can substitute for deterministic Tier 1, actual independent Tier 2 provenance, or immutable audit linkage.",
+      "acceptance_oracle": "Verification and persistence mutation/hostile-input tests plus an end-to-end graded fixture.",
+      "production_seam": "Verification evidence validation and Orchestration append-only audit ingestion/query.",
+      "blast_radius": "Tier-1/Tier-2 contracts, verifier services, evidence consumers, SQLite records, audit queries, and tests.",
+      "non_goals": [
+        "Eval calibration or empirical winner publication.",
+        "GitHub PR assembly.",
+        "Verification writing implementation code."
+      ],
+      "exceptions": {
+        "cross_domain": "A verdict without durable audit persistence, or persistence without verification, cannot establish the observable outcome.",
+        "multi_contract": "Tier 1, Tier 2, composite, routing provenance, evidence locator, and audit contracts compose one verdict chain.",
+        "multi_suite": "Verification and Orchestration tests establish both validation and append-only durability."
+      }
+    },
+    "controller-failure-budget-recovery": {
+      "observable_outcome": "The controller reaches one correct auditable terminal state across failure, spend exhaustion, restart, duplicate delivery, and discovered work.",
+      "primary_invariant": "SQLite-authoritative fenced state prevents duplicate paid attempts and silent topology/scope mutation while unrelated branches continue.",
+      "acceptance_oracle": "Deterministic fault injection across retry, budget, lease, queue, migration, result, reconciliation, discovery, and cleanup windows.",
+      "production_seam": "Orchestration lifecycle state machine, queue adapter, leases, result handling, reconciliation, budgets, and escalation.",
+      "blast_radius": "Orchestration contracts/store/services, queue integration, cleanup recovery, migrations, operational audit, and tests.",
+      "non_goals": [
+        "Multi-host consensus or transactional outbox/inbox.",
+        "Automatic DAG amendment.",
+        "ADR-038 merge-based dependency unlock or provider hard spend controls."
+      ],
+      "exceptions": {
+        "cross_domain": "Owned-resource recovery consumes Agent Execution outcomes but Orchestration alone mutates lifecycle truth.",
+        "multi_contract": "Retry, budget, lease, queue, result, discovery, and reconciliation contracts share terminal-state semantics and cannot contradict each other.",
+        "multi_suite": "State-machine, persistence, queue, sandbox-recovery, and migration suites cover distinct interruption boundaries."
+      }
+    },
+    "adr015-github-gate2-delivery": {
+      "observable_outcome": "Machine-green connected-component work reaches one reviewable GitHub PR and cannot complete without authorized human Gate 2.",
+      "primary_invariant": "Only reverified component commits with complete provenance enter trusted host-side delivery; GitHub never grants Worker authority.",
+      "acceptance_oracle": "Delivery/integration tests with replayed/forged events and one controlled PR lifecycle through human Gate 2.",
+      "production_seam": "Integration re-verification, ADR-015 PR assembly, trusted GitHub adapter, Gate 2, and governed revision intake.",
+      "blast_radius": "Integration and Delivery domain, orchestration delivery state, GitHub configuration/webhooks, credentials, and tests.",
+      "non_goals": [
+        "ADR-037 planning PRs.",
+        "ADR-038 one-PR-per-node mainline integration.",
+        "Automatic execution of comments or target deployment."
+      ],
+      "exceptions": {
+        "cross_domain": "Verification, Orchestration, and Delivery are inseparable for a governed reviewable GitHub outcome.",
+        "multi_contract": "Component manifest, commit provenance, verdict, PR, webhook, review, and revision identities jointly prevent bypass and replay.",
+        "multi_suite": "Integration, delivery-adapter, webhook, credential-isolation, and end-to-end PR tests cover separate external boundaries."
+      }
+    },
+    "single-host-functional-pool-deployment": {
+      "observable_outcome": "A fresh single host can deploy, run, recover, restore, and audit the complete direct-task-to-Gate-2 service.",
+      "primary_invariant": "Every live effect and recovery decision is health-visible, least-privilege, durable, correlated, restorable, and backed by prior node contracts.",
+      "acceptance_oracle": "Empty-host deployment, restart-window tests, encrypted backup/restore drill, credential canaries, one real direct-task-to-Gate-2 trace, and complete hash traversal.",
+      "production_seam": "Single-host service composition and operational controls over already implemented application capabilities.",
+      "blast_radius": "Deployment definitions, service configuration, health/logging, backup/restore, migrations, retention, operator docs, and system tests.",
+      "non_goals": [
+        "New business capability, free-form specs, Gate 1, Graphify, eval calibration, or agent-assisted probes.",
+        "ADR-037/038, multi-host/multi-tenant operation, formal SLO/on-call, or automatic target deployment.",
+        "Model-session or attempt-sandbox reuse."
+      ],
+      "exceptions": {
+        "cross_domain": "Deployment and one end-to-end trace necessarily compose all previously accepted runtime domains without changing their policy.",
+        "multi_contract": "Service health, secret, backup, restore, migration, retention, and trace contracts jointly define recoverable deployment readiness.",
+        "multi_suite": "Deterministic, Docker, retained-evidence, restart, backup/restore, and real end-to-end lanes establish different release properties."
+      }
+    }
+  }
+}

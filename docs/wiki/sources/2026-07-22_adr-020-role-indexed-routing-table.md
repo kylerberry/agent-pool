@@ -1,28 +1,31 @@
 ---
 title: ADR-020: Role-Indexed Routing Table — One Routing Decision Per Model-Call Role
 type: source
-tags: [source, ingest]
+tags: [source, routing, models, probe]
 created: 2026-07-22
-updated: 2026-07-22
+updated: 2026-08-13
 sources:
   - docs/raw/adr/orchestrator/ADR-020-role-indexed-routing-table.md
 ---
 
-# ADR-020: Role-Indexed Routing Table — One Routing Decision Per Model-Call Role
+# ADR-020: Role-Indexed Routing Table
 
-## Summary
+Every model-call role has its own routing decision and eventual eval task class: decomposition, probing, planning, building, assessing, tightening, and sharpening.
 
-This ADR records `ADR-020: Role-Indexed Routing Table — One Routing Decision Per Model-Call Role` for the supervisor orchestrator design.
+Bootstrap capability uses ties rather than a false total order:
 
-## Key decisions / claims
+- lower: Luna;
+- standard: GLM-5.2, Terra, Kimi K2.7 Code;
+- high: GLM-5.3, Sol, Kimi K3.
 
-The routing table is **role-indexed**: every CRAFTS phase that is a model call is its own routing decision, with its own eval task class and its own "best perf/cost model" derived from that class. A model strong at building may be mediocre at decomposition — different rows, different winners. Rows (one per model-call role): - **Decomposition** — spec → DAG. Graded against known-good decompositions (boundaries + edges). - **Planning (C)** — criteria → test strategy + plan. Graded by reference/judge. - **Building (R/F)** — plan → passing code. Graded by tier-1 pass rate + cost. Self-grading (tests are the oracle). - **Assessing (A)** — diff → catches real defects. Graded against known-defect fixtures. - **Tightening (T)** — security review. Graded against planted vulnerabilities. - **Sharpening (S)** — docs. Lowest-stakes; likely no dedicated eval.
+The evaluator differs from the builder and is never lower tier; prefer a higher qualified tier and permit a tied different model only when no higher qualified evaluator is available.
 
-## Related pages
+Moonshot is fallback-only and cannot become primary through bootstrap, availability, explicit selection, or eval publication. Building routes GLM-5.2→Kimi K2.7 Code. Post-launch probing routes GLM-5.3→Kimi K3. Exact Z.ai eligibility requires real Pool Worker qualification.
+
+Bootstrap tiers remain provisional. Builder-first eval calibration follows direct-task-first deployment.
+
+## Related
 
 - [[wiki/architecture/orchestrator-adr-map|Orchestrator ADR Map]]
 - [[wiki/architecture/supervisor-orchestrator|Supervisor Orchestrator]]
-
-## Raw source
-
-- `docs/raw/adr/orchestrator/ADR-020-role-indexed-routing-table.md`
+- [[wiki/sources/2026-08-13_adr-039-agent-assisted-probe-execution|ADR-039: Agent-Assisted Probe Execution]]

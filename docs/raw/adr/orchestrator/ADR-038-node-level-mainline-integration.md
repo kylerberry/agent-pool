@@ -1,6 +1,6 @@
 # ADR-038: Node-Level Mainline Integration
 
-**Status:** Proposed
+**Status:** Proposed — deferred pending real ADR-015 delivery evidence (2026-08-13)
 **Would supersede:** ADR-015 (PR granularity by connected component)
 **Would amend:** ADR-017 (test-suite storage and re-verification)
 
@@ -17,6 +17,8 @@ A trusted Integration and Delivery adapter verifies a signed, replay-protected G
 Every node merged to `main` must be independently production-safe. Feature flags protect incomplete user-visible behavior where needed; additive schemas, internal seams, fixtures, and non-routable adapters need no flag. Agent Pool integrates code but does not deploy it: target-repository CI/CD determines deployment.
 
 ## Consequences
+
+The functional deployment uses accepted ADR-015. Its delivery node records PR size, branch drift, integration retries, dependency-unlock latency, and operator friction. Reassess this proposal from that real evidence rather than changing integration semantics before first use. The hard-coded `main` target must also be reconciled with accepted target-branch support before adoption.
 
 This removes long-lived component branches and lets downstream Workers derive from current `main`. It increases PR volume but makes each review and merge small, independently auditable, and compatible with merge-queue conflict handling. It requires node lifecycle handling to distinguish Worker success, Gate 2 review, merged verification, and dependency eligibility.
 

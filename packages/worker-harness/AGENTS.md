@@ -14,6 +14,7 @@ A Pool Worker executes one assigned DAG node attempt. The supervisor, product sp
 - Emit schema-valid phase artifacts and preserve failure context.
 - Respect phase tool boundaries: R/F may write code, A/T are read-only, and S may write documentation only.
 - When C emits any closed-vocabulary `security_triggers`, require the fresh independent plan-security checkpoint after C and before R; `craft-security` applies `security-and-hardening`, while an empty list keeps the normal flow.
+- Moonshot models are fallback-only, never primary. The approved target building route is qualified `zai/glm-5.2` with `moonshot/kimi-k2.7-code` fallback; capability uses tie-capable tiers, not list order. Current runtime configuration is legacy until the Z.ai qualification node passes.
 - Never infer Pool Worker status from repository subject matter or prompt wording. The execution marker and preflight decide the actor.
 
 ## Fail Closed

@@ -12,6 +12,8 @@ sources:
 
 ## Summary
 
+The consolidated specification is updated through ADR-039. Pool Proof is complete; the next proposed phase is a nine-node direct-task-first deployment. Model policy uses exact qualified Z.ai primaries, Moonshot fallback-only, tie-capable bootstrap tiers, and post-launch eval calibration. Agent-assisted probes are one-call evidence work outside CRAFTS and remain post-launch.
+
 ---
 
 ## Key decisions / claims

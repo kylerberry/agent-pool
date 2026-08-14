@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "functional-pool-deployment-approval.schema.json",
+  "title": "Functional Pool Deployment Exact-Hash Approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "candidate_path",
+    "candidate_sha256",
+    "source_path",
+    "source_sha256",
+    "scope_review_path",
+    "scope_review_sha256",
+    "completed_plan_archive_path",
+    "completed_plan_archive_sha256",
+    "approved_by",
+    "approved_at"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "candidate_path": { "const": "docs/raw/plans/functional-pool-deployment-dag.candidate.json" },
+    "candidate_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "source_path": { "const": "docs/raw/specs/functional-pool-deployment.md" },
+    "source_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "scope_review_path": { "const": "docs/raw/plans/functional-pool-deployment-dag.scope-review.json" },
+    "scope_review_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "completed_plan_archive_path": { "const": "docs/raw/plans/completed-pool-proof-build-dag.json" },
+    "completed_plan_archive_sha256": { "const": "fe62bd9b156976401f4571aea4fd60bcb512b005927b161e5d3e4610dce2d8e5" },
+    "approved_by": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "approved_at": { "type": "string", "format": "date-time" }
+  }
+}

@@ -10,7 +10,7 @@ sources:
 
 # ADR-037: GitHub Planning PRs as Editable Gate 1 Manifests
 
-> ⚠️ Proposed: no implementation behavior changes until accepted.
+> ⚠️ Proposed and deferred until free-form intake/Gate 1 work begins. It is not part of the direct-task-first deployment.
 
 A target-repository planning PR owns the editable canonical DAG manifest. Deterministic CI validates it; a merged planning PR, rather than a review alone, creates immutable Gate 1 evidence. Human collaborators and authorized user agents may edit the proposal, while Workers remain topology-free and have no planning authority.
 

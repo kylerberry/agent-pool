@@ -3,7 +3,7 @@ title: Orchestrator ADR Map
 type: architecture
 tags: [adr, orchestrator, architecture]
 created: 2026-07-22
-updated: 2026-07-22
+updated: 2026-08-13
 sources:
   - docs/raw/adr/orchestrator/
 ---
@@ -21,7 +21,7 @@ This page indexes the initial supervisor-orchestrator ADR set and groups the dec
 - `ADR-005-ticket-sourced-eval-dataset-tested-only.md` — ADR-005: Ticket-Sourced Eval Dataset, Tested-Only: Seed set = any ticket from either codebase that already has a test. No retrofitting untested history. Dataset grows forward as new subba tickets are written with acceptance tests as standard practice.
 - `ADR-006-n3-reliability-reps.md` — ADR-006: N=3 Reliability Reps Per Task: Each task × model runs 3 times at Phase 1. Raise to 5+ later only for task classes showing inconsistent results.
 - `ADR-007-provider-agnostic-model-interface.md` — ADR-007: Provider-Agnostic Model Interface: All model calls go through a thin per-provider adapter normalized to one input/output contract. Providers are interchangeable configuration, not architecture — the orchestrator and routing table have no provider-specific logic.
-- `ADR-008-phased-run-matrix-chinese-lineup-first.md` — ADR-008: Phased Run-Matrix Rollout, Chinese Lineup First: - **Phase 1:** mid-tier only from Moonshot, Z.ai, Qwen (3 models) — chosen on cost and reasoning/coding benchmark strength (e.g. GLM-4.7 at 73.8% SWE-bench Verified, $0.60/$2.20), not as a placeholder. - **Phase 2:** expand to full 3×3 Chinese-provider matrix.
+- `ADR-008-phased-run-matrix-chinese-lineup-first.md` — Chinese-provider-first eval remains phased; exact IDs are versioned run inputs. The deployment first qualifies GLM-5.2/GLM-5.3, while Moonshot is measurable but fallback-only in production.
 - `ADR-009-empirical-routing-threshold.md` — ADR-009: Empirical Routing Threshold, Not Hardcoded: No threshold is fixed in advance. Per-task-class thresholds are derived from the actual Phase 1 score distribution once real runs exist — picked at a natural separation point between tiers, not an arbitrary round number.
 - `ADR-010-dag-orchestration-node-level-dispatch.md` — ADR-010: DAG-Level Orchestration, Node-Level Queue Dispatch: One queue ticket = one DAG node, never the whole DAG. Each round, the orchestrator enqueues one self-contained ticket (change spec + acceptance criteria) for every node whose dependencies are complete — the ready frontier — as independent, unrelated-looking jo
 - `ADR-011-failed-nodes-freeze-branch.md` — ADR-011: Failed Nodes Freeze Their Branch, Not the DAG: A failed node never enters completed state, so its dependents simply never become ready — they freeze, not cancel. The failed node escalates to a human per the retry-ceiling envelope. Unrelated branches keep executing in parallel, unaffected. Frozen dependents
@@ -34,7 +34,7 @@ This page indexes the initial supervisor-orchestrator ADR set and groups the dec
 - `ADR-018-decomposition-emission-schema.md` — ADR-018: Decomposition Emission Schema and Emit-vs-Derive Split: The DAG is a **flat list of nodes**, each carrying a `depends_on: [nodeId]` array — not a nested tree. A DAG allows convergence (a node with multiple parents), which a tree cannot represent without duplication; a flat edge list is the honest encoding and is me
 - `ADR-019-shared-codebase-rag-layer.md` — ADR-019: Shared Codebase Retrieval for Decomposer and C: its original single-RAG framing is superseded by ADR-022. Decomposer and C retain their breadth-versus-depth distinction, while retrieval uses direct grep/LSP for precise lookup, target-scoped structural graphs for dependencies, and target-repository prose discovery. No vector store or embedding layer is introduced.
 
-- `ADR-020-role-indexed-routing-table.md` — ADR-020: Role-Indexed Routing Table — One Routing Decision Per Model-Call Role: The routing table is **role-indexed**: every CRAFTS phase that is a model call is its own routing decision, with its own eval task class and its own "best perf/cost model" derived from that class. A model strong at building may be mediocre at decomposition — d
+- `ADR-020-role-indexed-routing-table.md` — role-indexed routing includes probing, tie-capable provisional tiers, exact Z.ai GLM-5.2/GLM-5.3 qualification, and the operator constraint that Moonshot is fallback-only.
 - `ADR-021-eval-scope-builder-first.md` — ADR-021: Eval Harness Scope — Builder (R/F) First, Other Roles Deferred: Build the **builder (R/F) eval row first, and only it, for now**: - **Self-graded** — tier-1 (test execution) is the oracle; no rubric, no judge, no reference-matching to design. - **Highest-volume role** — routing-by-cost saves the most here, so best ROI. - D
 - `ADR-022-codebase-knowledge-three-retrieval-modes.md` — ADR-022: Codebase Knowledge — Three Retrieval Modes, Not One RAG Layer: Three retrieval modes, each matched to a knowledge shape: 1. **Grep / LSP — precise, real-time code lookup (builder / R/F).** When the builder hits an unforeseen problem and needs surrounding code, it needs exact current lookups ("where is this defined, what's
 - `ADR-023-failure-class-retry-counters.md` — ADR-023: Failure-Class Retry Counters — Logic vs. Integration: Attempt failures are **classified** and counted separately: - **`logic` failure** — the node's own defect: tier-1 red on its own suite, tier-2 below threshold, build error. Counts against the ADR-012 retry ceiling (default 3). - **`integration` failure** — a p
@@ -51,13 +51,14 @@ This page indexes the initial supervisor-orchestrator ADR set and groups the dec
 - `ADR-034-domain-discovery-before-implementation.md` — a human-approved domain map precedes feature implementation.
 - `ADR-035-minimal-coherent-dag-nodes.md` — a node is the smallest independently verifiable vertical slice that preserves correctness; scope rationale/non-goals are Gate-1 review metadata, not Worker payload.
 - `ADR-036-discovered-work-and-dag-amendment.md` — Workers attest bounded discovered work; controller classification may recommend, but never automatically execute, a human-approved ADR-024 amendment.
-- `ADR-037-github-planning-pr-gate1.md` — **Proposed:** an editable target-repository planning PR is the Gate 1 DAG manifest; only its validated merge creates approval evidence.
-- `ADR-038-node-level-mainline-integration.md` — **Proposed:** each independently safe node uses a short-lived reviewed PR into `main`; verified merge unlocks dependents.
+- `ADR-037-github-planning-pr-gate1.md` — **Proposed/deferred:** reassess when free-form intake and Gate 1 implementation begins.
+- `ADR-038-node-level-mainline-integration.md` — **Proposed/deferred:** reassess after real ADR-015 delivery evidence and target-branch reconciliation.
+- `ADR-039-agent-assisted-probe-execution.md` — one post-launch bounded probing call outside CRAFTS produces deterministic durable evidence for later C sessions.
 
 ## Main themes
 
 - Deterministic control flow owns retries, budgets, dispatch, escalation, and audit state.
-- Model calls are bounded checkpoints with structured outputs.
+- Model calls are bounded checkpoints with structured outputs; Moonshot is fallback-only and agent-assisted probes use a distinct one-call role.
 - Work is decomposed into an approved DAG, dispatched as node-level queue jobs, and gated by tiered grading.
 - Reliability, routing, and model choice are empirically evaluated rather than guessed.
 - Failure handling preserves context, freezes dependent branches, records human overrides, and separates discovered work from unapproved scope expansion.

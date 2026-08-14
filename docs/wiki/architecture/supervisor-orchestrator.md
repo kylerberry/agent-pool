@@ -3,7 +3,7 @@ title: Supervisor Orchestrator
 type: architecture
 tags: [orchestrator, dag, agents]
 created: 2026-07-22
-updated: 2026-08-05
+updated: 2026-08-13
 sources:
   - docs/raw/specs/orchestrator-spec.md
   - docs/raw/adr/orchestrator/
@@ -15,15 +15,15 @@ The supervisor orchestrator accepts a free-form feature spec, decomposes it into
 
 ## Current build phase
 
-The approved Pool Proof precedes further supervisor governance. It builds and verifies the Minimal Pool Runtime against a controlled fixture using direct atomic jobs, one then two ready slots, fresh headless Worker sessions, deterministic results, and one contained Worker-process failure. Decomposition, grading, GitHub delivery, full failure policy, and operations remain authoritative v1 targets but are not Pool Proof prerequisites.
+Pool Proof is complete. The next phase is a proposed, exact-hash-gated nine-node direct-task-first deployment: qualify Z.ai, parameterize and dogfood the real runner, then activate the direct-task service, full CRAFTS/grading, recovery policy, accepted ADR-015 GitHub Gate 2, and single-host restore/traceability. The candidate is not active; the current ready frontier remains empty until approval.
 
 ## Operating model
 
 - Deterministic controller owns sequencing, retries, budgets, escalation, DAG state, and PR assembly.
-- Models are used at named checkpoints: decomposition, phase work, review/adjudication, and deferred failure diagnosis.
+- Models are used at named checkpoints: decomposition, post-launch one-call probing, phase work, review/adjudication, and deferred failure diagnosis.
 - Decomposition runs through a separate orchestrator-side harness/queue and produces ADR-018 output for deterministic validation and Gate 1; it is not a Pool Worker capability. Each node is the smallest independently verifiable vertical slice that preserves correctness, with explicit non-goals and a review rationale for any inseparable cross-domain or multi-contract scope (ADR-035).
 - The pool receives flat, atomic queue jobs and does not need DAG awareness.
-- Each node launches a fresh Pool Worker Pi session with the explicitly loaded `packages/worker-harness/`; it conducts CRAFTS through sequential `pi-subagents` phase calls.
+- Each node launches a fresh Pool Worker Pi session with the explicitly loaded `packages/worker-harness/`. Normal implementation nodes conduct sequential CRAFTS; only an explicitly approved controller-owned ADR-039 probe profile may use one probing call outside CRAFTS.
 - Codebase knowledge is target-repository scoped: bounded controller caches hold regenerable graph data, while prose knowledge is read from the target repository's own docs or approved provider. Missing wiki/docs are non-blocking; Agent Pool product docs are not exposed as knowledge for another target.
 - Orchestration is the sole SQLite writer. It derives deterministic attempt and job IDs, sends identifier-only queue envelopes, rehydrates and deep-freezes one topology-free worker contract at consumption, and uses CAS lifecycle transitions, lease generation/token fencing, idempotent result acceptance, and startup reconciliation to recover interrupted windows.
 - SQLite startup is gated on an owner-only private runtime path, no symlink or non-regular database target, foreign keys/WAL, and fail-closed versioned migrations. Gate-1-bound, versioned controller-owned predicted-touch evidence may serialize confident likely overlaps without changing approved DAG edges; stale, unavailable, mismatched, or low-confidence evidence uses optimistic concurrency and records its decision.
@@ -41,10 +41,13 @@ The approved Pool Proof precedes further supervisor governance. It builds and ve
 - Domain discovery and human approval precede feature implementation.
 - Workers pin Pi, Node, Graphify, and extension versions and preflight capabilities.
 - Practical worker isolation and single-host recovery controls are required for v1. P0 fast-follow hardening adds content-level secret scanning/redaction, OS default-deny egress, OS read-only mount/sandbox isolation, and reproducible worker-image smoke attestation for pinned Graphify/runtime capabilities.
-- Model routing uses an exact provider-qualified registry, actor-separated source-bound bootstrap fixtures, deterministic routing over validated availability, fail-closed explicit selection, atomic builder/evaluator constraints, provider-neutral injected adapters, and immutable credential-free evidence. Bootstrap ranks are provisional; replacement requires validated eval-derived publications, not yet an eval harness, live provider availability, or audit persistence.
-- The orchestrator-side decomposition harness is physically separate from Pool Worker resources. Deterministic Work Intake sanitizes and bounds inputs, retrieves revision-bound breadth context, selects bootstrap Kimi K3 or only the approved Sol fallback, and validates exact ADR-018 output with at most one schema-only repair. The adapter executes that exact provider-qualified selection. Immutable provenance binds the sanitized prompt, routing decision, breadth tool/revision, package identity, and Pi path/version/digest. Launch uses a trusted interpreter, pinned/reverified Pi bytes, minimal environment, private runtime subtree, and controlled cleanup.
+- Model routing uses seven exact target IDs and tie-capable provisional tiers. GLM-5.2/Terra/Kimi K2.7 Code are standard; GLM-5.3/Sol/Kimi K3 are high; Luna is lower. Building bootstraps GLM-5.2→Kimi K2.7 Code. Moonshot is always fallback, never primary. Z.ai remains ineligible until real qualification; eval calibration is post-launch.
+- The orchestrator-side decomposition harness is physically separate from Pool Worker resources. Free-form decomposition is post-launch, and its legacy Kimi-primary bootstrap must migrate before activation because Moonshot is fallback-only. Exact ADR-018 validation, bounded repair, immutable provenance, pinned/reverified Pi, minimal environment, private runtime, and controlled cleanup remain required.
+- ADR-039 defines a post-launch one-call probe profile: GLM-5.3→Kimi K3, strict evidence schema, deterministic validation, and bounded projection into later C. It is not CRAFTS and cannot become controller authority.
 
 ## Related
 
 - [[wiki/architecture/orchestrator-adr-map|Orchestrator ADR Map]]
 - [[wiki/product/agent-pool|Warm Agent Pool]]
+- [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment]]
+- [[wiki/sources/2026-08-13_adr-039-agent-assisted-probe-execution|ADR-039: Agent-Assisted Probe Execution]]

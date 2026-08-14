@@ -10,7 +10,7 @@
 - **Attempt contract**: The single DAG-free unit payload a worker executes (`pool-worker-attempt-contract.schema.json`, v1).
 - **CRAFTS phase**: One of Conceptualize, Render, Assess, Fix, Tighten, or Sharpen executed within an attempt.
 - **Phase capability grant**: The tool/write authorization a phase holds, scoped per phase rather than per container.
-- **Backend fallback**: Degrading to an approved lower-capability backend *within the same attempt*; the whole chain is still one attempt against the retry ceiling.
+- **Backend fallback**: Moving to an approved alternate backend *within the same attempt* after an eligible primary failure; the whole chain is still one attempt against the retry ceiling. Moonshot is fallback-only, never primary.
 - **Cleanup state**: `ready`, `extracting`, `audit_complete`, `audit_incomplete`.
 - **Persistent attempt sandbox**: One fresh long-lived repository container per broker/attempt, created at `SandboxBroker.start()` and torn down at every terminal path. All `runTool` calls within an attempt reuse the same container; a new attempt always gets a fresh container, workspace, HOME/XDG, and ownership binding. Capacity slots never own reusable containers.
 - **Sandbox broker**: The launcher-owned Unix-socket server (`createSandboxBroker`) that fronts one persistent `RepositorySandbox`. It owns the container lifecycle, frames the newline JSON tool protocol, and exposes a `terminalFailure` channel for post-listen server failure.
@@ -35,8 +35,8 @@
 - The full production profile executes CRAFTS phases in the approved sequence and forwards only schema-valid artifacts. The explicitly selected Pool Proof profile runs one builder directly and writes no synthetic phase artifact or evaluator provenance.
 - A (`A`), Tighten (`T`), and Conceptualize (`C`) hold no write capability. Sharpen writes only into an owner-approved knowledge sink and never creates one.
 - Repository commands receive an allowlist-built environment and no provider or GitHub credential — **including file-based ones**. The host `HOME` is never propagated; home-scoped variables and git's config paths are repointed inside a caller-supplied workspace home.
-- Startup validates the model scope against the exact five-model set fixed in the specification, held as a constant in the gate. Configuration files agreeing with each other is not evidence: both are mutable and in-repo.
-- Backend fallback never leaves the attempt, never exceeds the approved model scope, is bounded at three backends, and accumulates cost and evidence from failed backends as well as the winner. `amount` and `currency` are jointly present or jointly absent.
+- Startup validates model scope against the active canonical constant, not agreement between mutable config files. The current implementation remains the legacy five-model gate. The proposed seven-model target (Luna/Terra/Sol, GLM-5.2/GLM-5.3, Kimi K2.7 Code/Kimi K3) becomes active only after exact-hash plan activation and real Z.ai qualification.
+- Backend fallback never leaves the attempt, never exceeds approved exact scope, is bounded at three backends, and accumulates cost and evidence from failed backends as well as the winner. Moonshot cannot be selected as primary or promoted through fallback. `amount` and `currency` are jointly present or jointly absent.
 - Transcript retention runs finalize → redact → hash → persist → verify → index before cleanup. The hash covers the redacted bytes actually persisted, and verification re-reads the stored **bytes** and rehashes them locally — store-reported metadata is not verification.
 - `transcript_path` is a transient workspace-relative locator only; the durable reference is `transcript_object_id`.
 - Cleanup has no indefinite-retention outcome: an unresolved or failed extraction is destroyed once the bounded quarantine expires, preserving the failure record. `startedAt` must be finite, or the deadline comparison never fires.

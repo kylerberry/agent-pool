@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { validatePlan } from "./goal-plan.mjs";
+import { validateFunctionalDeploymentActivation } from "./functional-deployment-approval.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const readJson = (path) => JSON.parse(readFileSync(resolve(root, path), "utf8"));
@@ -29,6 +30,11 @@ if (!approval.approved_by || Number.isNaN(Date.parse(approval.approved_at))) {
 
 const dagPath = resolve(root, "docs/raw/plans/proposed-build-dag.json");
 const { plan: dag, sha: dagSha } = validatePlan(dagPath);
+try {
+  validateFunctionalDeploymentActivation(root, dag);
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error));
+}
 
 const roots = dag.nodes.filter((node) => node.depends_on.length === 0).map((node) => node.id);
 console.log(`goal-plan validation passed: map_sha256=${mapSha256} dag_sha256=${dagSha} nodes=${dag.nodes.length} roots=${roots.join(",")}`);

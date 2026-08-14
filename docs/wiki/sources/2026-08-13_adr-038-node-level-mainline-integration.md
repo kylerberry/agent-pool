@@ -10,11 +10,11 @@ sources:
 
 # ADR-038: Node-Level Mainline Integration
 
-> ⚠️ Proposed: no implementation behavior changes until accepted.
+> ⚠️ Proposed and deferred. The functional deployment uses ADR-015 and records real delivery evidence before reassessment.
 
 Each independently verifiable node uses a short-lived PR into `main`. It retains Gate 2 review, prefers merge queue where available, and unlocks dependents only after a trusted adapter verifies the exact merged commit and required checks.
 
-Nodes must be production-safe in isolation. Agent Pool integrates code; deployment remains the target repository's CI/CD decision.
+Nodes must be production-safe in isolation. Agent Pool integrates code; deployment remains the target repository's CI/CD decision. Before adoption, reconcile the proposal's hard-coded `main` with accepted target-branch support.
 
 ## Related
 

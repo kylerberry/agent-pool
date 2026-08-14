@@ -7,15 +7,15 @@ subject: development-harness
 
 Build this repository into the v1 self-hosted agent-pool and supervisor-orchestrator system described by its canonical specifications and ADRs. Work autonomously within the constraints below. Treat the linked raw sources as authoritative; do not restate, weaken, or silently reinterpret their decisions.
 
-## 0. Current approved build phase: Pool Proof
+## 0. Current phase: Pool Proof complete; functional deployment proposed
 
-The immediate approved build phase is the exact-hash Pool Proof in `raw/specs/pool-proof.md`, executed through the approved two-node flat DAG derived from `raw/plans/pool-proof-build-dag.candidate.json`.
+The exact-hash two-node Pool Proof in `raw/specs/pool-proof.md` is complete. Its canonical plan, ledger history, retained Stage 1/2 reports, and sandbox-lifecycle report remain immutable evidence. No Pool Proof node is ready or reopened.
 
-This phase builds a real Minimal Pool Runtime plus a separate deterministic Harness. It first proves one real headless approved-model Worker against the repository-owned fixture, then proves two ready slots, three jobs, and continued unrelated work after one runner-injected Worker-process failure. A Repository Builder builds this infrastructure; it never becomes a Pool Worker.
+The next proposed build phase is the unapproved direct-task-first functional deployment in `raw/specs/functional-pool-deployment.md`, with nine ADR-018 nodes at `raw/plans/functional-pool-deployment-dag.candidate.json` and separate ADR-035 review metadata. It begins with exact Z.ai GLM-5.2/GLM-5.3 qualification, parameterizes the proven runner, performs one bounded Agent Pool credential-strip dogfood task, and then builds the production direct-task service, full CRAFTS/grading, recovery policy, accepted ADR-015 GitHub Gate 2 delivery, and single-host deployment/restore trace.
 
-The following v1 requirements remain authoritative but are deliberately deferred until evidence from Pool Proof justifies their sequencing: free-form decomposition and Gate 1; predicted-touch/Graphify scheduling; full DAG retry, budget, reconciliation, escalation, and branch-freezing policy; Tier-2 evaluation; full CRAFTS and revision-history activation; builder calibration; integration and GitHub delivery/webhooks; and full backup, restore, retention, and operational audit infrastructure.
+Until Kyler approves the exact candidate and source hashes, `raw/plans/proposed-build-dag.json` remains the completed authoritative plan, the ready frontier is empty, and no candidate node may dispatch.
 
-Pool Proof completion is governed by its approved specification and two DAG nodes, not by the final-v1 acceptance criteria below. After Pool Proof, the first follow-up is one separately reviewed `agent-pool` dogfood task; the remaining v1 work must be re-planned from observed evidence and approved before dispatch.
+Free-form decomposition/Gate 1, Graphify/predicted-touch scheduling, agent-assisted probe implementation, eval calibration, ADR-037/038, and broader v1 hardening remain post-launch work. A Repository Builder creates and activates this infrastructure; it never becomes a Pool Worker.
 
 ## 1. Product objective
 
@@ -42,7 +42,7 @@ The complete v1 ultimately implements every behavior defined by the canonical sp
 Read and implement from these direct sources rather than relying on summaries:
 
 - [Supervisor Orchestrator — Consolidated Specification](raw/specs/orchestrator-spec.md)
-- [ADR-001 through ADR-034](raw/adr/orchestrator/)
+- [ADR-001 through ADR-039](raw/adr/orchestrator/)
 - [CRAFTS Phase Artifact Contract](raw/specs/crafts-phase-artifact-contract.md)
 
 ## 3. Non-functional requirements
@@ -68,13 +68,13 @@ Meet only the capacity, concurrency, cost, and execution constraints defined in 
 ## 4. Architecture constraints
 
 - Follow the deterministic-controller boundary in [ADR-001](raw/adr/orchestrator/ADR-001-deterministic-controller-vs-agentic-orchestrator.md): models operate only at named checkpoints; code owns control flow, policy enforcement, and state transitions.
-- Honor every architecture, persistence, orchestration, grading, routing, retrieval, retry, audit, slicing, and amendment decision in [ADR-001 through ADR-036](raw/adr/orchestrator/).
+- Honor every architecture, persistence, orchestration, grading, routing, retrieval, retry, audit, slicing, amendment, delivery-status, and probing decision in [ADR-001 through ADR-039](raw/adr/orchestrator/). Proposed/deferred ADR-037 and ADR-038 are not implementation authority.
 - Use the framework, language, infrastructure, API, storage, and integration constraints specified in the canonical orchestrator specification; do not introduce substitutes without an approved ADR.
 - Organize application code as bounded domains under `src/domains/<domain>/`. Each domain owns local business rules and a canonical `AGENTS.md`; its sibling `CLAUDE.md` contains only `@AGENTS.md`. See [Domain-Driven Documentation Convention](raw/context/domain-driven-documentation-convention.md).
 - Read `AGENTS.md`, `docs/AGENTS.md`, `docs/wiki/index.md`, relevant wiki pages, and then exact raw sources before non-trivial work.
-- Launch each DAG node as a fresh Pool Worker Pi session with the explicitly loaded `packages/worker-harness`, `pi-subagents`, the original unit payload, a trusted execution-context marker, and explicit model/tool grants. The session conducts CRAFTS by spawning project phase agents sequentially.
+- Launch each DAG node as a fresh Pool Worker Pi session with the explicitly loaded `packages/worker-harness`, `pi-subagents`, the original unit payload, a trusted execution-context marker, and explicit model/tool grants. Normal implementation nodes conduct CRAFTS sequentially. Only an explicitly approved, controller-tagged ADR-039 probe may use the post-launch one-call probe profile; a model cannot self-select that exception.
 - Before implementation, complete ADR-034's human-approved domain-discovery gate and create each initial domain's instruction files.
-- Pin and preflight Pool Worker capabilities from `packages/worker-harness/config/runtime-versions.json`. Enforce its five exact models and bootstrap routing; do not select Anthropic or any unlisted model. Local `.pi/` routing applies only to Repository Builders.
+- Pin and preflight Pool Worker capabilities from `packages/worker-harness/config/runtime-versions.json`. The approved target scope is seven exact models: Luna/Terra/Sol, GLM-5.2/GLM-5.3, and Kimi K2.7 Code/Kimi K3. Z.ai models remain ineligible until qualified; Moonshot is fallback-only; do not select Anthropic or any unlisted model. Local `.pi/` routing applies only to Repository Builders.
 - The CRAFTS S — Sharpen phase maintains durable domain `AGENTS.md` guidance and affected wiki pages. Canonical requirements/decisions are recorded in `docs/raw/` first; omit transient implementation noise.
 
 ## 5. Final-v1 acceptance criteria

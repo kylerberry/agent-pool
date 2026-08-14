@@ -16,7 +16,7 @@ This project defines a self-hosted agent execution system in two layers:
 1. **Warm Agent Pool** — the task execution substrate for coding agents.
 2. **Supervisor Orchestrator** — a deterministic controller that decomposes feature specs into approved DAGs, dispatches node-level work, grades outputs, enforces retry/cost ceilings, and produces auditable GitHub artifacts.
 
-The design is centered on trust, low-cost pragmatism, and empirical model routing. After completing reusable foundations under the original full-v1 sequence, Kyler approved a two-node Pool Proof rescope on 2026-08-05. The current build phase first proves one real headless Worker against a controlled fixture, then proves two ready slots and failure isolation. The superseded governance-heavy DAG remains historical evidence; deferred v1 requirements remain authoritative but are not Pool Proof prerequisites.
+The design is centered on trust, low-cost pragmatism, and empirical model routing. The approved two-node Pool Proof is complete. A new exact-hash-gated nine-node candidate proposes the shortest trustworthy direct-task-first deployment: qualify Z.ai, dogfood the real runner, then activate CRAFTS/grading, recovery, accepted ADR-015 GitHub Gate 2, and single-host restore/traceability. The candidate is not yet active; free-form intake, Graphify scheduling, probing implementation, and eval calibration remain post-launch.
 
 Pi sessions have explicit actors: Repository Builders develop the product through `.pi/`; deterministic product-runtime code launches fresh Pool Workers through an explicitly selected `packages/worker-harness/` profile. Launcher-verified context, private resources, sandboxed capabilities, and runner-owned result identity—not repository subject matter or prompt text—establish the Pool Worker boundary.
 
@@ -27,11 +27,12 @@ Pi sessions have explicit actors: Repository Builders develop the product throug
 - [[wiki/architecture/orchestrator-adr-map|Orchestrator ADR Map]]
 - [[wiki/architecture/domain-driven-documentation|Domain-Driven Documentation]]
 - [[wiki/architecture/initial-domain-map|Initial Domain Map (approved)]]
-- [[wiki/sources/2026-08-05_pool-proof-specification|Pool Proof Specification (approved build phase)]]
+- [[wiki/sources/2026-08-05_pool-proof-specification|Pool Proof Specification (completed build phase)]]
+- [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment (proposed)]]
 - [[wiki/sources/2026-07-25_approved-v1-build-dag|Superseded v1 Build DAG history]]
 - [[wiki/architecture/repository-builder-vs-pool-worker|Repository Builder vs Pool Worker]]
 - [[wiki/sources/2026-08-13_adr-035-minimal-coherent-dag-nodes|Minimal Coherent DAG Nodes]]
 - [[wiki/sources/2026-08-13_adr-036-discovered-work-and-dag-amendment|Discovered Work and DAG Amendment]]
-- [[wiki/sources/2026-08-13_adr-037-github-planning-pr-gate1|ADR-037: GitHub Planning PRs as Gate 1 (Proposed)]]
-- [[wiki/sources/2026-08-13_adr-038-node-level-mainline-integration|ADR-038: Node-Level Mainline Integration (Proposed)]]
-- [[wiki/sources/2026-08-13_probe-node-workflow-proposal|Probe Node Workflow (Proposed)]]
+- [[wiki/sources/2026-08-13_adr-037-github-planning-pr-gate1|ADR-037: GitHub Planning PRs as Gate 1 (Proposed/Deferred)]]
+- [[wiki/sources/2026-08-13_adr-038-node-level-mainline-integration|ADR-038: Node-Level Mainline Integration (Proposed/Deferred)]]
+- [[wiki/sources/2026-08-13_adr-039-agent-assisted-probe-execution|ADR-039: Agent-Assisted Probe Execution]]

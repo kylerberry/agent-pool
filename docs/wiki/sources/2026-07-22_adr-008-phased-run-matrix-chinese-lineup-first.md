@@ -3,7 +3,7 @@ title: ADR-008: Phased Run-Matrix Rollout, Chinese Lineup First
 type: source
 tags: [source, ingest]
 created: 2026-07-22
-updated: 2026-07-22
+updated: 2026-08-13
 sources:
   - docs/raw/adr/orchestrator/ADR-008-phased-run-matrix-chinese-lineup-first.md
 ---
@@ -16,7 +16,7 @@ This ADR records `ADR-008: Phased Run-Matrix Rollout, Chinese Lineup First` for 
 
 ## Key decisions / claims
 
-- **Phase 1:** mid-tier only from Moonshot, Z.ai, Qwen (3 models) — chosen on cost and reasoning/coding benchmark strength (e.g. GLM-4.7 at 73.8% SWE-bench Verified, $0.60/$2.20), not as a placeholder. - **Phase 2:** expand to full 3×3 Chinese-provider matrix. - **Phase 3:** add Anthropic/OpenAI/Google.
+The eval rollout remains Chinese-provider-first, but exact model IDs are versioned run inputs rather than frozen historical examples. The direct-task deployment first qualifies `zai/glm-5.2` and `zai/glm-5.3`. Moonshot remains measurable in eval but fallback-only in production and cannot become primary.
 
 ## Related pages
 
