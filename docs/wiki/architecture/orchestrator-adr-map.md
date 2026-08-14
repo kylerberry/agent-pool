@@ -51,6 +51,8 @@ This page indexes the initial supervisor-orchestrator ADR set and groups the dec
 - `ADR-034-domain-discovery-before-implementation.md` — a human-approved domain map precedes feature implementation.
 - `ADR-035-minimal-coherent-dag-nodes.md` — a node is the smallest independently verifiable vertical slice that preserves correctness; scope rationale/non-goals are Gate-1 review metadata, not Worker payload.
 - `ADR-036-discovered-work-and-dag-amendment.md` — Workers attest bounded discovered work; controller classification may recommend, but never automatically execute, a human-approved ADR-024 amendment.
+- `ADR-037-github-planning-pr-gate1.md` — **Proposed:** an editable target-repository planning PR is the Gate 1 DAG manifest; only its validated merge creates approval evidence.
+- `ADR-038-node-level-mainline-integration.md` — **Proposed:** each independently safe node uses a short-lived reviewed PR into `main`; verified merge unlocks dependents.
 
 ## Main themes
 

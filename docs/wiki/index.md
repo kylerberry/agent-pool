@@ -34,6 +34,9 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/sources/2026-04-13_pool-worker-execution-context-schema|Pool Worker Execution Context Schema]] — `docs/raw/specs/schemas/pool-worker-execution-context.schema.json`
 - [[wiki/sources/2026-07-31_pool-worker-attempt-contract-schema|Pool Worker Attempt Contract Schema]] — `docs/raw/specs/schemas/pool-worker-attempt-contract.schema.json`
 - [[wiki/sources/2026-07-22_orchestrator-spec|Supervisor Orchestrator — Consolidated Specification]] — `docs/raw/specs/orchestrator-spec.md`
+- [[wiki/sources/2026-08-13_adr-037-github-planning-pr-gate1|ADR-037: GitHub Planning PRs as Editable Gate 1 Manifests]] — proposed
+- [[wiki/sources/2026-08-13_adr-038-node-level-mainline-integration|ADR-038: Node-Level Mainline Integration]] — proposed
+- [[wiki/sources/2026-08-13_probe-node-workflow-proposal|Probe Node Workflow Proposal]] — proposed
 - [[wiki/sources/2026-07-22_adr-001-deterministic-controller-vs-agentic-orchestrator|ADR-001: Deterministic Controller vs. Agentic Orchestrator]] — `docs/raw/adr/orchestrator/ADR-001-deterministic-controller-vs-agentic-orchestrator.md`
 - [[wiki/sources/2026-07-22_adr-002-fuzzy-in-structured-out-spec-boundary|ADR-002: Fuzzy-In / Structured-Out Spec Boundary]] — `docs/raw/adr/orchestrator/ADR-002-fuzzy-in-structured-out-spec-boundary.md`
 - [[wiki/sources/2026-07-22_adr-003-dag-as-gated-checkpoint|ADR-003: DAG as Gated Checkpoint]] — `docs/raw/adr/orchestrator/ADR-003-dag-as-gated-checkpoint.md`
