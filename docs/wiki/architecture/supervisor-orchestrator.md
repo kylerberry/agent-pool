@@ -15,7 +15,7 @@ The supervisor orchestrator accepts a free-form feature spec, decomposes it into
 
 ## Current build phase
 
-Pool Proof is complete. The next phase is a proposed, exact-hash-gated 17-node direct-task-first deployment: establish the bootstrap policy and qualify GLM-5.2 (with GLM-5.3 qualification in parallel), parameterize and dogfood the real runner, then activate the direct-task service, CRAFTS ledger/conductor, Tier-1/Tier-2 grading, the governed failure/retry lifecycle with budget, discovery, and recovery branches, accepted ADR-015 PR assembly behind GitHub Gate 2, the single-host operations baseline, and one release-convergence proof. The candidate is not active; the current ready frontier remains empty until approval.
+Pool Proof is complete. The active exact-hash-gated phase is a 17-node direct-task-first deployment: establish the bootstrap policy and qualify GLM-5.2 (with GLM-5.3 qualification in parallel), parameterize and dogfood the real runner, then activate the direct-task service, CRAFTS ledger/conductor, Tier-1/Tier-2 grading, the governed failure/retry lifecycle with budget, discovery, and recovery branches, accepted ADR-015 PR assembly behind GitHub Gate 2, the single-host operations baseline, and one release-convergence proof. The sole ready root is `deployment-bootstrap-policy-and-glm52-qualification`; it is not reserved or started.
 
 ## Operating model
 

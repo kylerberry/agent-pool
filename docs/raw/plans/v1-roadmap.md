@@ -1,14 +1,14 @@
 # Agent Pool v1 Roadmap
 
-## Current proposed build phase
+## Current approved build phase
 
-The completed Pool Proof is followed by the unapproved 17-node direct-task-first deployment candidate:
+The completed Pool Proof is followed by the approved 17-node direct-task-first deployment plan:
 
 - `docs/raw/specs/functional-pool-deployment.md`
 - `docs/raw/plans/functional-pool-deployment-dag.candidate.json`
 - `docs/raw/plans/functional-pool-deployment-dag.scope-review.json`
 
-No node becomes ready until the exact candidate/spec hashes receive human approval and the canonical plan/ledger are activated through the guarded `/goal` path.
+The exact candidate/source/scope/archive hashes were approved on 2026-08-15 and activated through the guarded `/goal` path. `deployment-bootstrap-policy-and-glm52-qualification` is the sole ready root; it remains unreserved until explicitly started.
 
 ## Deployment critical path
 

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "candidate_path": "docs/raw/plans/functional-pool-deployment-dag.candidate.json",
+  "candidate_sha256": "82cfe59c88b57e5fbcea27ce26d6c2406fea360e8e3025390d920326b01a6b9a",
+  "source_path": "docs/raw/specs/functional-pool-deployment.md",
+  "source_sha256": "9ee86d71d7b23050186234712f37e8c997ceec671e487a9cf36990befc12a33c",
+  "scope_review_path": "docs/raw/plans/functional-pool-deployment-dag.scope-review.json",
+  "scope_review_sha256": "d3ba76c1261fcfc7a6c987c8e9f48fc5940702a772bc0eed5681a0f26191b039",
+  "completed_plan_archive_path": "docs/raw/plans/completed-pool-proof-build-dag.json",
+  "completed_plan_archive_sha256": "fe62bd9b156976401f4571aea4fd60bcb512b005927b161e5d3e4610dce2d8e5",
+  "approved_by": "kyler",
+  "approved_at": "2026-08-15T02:20:45Z"
+}

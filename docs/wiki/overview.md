@@ -16,7 +16,7 @@ This project defines a self-hosted agent execution system in two layers:
 1. **Warm Agent Pool** — the task execution substrate for coding agents.
 2. **Supervisor Orchestrator** — a deterministic controller that decomposes feature specs into approved DAGs, dispatches node-level work, grades outputs, enforces retry/cost ceilings, and produces auditable GitHub artifacts.
 
-The design is centered on trust, low-cost pragmatism, and empirical model routing. The approved two-node Pool Proof is complete. A new exact-hash-gated 17-node candidate proposes the shortest trustworthy direct-task-first deployment: qualify the bootstrap policy and GLM-5.2, qualify GLM-5.3 in parallel, dogfood the real runner, then activate the direct-task service, CRAFTS ledger/conductor, Tier-1/Tier-2 grading, the governed failure lifecycle with budget/discovery/recovery branches, accepted ADR-015 PR assembly behind GitHub Gate 2, the single-host operations baseline, and one release-convergence proof. The candidate is not yet active; free-form intake, Graphify scheduling, probing implementation, and eval calibration remain post-launch.
+The design is centered on trust, low-cost pragmatism, and empirical model routing. The approved two-node Pool Proof is complete. The active exact-hash-gated 17-node plan is the shortest trustworthy direct-task-first deployment: qualify the bootstrap policy and GLM-5.2, qualify GLM-5.3 in parallel, dogfood the real runner, then activate the direct-task service, CRAFTS ledger/conductor, Tier-1/Tier-2 grading, the governed failure lifecycle with budget/discovery/recovery branches, accepted ADR-015 PR assembly behind GitHub Gate 2, the single-host operations baseline, and one release-convergence proof. Its sole ready root is unreserved; free-form intake, Graphify scheduling, probing implementation, and eval calibration remain post-launch.
 
 Pi sessions have explicit actors: Repository Builders develop the product through `.pi/`; deterministic product-runtime code launches fresh Pool Workers through an explicitly selected `packages/worker-harness/` profile. Launcher-verified context, private resources, sandboxed capabilities, and runner-owned result identity—not repository subject matter or prompt text—establish the Pool Worker boundary.
 
@@ -28,7 +28,7 @@ Pi sessions have explicit actors: Repository Builders develop the product throug
 - [[wiki/architecture/domain-driven-documentation|Domain-Driven Documentation]]
 - [[wiki/architecture/initial-domain-map|Initial Domain Map (approved)]]
 - [[wiki/sources/2026-08-05_pool-proof-specification|Pool Proof Specification (completed build phase)]]
-- [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment (proposed)]]
+- [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment (active)]]
 - [[wiki/sources/2026-07-25_approved-v1-build-dag|Superseded v1 Build DAG history]]
 - [[wiki/architecture/repository-builder-vs-pool-worker|Repository Builder vs Pool Worker]]
 - [[wiki/sources/2026-08-13_adr-035-minimal-coherent-dag-nodes|Minimal Coherent DAG Nodes]]

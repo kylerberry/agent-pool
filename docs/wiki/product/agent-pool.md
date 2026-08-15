@@ -12,7 +12,7 @@ sources:
 
 The warm agent pool is the DAG-unaware execution substrate: ready capacity slots accept atomic jobs and start a fresh Pool Worker Pi process/session and workspace for every attempt. Slots may persist; conversational state never does. These runtime workers are distinct from Repository Builder sessions developing this codebase.
 
-Pool Proof is complete. The proposed next build phase first qualifies Z.ai and dogfoods a parameterized real-repository runner, then activates the direct-task service, full CRAFTS/grading, recovery, accepted ADR-015 GitHub Gate 2, and single-host deployment. The candidate remains unapproved; full free-form supervision and probing implementation are post-launch.
+Pool Proof is complete. The active 17-node build phase first qualifies Z.ai and dogfoods a parameterized real-repository runner, then activates the direct-task service, full CRAFTS/grading, recovery, accepted ADR-015 GitHub Gate 2, and single-host deployment. Its sole ready root remains unreserved; full free-form supervision and probing implementation are post-launch.
 
 ## Key constraints
 

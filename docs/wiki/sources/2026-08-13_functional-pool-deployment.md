@@ -14,7 +14,7 @@ sources:
 
 ## Status
 
-Proposed and awaiting exact-hash approval. The completed Pool Proof plan remains authoritative and has no ready nodes; its exact canonical bytes are archived at `docs/raw/plans/completed-pool-proof-build-dag.json`. Dispatcher initialization and archive reset authorize exact plan bytes before persistent mutation. Structural-only plans cannot dispatch: only the pinned completed plan bypasses the detached candidate/source/scope/archive/canonical/approver chain, and markers or filesystem aliases cannot downgrade authorization. No deployment approval record exists yet, so activation fails closed.
+Approved and activated on 2026-08-15. The detached record binds candidate, source, scope review, completed-plan archive, canonical bytes, and approver identity. The completed Pool Proof canonical bytes remain archived at `docs/raw/plans/completed-pool-proof-build-dag.json`; its ledger was archive-reset only after exact-byte authorization. The active 17-node plan has one unreserved ready root: `deployment-bootstrap-policy-and-glm52-qualification`. Structural-only plans cannot dispatch, and markers or filesystem aliases cannot downgrade authorization.
 
 ## Critical path
 
