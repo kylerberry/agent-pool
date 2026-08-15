@@ -119,7 +119,7 @@ export function validatePlanObject(plan, byteLength) {
     ids.add(node.id);
     if (typeof node.intent !== "string" || typeof node.change_spec !== "string") fail(`plan node ${node.id} contract is invalid`);
     stringArray(node.acceptance_criteria, `plan node ${node.id} acceptance_criteria`, { nonEmpty: true });
-    stringArray(node.depends_on, `plan node ${node.id} depends_on`);
+    stringArray(node.depends_on, `plan node ${node.id} depends_on`, { unique: true });
     if (node.id.length > PLAN_BOUNDS.max_id_length || node.intent.length > PLAN_BOUNDS.max_string_field || node.change_spec.length > PLAN_BOUNDS.max_string_field) {
       fail(`node ${node.id} field is out of bounds`);
     }

@@ -4,19 +4,35 @@
   "source": "docs/raw/specs/functional-pool-deployment.md",
   "nodes": [
     {
-      "id": "model-policy-zai-qualification",
-      "intent": "Qualify exact Z.ai Pool Worker models under cost-prioritized, fallback-safe routing",
-      "change_spec": "Approve and live-qualify exact models zai/glm-5.2 and zai/glm-5.3 for Pool Workers. Replace forced unique capability ranks with explicit tiers that permit ties: GLM-5.2 equals Terra and Kimi K2.7 Code; GLM-5.3 equals Sol and Kimi K3. Make Moonshot fallback-only across every bootstrap and future eval-derived policy. Keep non-building production primaries non-Moonshot, route building to GLM-5.2 with Kimi K2.7 Code fallback, and preserve an exact route for every active CRAFTS/conductor role. Record ADR-039's future GLM-5.3/Kimi K3 probing route without implementing an unused probing policy row or execution profile in this deployment node. Preserve fail-closed exact selection, model diversity, provider credential isolation, same-attempt fallback cost/evidence continuity, and sealed Pool Proof reports.",
+      "id": "deployment-bootstrap-policy-and-glm52-qualification",
+      "intent": "Establish the tie-capable bootstrap routing policy and live-qualify the exact GLM-5.2 active builder route",
+      "change_spec": "Approve and live-qualify the exact model zai/glm-5.2 for Pool Workers as the active building route, together with the shared bootstrap policy migration it requires. Replace forced unique capability ranks with explicit tiers that permit ties: GLM-5.2 equals Terra and Kimi K2.7 Code; GLM-5.3 equals Sol and Kimi K3. Make Moonshot fallback-only across every bootstrap and future eval-derived policy. Keep non-building production primaries non-Moonshot, route building to GLM-5.2 with Kimi K2.7 Code fallback, and preserve an exact route for every active CRAFTS/conductor role. Record ADR-039's future GLM-5.3/Kimi K3 probing route without implementing an unused probing policy row or execution profile in this deployment node. Preserve fail-closed exact selection, model diversity, provider credential isolation, same-attempt fallback cost/evidence continuity, and sealed Pool Proof reports. GLM-5.3 registration and qualification are a separate release-completeness node.",
       "acceptance_criteria": [
-        "The canonical exact-model registry, Worker settings, runtime metadata, profiles, policy loaders, and preflight admit zai/glm-5.2 and zai/glm-5.3 while rejecting aliases, wildcards, case variants, and every unlisted Z.ai model.",
+        "The canonical exact-model registry, Worker settings, runtime metadata, profiles, policy loaders, and preflight admit zai/glm-5.2 while rejecting aliases, wildcards, case variants, and every unlisted Z.ai model.",
         "Capability policy uses explicit tiers with ties rather than list position or unique total ranks: GLM-5.2, Terra, and Kimi K2.7 Code compare equal; GLM-5.3, Sol, and Kimi K3 compare equal; evaluator selection remains a different model and never a lower tier.",
         "Moonshot models are rejected as primaries in bootstrap and eval-derived policies and may run only as bounded, recorded fallbacks after an eligible non-Moonshot primary fails within the same attempt.",
         "The launch bootstrap has an exact route for every active role: Terra→Kimi K3 for node conductor and planning, GLM-5.2→Kimi K2.7 Code for building, Sol→Kimi K3 for assessing, Sol→Terra for tightening, Luna→Terra for sharpening, and Terra→Sol for failure diagnosis. ADR-039 records the future GLM-5.3→Kimi K3 probing route, but runtime probing implementation remains post-launch.",
-        "Each exact Z.ai model completes a real pinned-Pi, isolated-Worker qualification covering authentication, exact model resolution, bounded tool execution, structured result, provider-reported usage/cost where available, same-attempt cleanup, and independent report verification.",
+        "zai/glm-5.2 completes a real pinned-Pi, isolated-Worker qualification covering authentication, exact model resolution, bounded tool execution, structured result, provider-reported usage/cost where available, same-attempt cleanup, and independent report verification.",
         "Provider quota or subscription exhaustion is classified as availability/fallback evidence rather than an assumed account cap; ambiguous or failed provider work remains cost-accounted and cannot fabricate success.",
         "Qualification and routing evidence is immutable, provider-qualified, credential-free, marked bootstrap rather than empirical, and cannot alter the retained Stage 1, Stage 2, or sandbox-lifecycle reports."
       ],
       "depends_on": []
+    },
+    {
+      "id": "glm53-eligibility-qualification",
+      "intent": "Live-qualify exact zai/glm-5.3 as high-tier eligible without giving it any active deployment role",
+      "change_spec": "After the shared registry, tier, preflight, and qualification-report seam exists from the bootstrap policy node, admit zai/glm-5.3 by exact ID at the high tier and independently complete its real Pool Worker qualification. GLM-5.3 remains unreferenced by every active deployment role; no probing role, runtime probing row, or execution profile is implemented. This is a release-completeness gate for the declared target model scope, not a runtime dependency of the active building path.",
+      "acceptance_criteria": [
+        "The canonical exact-model registry, Worker settings, runtime metadata, profiles, policy loaders, and preflight admit zai/glm-5.3 while rejecting aliases, wildcards, case variants, and every unlisted Z.ai model, and only after its own qualification passes.",
+        "zai/glm-5.3 sits in the tier where GLM-5.3, Sol, and Kimi K3 compare equal, and no active deployment role references it: it remains eligible but unreferenced by active routing.",
+        "zai/glm-5.3 completes a real pinned-Pi, isolated-Worker qualification covering authentication, exact model resolution, bounded tool execution, structured result, provider-reported usage/cost where available, same-attempt cleanup, and independent report verification.",
+        "Provider quota or subscription exhaustion for zai/glm-5.3 is classified as availability/fallback evidence rather than an assumed account cap; ambiguous or failed provider work remains cost-accounted and cannot fabricate success.",
+        "Qualification evidence for zai/glm-5.3 is immutable, provider-qualified, credential-free, marked bootstrap rather than empirical, and cannot alter the retained Stage 1, Stage 2, or sandbox-lifecycle reports.",
+        "No probing policy row, probing profile, or agent-assisted probe execution is implemented; ADR-039's probing route stays recorded-but-unimplemented."
+      ],
+      "depends_on": [
+        "deployment-bootstrap-policy-and-glm52-qualification"
+      ]
     },
     {
       "id": "parameterized-agent-pool-dogfood-runner",
@@ -31,13 +47,13 @@
         "Ordinary tests and dogfood runs write only temporary candidate evidence; explicit publication is separately authorized and no path can overwrite the sealed Pool Proof reports."
       ],
       "depends_on": [
-        "model-policy-zai-qualification"
+        "deployment-bootstrap-policy-and-glm52-qualification"
       ]
     },
     {
       "id": "credential-strip-zai-dogfood",
       "intent": "Prove the pool can safely improve Agent Pool itself through a useful Z.ai-built change",
-      "change_spec": "Use the parameterized runner and a qualified Z.ai primary to remove credential-bearing fields from the selected provider metadata copied into the launcher's private models.json while preserving offline provider resolution. The reviewed task is the first real Agent Pool dogfood run. It remains a bounded local-commit proof with independent verification and no CRAFTS, grading, GitHub, arbitrary-repository, or production authorization claim.",
+      "change_spec": "Use the parameterized runner and a qualified zai/glm-5.2 primary to remove credential-bearing fields from the selected provider metadata copied into the launcher's private models.json while preserving offline provider resolution. The reviewed task is the first real Agent Pool dogfood run. It remains a bounded local-commit proof with independent verification and no CRAFTS, grading, GitHub, arbitrary-repository, or production authorization claim.",
       "acceptance_criteria": [
         "The reviewed dogfood manifest pins the Agent Pool base commit, exact change specification, immutable criteria, expected parent/one-commit shape, and only the launcher/provider-projection implementation and focused test paths required for the fix.",
         "Red evidence at the pinned base proves a credential canary in provider model configuration is copied into the private models.json.",
@@ -68,93 +84,188 @@
       ]
     },
     {
-      "id": "full-crafts-attempt-runtime",
-      "intent": "Execute every production direct-task attempt through the complete governed CRAFTS lifecycle",
-      "change_spec": "Activate the full Pool Worker profile and deterministic phase conductor for production direct tasks. Run C, any required independent plan-security checkpoint, R, A, bounded F/A repair, T, bounded F/T repair, and S with phase-scoped capabilities, immutable original criteria, distinct non-lower builder/evaluator models, schema-valid artifacts, bounded failure context, append-only revisions, and verified transcript-object handling before cleanup. Preserve the separate builder-only Pool Proof profile.",
+      "id": "crafts-artifact-ledger-and-transcript-retention",
+      "intent": "Accept and retain only schema-valid, attempt-bound, append-only CRAFTS phase artifacts with verified transcript objects or audit_incomplete state",
+      "change_spec": "Build the durable phase-artifact boundary every later phase, grading, retry, and audit consumer needs. A direct-task attempt can durably submit a CRAFTS phase artifact only when the CRAFTS schema validator accepts it, it binds to the stored attempt and immutable criteria, revisions are append-only by phase, and transcript-object handling links to verified retained objects or records audit_incomplete. Extend the phase_artifacts record from its current hash/path-only form; do not add phase sequencing, evaluator choice, grading, retry, or delivery policy here.",
       "acceptance_criteria": [
-        "Production direct tasks select the full Worker profile; the builder-only Pool Proof profile remains isolated and cannot satisfy this runtime path.",
-        "The conductor permits only the approved phase/checkpoint transition order and bounds A/F and T/F review loops without letting phase agents orchestrate children.",
-        "Every phase receives original criteria plus only required validated artifacts, uses phase-scoped tools, and emits a schema-valid artifact covering every criterion without forwarding working transcripts.",
-        "C, A, and T cannot write; R/F hold implementation capability; S writes only an owner-approved knowledge sink or returns a structured proposal when none exists.",
-        "R/F use a qualified primary builder and A/T use a different qualified evaluator that is higher tier when available, tied only when no higher qualified evaluator exists, and never lower; unenforceable pairing blocks before paid phase work.",
-        "Failure artifacts retain bounded attempts, reasons, discoveries, and dead ends; repeated phases receive prior failure context and append monotonic revisions rather than overwrite history.",
-        "Transcript handling finalizes, redacts, hashes, persists externally, verifies, indexes durable object metadata, records audit_incomplete on failure, and always reaches bounded workspace destruction.",
-        "An end-to-end fixture proves full sequencing, one A repair, one T repair, security-trigger routing, S confinement, restart-safe artifact history, and fail-closed invalid artifacts."
+        "A direct-task attempt can durably submit a CRAFTS phase artifact only when it is a schema-valid artifact covering every criterion without forwarding working transcripts, bound to the stored attempt and immutable original criteria, append-only by phase revision, and linked to verified transcript objects or recorded audit_incomplete retention state.",
+        "Contract and mutation tests reject unknown criteria, wrong node/attempt/model/phase/status bindings, read-only-phase writes, invalid security triggers, stale or substituted hashes, duplicate or replaced revisions, and unverified transcript links; no phase artifact, failure context, invocation/evidence locator, or transcript metadata can be overwritten, substituted, or accepted without an existing attempt and a validated artifact contract.",
+        "Failure artifacts retain bounded attempts, reasons, discoveries, and dead ends, and repeated phases append monotonic revisions rather than overwrite history.",
+        "Transcript handling finalizes, redacts, hashes, persists externally, verifies, and indexes durable object metadata, and records audit_incomplete on failure.",
+        "Restart/reopen tests prove queryable revision history and retention failure records survive, and a public direct-attempt artifact-ingestion fixture proves the controller boundary rather than a direct SQLite write."
       ],
       "depends_on": [
         "direct-task-first-service"
       ]
     },
     {
-      "id": "grading-and-audit-verdicts",
-      "intent": "Produce one evidence-backed composite verdict and immutable audit chain for every CRAFTS attempt",
-      "change_spec": "Activate Tier 1 red/green and deterministic checks, independent Tier 2 bootstrap assessment, evaluator invocation provenance, composite verdicts, append-only cost/evidence records, suite/version hashing, and criterion-level audit queries. Keep bootstrap capability tiers and criteria-fit gates until post-launch eval calibration; do not invent empirical thresholds or trust Worker prose.",
+      "id": "full-crafts-phase-conductor",
+      "intent": "Execute every production direct-task attempt through the complete governed CRAFTS lifecycle",
+      "change_spec": "Activate the full Pool Worker profile and deterministic phase conductor for production direct tasks. Run C, any required independent plan-security checkpoint, R, A, bounded F/A repair, T, bounded F/T repair, and S with phase-scoped capabilities, immutable original criteria, distinct non-lower builder/evaluator models, schema-valid artifacts, bounded failure context, append-only revisions, and verified transcript-object handling before cleanup. Preserve the separate builder-only Pool Proof profile. Persist every handoff through the artifact ledger node.",
+      "acceptance_criteria": [
+        "Production direct tasks select the full Worker profile; the builder-only Pool Proof profile remains isolated and cannot satisfy this runtime path.",
+        "The conductor permits only the approved phase/checkpoint transition order (C, required independent plan-security checkpoint, R, A, bounded F/A repair, T, bounded F/T repair, S) and bounds A/F and T/F review loops without letting phase agents orchestrate children or forward transcripts.",
+        "Every phase receives original criteria plus only required validated artifacts from the ledger, uses phase-scoped tools, and revalidates artifacts rather than trusting Worker prose.",
+        "C, A, and T cannot write; R/F hold implementation capability; S writes only an owner-approved knowledge sink or returns a structured proposal when none exists.",
+        "Production direct tasks execute with distinct non-lower builder/evaluator models: R/F use a qualified primary builder and A/T use a different qualified evaluator that is higher tier when available, tied only when no higher qualified evaluator exists, and never lower; unenforceable pairing blocks before paid phase work.",
+        "Repeated phases receive prior bounded failure context from the ledger so repair attempts start from recorded dead ends rather than a clean slate.",
+        "Workspace teardown always reaches bounded workspace destruction after transcript retention success or failure.",
+        "An end-to-end fixture proves full sequencing, one A repair, one T repair, security-trigger routing, S confinement, restart-safe artifact history, and fail-closed invalid artifacts."
+      ],
+      "depends_on": [
+        "crafts-artifact-ledger-and-transcript-retention"
+      ]
+    },
+    {
+      "id": "tier1-evidence-attestation",
+      "intent": "Emit one immutable deterministic Tier-1 pass/fail attestation bound to independently recomputed red/green evidence",
+      "change_spec": "Activate the general Verification Tier-1 service for CRAFTS implementation attempts. For every completed R/F implementation, an independent deterministic verifier recomputes or reruns the evidence and appends an immutable Tier-1 pass/fail attestation bound to pre/post commits, suite bytes, commands, pinned environment, allowed paths, clean commit shape, and criterion evidence. Keep createPoolProofVerifier() and sealed Pool-Proof evidence unchanged. Do not add evaluator scoring, composite verdicts, calibration, or delivery.",
       "acceptance_criteria": [
         "Tier 1 fails closed unless red/green evidence binds pre/post commits, suite path/hash, command, exit code, pinned environment/image, and bounded raw-output artifact; hashes are recomputed before acceptance.",
         "Required tests, lint, typecheck, static/security checks, clean commit shape, allowed paths, and every original criterion are deterministically attested.",
+        "The Tier-1 attestation is immutable and bound to red/green commits, suite bytes, commands, environment, paths, commit shape, and criterion evidence; Worker prose and agent-authored paths cannot make Tier 1 pass, and missing red/green evidence fails closed.",
+        "Hostile-input and mutation tests prove a changed suite, commit, image, criterion, command, or allowed path causes deterministic attestation verification to fail.",
+        "An end-to-end CRAFTS fixture yields a retained Tier-1 attestation demonstrating both a base-red and post-change-green result."
+      ],
+      "depends_on": [
+        "full-crafts-phase-conductor"
+      ]
+    },
+    {
+      "id": "tier2-composite-verdict-audit",
+      "intent": "Produce one evidence-backed composite verdict and immutable audit chain for every Tier-1-complete CRAFTS attempt",
+      "change_spec": "Activate independent Tier-2 bootstrap assessment, evaluator invocation provenance, composite verdicts, append-only cost/evidence records, suite/version hashing, and criterion-level audit queries. Each Tier-1-complete attempt receives exactly one append-only machine verdict joining actual evaluator provenance, criteria-fit, maintainability findings, Tier-1 attestation, evidence identities, routing, phase revisions, failure context, and costs. Keep bootstrap capability tiers and criteria-fit gates until post-launch eval calibration; do not invent empirical thresholds or trust Worker prose.",
+      "acceptance_criteria": [
         "Tier 2 records the actual independent evaluator invocation and routing evidence, applies the binary criteria-fit hard gate and anchored maintainability rubric, and cannot infer evaluator identity from builder dispatch or agent-authored claims.",
         "Composite pass requires passing Tier 1, complete criteria fit, no blocking maintainability finding, valid model independence, and complete criterion evidence; prose cannot override any failed mechanism.",
         "Attempt routing, phase revisions, evidence identities, successful and failed backend costs, attestations, assessment, verdict, and failure context are append-only and queryable by work/node/attempt/criterion.",
         "Identical replay is an audited no-op; conflicting artifacts, costs, verdicts, identities, or terminal outcomes fail without overwrite.",
-        "Tampering with a suite, commit, image, criterion, model, artifact, cost, or verdict link causes deterministic audit verification to fail."
+        "Tampering with a model, artifact, cost, or verdict link causes deterministic audit verification to fail."
       ],
       "depends_on": [
-        "full-crafts-attempt-runtime"
+        "tier1-evidence-attestation"
       ]
     },
     {
-      "id": "controller-failure-budget-recovery",
-      "intent": "Contain failures, enforce spend limits, and recover durable work without duplicate paid attempts",
-      "change_spec": "Complete the deterministic controller's failure-class retries, node/DAG budget ceilings, branch freezing, five governed resolutions, discovered-work persistence/classification, lease/token fencing, deterministic queue delivery, CAS lifecycle, idempotent results, startup reconciliation, safe SQLite migration, and owned-resource recovery. Preserve same-attempt backend fallback with cost/evidence continuity; never auto-amend a DAG or infer success from partial state.",
+      "id": "classified-failure-retry-and-resolution",
+      "intent": "Classify graded failures and govern retry, freezing, and the five authorized resolutions in one auditable lifecycle",
+      "change_spec": "Complete the deterministic controller's failure-classification lifecycle: logic/integration counters under fixed ceilings with downward-only overrides, bounded retry failure context, branch freezing, human escalation records, and the five governed resolutions (retry, manual fix, cancel branch, force-pass with reason, human-approved amend-DAG). Compute the next deterministic attempt number rather than hard-coding it, and pass real retry failure context. Integration re-verification failures and delivery-side stale-green failures route into this same governed boundary. Do not implement spend accounting, discovered-work intake, queue restart semantics, or backup here.",
       "acceptance_criteria": [
         "Logic and integration failures use separate monotonic counters under the fixed ceiling and downward-only overrides; retries receive bounded prior failure context.",
         "Failed nodes freeze only dependent branches while unrelated ready nodes continue, and the only authorized resolutions are retry, manual fix, cancel branch, force-pass with reason, and human-approved amend-DAG.",
-        "Per-node budget exhaustion stops/escalates that node; per-DAG exhaustion halts new dispatch while bounded in-flight work settles; every attempted backend cost is retained with valid currency semantics.",
         "Same-attempt backend fallback preserves workspace state and records failed-primary evidence/cost before a bounded fallback; Moonshot cannot become primary through fallback handling.",
-        "Deterministic jobs, leases, generations, token digests, CAS versions, and unique attempt/result identities reject stale, duplicate, or conflicting actors and terminal results.",
-        "Startup reconciliation covers every commit/enqueue/lease/result interruption window and cleans or recovers owned sandboxes without launching duplicate paid work or inferring success.",
-        "Discovered-work records are bounded, append-only, non-authoritative, and classified as adjacent backlog, correctness/security blocker, or amendment recommendation without mutating active scope or topology.",
-        "Versioned migrations and controller startup fail closed on unsafe paths, permissions, symlinks, corruption, failed backup hooks, or unsupported schemas, with rollback and bounded audit evidence."
+        "Integration re-verification failure is classified by the same logic/integration machinery from recorded evidence rather than a Worker failure string, and routes into this governed lifecycle.",
+        "Every classification, counter change, branch freeze, escalation, and resolution is durable and auditable; unauthorized paths cannot reset counters or bypass branch freezing."
       ],
       "depends_on": [
-        "grading-and-audit-verdicts"
+        "tier2-composite-verdict-audit"
       ]
     },
     {
-      "id": "adr015-github-gate2-delivery",
-      "intent": "Deliver machine-green work as reviewable connected-component pull requests behind mandatory Gate 2",
-      "change_spec": "Implement accepted ADR-015 delivery: one branch and pull request per connected DAG component, one ordered provenance-bearing commit per node, integration re-verification against the composed head, trusted host-side GitHub credentials, mandatory human Gate 2, idempotent Git effects, and governed comment/revision intake. Do not implement proposed ADR-037 planning PRs or ADR-038 node-level mainline integration; retain evidence needed to reassess ADR-038 after real delivery use.",
+      "id": "controller-budget-guardrails",
+      "intent": "Stop nodes and new DAG dispatch at the correct cumulative spend ceiling without losing in-flight results",
+      "change_spec": "Complete ADR-013 dual-level budgets on top of the governed failure lifecycle: validated cumulative attempt-cost ingestion (including failed same-attempt fallback consumption), per-node stop/escalation through the classified-failure path, per-DAG halt of new ready-frontier dispatch while leased work settles, and a distinct DAG escalation. Agent Execution remains the producer of the fallback cost ledger; Orchestration owns the admission gate and persisted totals. Do not duplicate routing/fallback policy, retry classification, discovery records, or host backup here.",
+      "acceptance_criteria": [
+        "Per-node budget exhaustion stops/escalates that node through the governed failure path; per-DAG exhaustion halts new dispatch while bounded in-flight work settles before a distinct DAG escalation; every attempted backend cost is retained with valid currency semantics.",
+        "A failed primary plus fallback is charged exactly once, attributed to the exact attempt that incurred it.",
+        "Restart does not reset cumulative node/DAG spend totals, and cost ingestion rejects malformed currency or amount input fail-closed.",
+        "A budget stop never loses in-flight results, never terminates leased work abruptly, and never fabricates terminal success."
+      ],
+      "depends_on": [
+        "classified-failure-retry-and-resolution"
+      ]
+    },
+    {
+      "id": "discovered-work-quarantine",
+      "intent": "Accept only bounded, redacted, provenance-bound discovered-work records classified without topology authority",
+      "change_spec": "Complete the ADR-036 direct-task-first slice: a Worker can submit only a validated, redacted, append-only, provenance-bound discovered-work record; the controller classifies it as adjacent backlog, correctness/security blocker, or a non-authoritative amend-DAG recommendation without changing the active node, priority, queue, dependencies, or approved topology. Blocker records escalate through the governed failure lifecycle. No decomposer invocation, partial re-decomposition, or Gate 1 approval occurs in this phase.",
+      "acceptance_criteria": [
+        "Discovered-work records are bounded, append-only, non-authoritative, and classified as adjacent backlog, correctness/security blocker, or amendment recommendation without mutating active scope or topology.",
+        "Hostile Worker-result tests prove no arbitrary plan/transcript/credential/priority/topology content enters durable state, and discovery cannot widen an attempt, enqueue work, alter dependencies, or alter passed work.",
+        "Blocker records escalate through classified-failure-retry-and-resolution's governed failure path, and amendment recommendations remain inert absent renewed Gate 1 approval."
+      ],
+      "depends_on": [
+        "classified-failure-retry-and-resolution"
+      ]
+    },
+    {
+      "id": "queue-and-restart-recovery",
+      "intent": "Reconcile every ordinary controller, queue, lease, and result interruption idempotently without duplicate paid work",
+      "change_spec": "Complete the deterministic controller's interruption-recovery invariant as one unit: deterministic queue delivery, lease/token fencing, generations, CAS lifecycle versions, idempotent results with unique identities, startup reconciliation across every commit/enqueue/lease/result window, owned-sandbox cleanup/recovery, safe versioned SQLite migration, and required health/cost/queue signal exposure. Compose the existing lease fencing and reconciliation seams. This node is deliberately the convergence of the budget and discovery branches because a restore proof that omits their durable records would not establish recovery.",
+      "acceptance_criteria": [
+        "Deterministic jobs, leases, generations, token digests, CAS versions, and unique attempt/result identities reject stale, duplicate, or conflicting actors and terminal results.",
+        "Startup reconciliation covers every commit/enqueue/lease/result interruption window and cleans or recovers owned sandboxes without launching duplicate paid work or inferring success.",
+        "Versioned migrations and controller startup fail closed on unsafe paths, permissions, symlinks, corruption, failed backup hooks, or unsupported schemas, with rollback and bounded audit evidence.",
+        "Restarted controllers, queues, leases, and results reconcile idempotently with preserved IDs, counters, budget totals, discovery evidence, and audit correlation, and expose queue age/stalled jobs and required health/cost/queue signals for reopen verification."
+      ],
+      "depends_on": [
+        "controller-budget-guardrails",
+        "discovered-work-quarantine"
+      ]
+    },
+    {
+      "id": "adr015-component-pr-assembly",
+      "intent": "Materialize machine-green connected components as exactly one provenance-bearing GitHub PR awaiting Gate 2",
+      "change_spec": "Implement the assembly half of accepted ADR-015 delivery: one branch and pull request per connected DAG component, one ordered provenance-bearing commit per node, integration re-verification against the composed head, trusted host-side GitHub credentials, and idempotent Git effects. This node depends on the governed failure lifecycle so stale-green or conflicting components return there instead of an ad-hoc delivery failure path, with no GitHub side effect before successful re-verification. Do not implement Gate-2 review state, comment processing, proposed ADR-037 planning PRs, or ADR-038 node-level mainline integration; retain evidence needed to reassess ADR-038 after real delivery use.",
       "acceptance_criteria": [
         "The controller derives connected components from accepted work and creates one delivery branch/PR per component; a single direct node forms one component.",
         "Each node contributes one ordered commit linked to intent, criteria, Tier-1/Tier-2 evidence, composite verdict, cost, selected-model rationale, and node/attempt identities.",
-        "Integration recomputes suite hashes and reruns required checks against the composed component head before PR creation/update; stale-green or conflicting nodes return to governed failure handling.",
+        "Integration recomputes suite hashes and reruns required checks against the composed component head before PR creation/update; stale-green or conflicting components produce no GitHub side effect — no PR is created or updated and the failure returns to governed failure handling in classified-failure-retry-and-resolution.",
         "No PR reaches Gate 2 with missing/red evidence, unresolved integration failure, unexpected commits, dirty state, or component mismatch.",
-        "Human Gate 2 approval is mandatory; no caller, Worker, comment, small-diff exception, or automation can force completion without the authorized review record.",
         "GitHub credentials exist only in a least-privilege trusted delivery adapter and never enter Worker, sandbox, repository-command, phase-artifact, log, transcript, or report environments.",
-        "GitHub requests/events are repository/ref/identity-bound, idempotent, signature-verified where applicable, and replay-protected; comments are bounded revision inputs rather than executable instructions.",
-        "Delivery follows ADR-015 only and records PR size, branch drift, integration retries, unlock latency, and operator friction for later ADR-038 reassessment."
+        "GitHub requests are repository/ref/identity-bound, idempotent, signature-verified where applicable, and replay-protected.",
+        "Delivery follows ADR-015 only and records PR size, branch drift, integration retries for later ADR-038 reassessment."
       ],
       "depends_on": [
-        "controller-failure-budget-recovery"
+        "classified-failure-retry-and-resolution"
       ]
     },
     {
-      "id": "single-host-functional-pool-deployment",
-      "intent": "Deploy and prove the direct-task-first pool as a recoverable single-host personal service",
-      "change_spec": "Package the accepted direct-task, full CRAFTS, grading, recovery, and ADR-015 delivery capabilities into a pinned single-host deployment. Add health/readiness, restart policy, correlated logs/status, queue/disk/provider/cost/backup visibility, least-privilege secret injection, versioned migrations, encrypted WAL-safe off-host backup, bounded retention, an exercised empty-host restore, owned-resource cleanup, and one complete direct-task-to-Gate-2 trace. This is the deployment and release-traceability gate; it adds no new business capability.",
+      "id": "github-gate2-governed-review",
+      "intent": "Complete or return an awaiting PR only through an authorized, signature-verified, replay-protected human Gate-2 record",
+      "change_spec": "Implement the human-authority half of accepted ADR-015 delivery: only an authorized, signature-verified, replay-protected human review record can transition an awaiting PR to the governed delivered disposition or return it for revision. Signed comments become bounded, non-executable revision-input records. Hostile signed comment and prompt-injection content is inert bounded revision data only. Do not implement PR assembly or integration re-verification, comment execution, ADR-037 planning PRs, or ADR-038 merge-event dependency unlocking.",
       "acceptance_criteria": [
-        "Versioned Compose or equivalent starts the authenticated API, deterministic controller, durable queue, ready Worker capacity, persistent per-attempt sandbox path, SQLite, and trusted adapters with pinned identities, health/readiness checks, restart policy, and no Worker access to the host Docker socket.",
-        "Host-owned secret injection grants each process only required Z.ai, queue, GitHub, encryption, and backup credentials; repository commands, artifacts, logs, reports, transcripts, and backups pass credential-canary checks.",
-        "Structured logs and status queries correlate submission, work/component/node/attempt/lease, exact routing, phase revisions, evidence, verdict, cost, commit, PR, review, and terminal delivery without raw sensitive content.",
+        "Human Gate 2 approval is mandatory; no caller, Worker, comment, small-diff exception, or automation can force completion without the authorized review record.",
+        "Only an authorized, signature-verified, replay-protected human review record can transition an awaiting PR to the governed delivered disposition or return it to bounded revision; forged signature, replay, wrong repository/ref/identity, caller, Worker, and automation bypass attempts fail closed.",
+        "Comments become bounded revision inputs rather than executable instructions; hostile signed comment and prompt-injection content is inert, bounded revision data only — no command, dispatch, topology, Gate-2, or delivery-state effect may follow from comment content.",
+        "The review lifecycle records approval identity/event, review disposition, dependency-unlock latency, and operator friction for later ADR-038 reassessment."
+      ],
+      "depends_on": [
+        "adr015-component-pr-assembly"
+      ]
+    },
+    {
+      "id": "single-host-operations-baseline",
+      "intent": "Operate, back up, restore, and clean up the full stack on one private pre-release host without credential leakage",
+      "change_spec": "Package the accepted direct-task, full CRAFTS, grading, and recovery capabilities into a pinned private single-host operational baseline. Add health/readiness, restart policy, correlated logs/status, queue/disk/provider/cost/backup visibility, least-privilege secret injection, versioned migrations, encrypted WAL-safe off-host backup, bounded retention, an exercised empty-host restore drill, and owned-resource cleanup. This node claims no functional delivery and is delivery-free: no delivery adapter is started and no delivery credential is injected on this host, which stays private and pre-release until functional-pool-release-convergence composes the delivery branch with it. It adds no new business capability.",
+      "acceptance_criteria": [
+        "Versioned Compose or equivalent starts the authenticated API, deterministic controller, durable queue, ready Worker capacity, persistent per-attempt sandbox path, and SQLite with pinned identities, health/readiness checks, restart policy, and no Worker access to the host Docker socket, and without starting any delivery adapter.",
+        "Host-owned secret injection grants each process only required Z.ai, queue, encryption, and backup credentials; repository commands, artifacts, logs, reports, transcripts, and backups pass credential-canary checks, and no delivery credential is present on the host.",
         "Visible health covers service readiness, queue age/stalls, ready capacity, disk, provider failures, accumulated cost, backup freshness, cleanup failure, and migration status without requiring an enterprise metrics platform.",
         "SQLite and applicable queue/session state receive encrypted, WAL-safe, off-host backups under bounded retention, and a documented empty-host restore drill verifies audit integrity before dispatch resumes.",
         "Restart tests at API, controller, queue, Worker, sandbox, and result windows reconcile durable state, fence stale actors, remove owned resources, and neither lose nor duplicate terminal outcomes.",
+        "The host remains private and pre-release: no public functional-pool release, no Gate-2 capability claim, no new workflow, and no multi-host/multi-tenant or formal SLO/on-call operation is claimed."
+      ],
+      "depends_on": [
+        "queue-and-restart-recovery"
+      ]
+    },
+    {
+      "id": "functional-pool-release-convergence",
+      "intent": "Prove the restored single-host release end to end from authenticated direct task through Gate 2 to final GitHub disposition",
+      "change_spec": "Converge the governed delivery branch (GLM-5.3 eligibility qualification, ADR-015 assembly, Gate-2 review) and the operations branch (single-host operations baseline) into the sole release gate. The recovered single-host release executes one controlled authenticated direct task through qualified GLM-5.2 routing, full CRAFTS, composite grading, ADR-015 PR assembly, mandatory human Gate 2, and final GitHub disposition, with every link traversable by stable ID/hash. This node owns the delivery-host composition the delivery-free operations baseline defers: the released host composes the trusted host-side GitHub adapter from the delivery branch under least-privilege host GitHub credential injection, verified by credential canaries. This node composes already accepted capabilities and adds no new capability.",
+      "acceptance_criteria": [
         "A controlled authenticated POST /tasks run uses a qualified Z.ai primary unless a deliberate fallback is recorded, completes full CRAFTS and composite grading, creates the ADR-015 PR, pauses for human Gate 2, and records final GitHub disposition.",
+        "The released host starts the trusted host-side GitHub adapter alongside the operational baseline with pinned identities and no Worker access to the host Docker socket.",
+        "Host-owned secret injection on the released host grants each process only required Z.ai, queue, GitHub, encryption, and backup credentials, confined so GitHub credentials exist only in the least-privilege trusted delivery adapter and never enter Worker, sandbox, repository-command, phase-artifact, log, transcript, or report environments; repository commands, artifacts, logs, reports, transcripts, and backups pass credential-canary checks.",
+        "Structured logs and status queries correlate submission, work/component/node/attempt/lease, exact routing, phase revisions, evidence, verdict, cost, commit, PR, review, and terminal delivery without raw sensitive content.",
         "An operator can traverse every immutable link in that run through stable IDs and hashes; deterministic, Docker, retained-report, backup/restore, and owned-resource cleanup checks pass without changing Pool Proof or dogfood evidence.",
         "The deployed release explicitly excludes free-form specs/Gate 1, Graphify scheduling, eval calibration, agent-assisted probes, ADR-037/038, arbitrary provider/extensions, multi-host/multi-tenant operation, formal SLO/on-call, and automatic target deployment."
       ],
       "depends_on": [
-        "adr015-github-gate2-delivery"
+        "glm53-eligibility-qualification",
+        "github-gate2-governed-review",
+        "single-host-operations-baseline"
       ]
     }
   ]

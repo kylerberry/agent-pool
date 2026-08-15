@@ -2,7 +2,7 @@
 
 ## Current proposed build phase
 
-The completed Pool Proof is followed by the unapproved nine-node direct-task-first deployment candidate:
+The completed Pool Proof is followed by the unapproved 17-node direct-task-first deployment candidate:
 
 - `docs/raw/specs/functional-pool-deployment.md`
 - `docs/raw/plans/functional-pool-deployment-dag.candidate.json`
@@ -12,15 +12,25 @@ No node becomes ready until the exact candidate/spec hashes receive human approv
 
 ## Deployment critical path
 
-1. exact Z.ai GLM-5.2/GLM-5.3 scope, tie-capable tiers, Moonshot-fallback-only policy, and real qualification;
-2. parameterized Agent Pool dogfood runner;
-3. Z.ai-built credential-strip dogfood task;
-4. authenticated durable direct-task-first service;
-5. full Pool Worker CRAFTS lifecycle and append-only artifacts;
-6. Tier-1/Tier-2 bootstrap grading and immutable audit verdicts;
-7. retry/budget/failure/discovery/reconciliation policy;
-8. accepted ADR-015 GitHub delivery with mandatory Gate 2; and
-9. single-host deployment, backup/restore, operations, and end-to-end traceability.
+1. exact Z.ai GLM-5.2 scope, tie-capable tiers, Moonshot-fallback-only policy, and real GLM-5.2 qualification (`deployment-bootstrap-policy-and-glm52-qualification`);
+2. real GLM-5.3 qualification at high tier with no active role (`glm53-eligibility-qualification`);
+3. parameterized Agent Pool dogfood runner (`parameterized-agent-pool-dogfood-runner`);
+4. Z.ai-built credential-strip dogfood task (`credential-strip-zai-dogfood`);
+5. authenticated durable direct-task-first service (`direct-task-first-service`);
+6. CRAFTS artifact ledger and transcript retention (`crafts-artifact-ledger-and-transcript-retention`);
+7. full Pool Worker CRAFTS phase conductor (`full-crafts-phase-conductor`);
+8. Tier-1 deterministic evidence attestation (`tier1-evidence-attestation`);
+9. Tier-2 composite verdicts and immutable audit (`tier2-composite-verdict-audit`);
+10. classified failure retry and governed resolutions (`classified-failure-retry-and-resolution`);
+11. controller budget guardrails (`controller-budget-guardrails`);
+12. discovered-work quarantine (`discovered-work-quarantine`);
+13. queue and restart recovery (`queue-and-restart-recovery`);
+14. ADR-015 component PR assembly (`adr015-component-pr-assembly`);
+15. GitHub Gate-2 governed review (`github-gate2-governed-review`);
+16. single-host operations baseline (`single-host-operations-baseline`); and
+17. functional-pool release convergence and end-to-end traceability (`functional-pool-release-convergence`).
+
+Nodes 2 and 3 may run concurrently after node 1; nodes 11 and 12 after node 10; the controller branch (10–13) and delivery branch (14–15) after node 9; and node 16 after node 13 alongside unfinished delivery work. Node 17 is the sole release gate.
 
 Bootstrap routing is permitted for initial deployment when exact models are qualified and evidence is explicitly marked provisional. Eval-derived routing is post-launch calibration, not a pre-deployment blocker. Moonshot models remain fallback-only and cannot become primary through bootstrap or eval publication.
 

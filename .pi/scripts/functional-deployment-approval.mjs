@@ -12,6 +12,7 @@ const COMPLETED_PLAN_ARCHIVE_PATH = "docs/raw/plans/completed-pool-proof-build-d
 const COMPLETED_PLAN_ARCHIVE_SHA256 = "fe62bd9b156976401f4571aea4fd60bcb512b005927b161e5d3e4610dce2d8e5";
 const MAX_ARTIFACT_BYTES = 10 * 1024 * 1024;
 const SHA256 = /^[0-9a-f]{64}$/;
+export const TRUSTED_ACTIVE_PLAN_SHA256 = COMPLETED_PLAN_ARCHIVE_SHA256;
 
 function fail(message) { throw new Error(message); }
 function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
@@ -21,12 +22,54 @@ function exactKeys(value, expected, label) {
   }
 }
 function sha256(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
+function isWithin(parent, candidate) {
+  const relative = path.relative(parent, candidate);
+  return relative !== "" && !relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative);
+}
+// Governing artifacts must be root-contained regular files. Symlinks are rejected in the final
+// component and every existing ancestor before opening (O_NOFOLLOW), and the opened descriptor
+// is re-validated after the open: the ancestor/final symlink check is repeated, the target's
+// realpath must remain the exact expected root-contained path, and the current path's device and
+// inode must match the opened descriptor. Bytes are read and hashed only from that verified fd.
 function readBytes(root, relative, label) {
-  const target = path.resolve(root, relative);
-  if (!fs.existsSync(target)) fail(`${label} is missing: ${relative}`);
-  const bytes = fs.readFileSync(target);
-  if (bytes.length > MAX_ARTIFACT_BYTES) fail(`${label} exceeds size bound`);
-  return bytes;
+  if (typeof relative !== "string" || relative === "" || path.isAbsolute(relative)) fail(`${label} path is invalid: ${relative}`);
+  const rootDir = path.resolve(root);
+  const target = path.resolve(rootDir, relative);
+  if (!isWithin(rootDir, target)) fail(`${label} escapes repository root: ${relative}`);
+  const segments = path.relative(rootDir, target).split(path.sep).filter((item) => item && item !== ".");
+  const assertNoSymlinks = () => {
+    let current = rootDir;
+    for (const segment of segments) {
+      current = path.join(current, segment);
+      let stats;
+      try { stats = fs.lstatSync(current); } catch { fail(`${label} is missing: ${relative}`); }
+      if (stats.isSymbolicLink()) fail(`${label} path contains a symbolic link: ${current}`);
+    }
+  };
+  assertNoSymlinks();
+  const descriptor = (() => {
+    try { return fs.openSync(target, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0)); }
+    catch { fail(`${label} is missing: ${relative}`); }
+  })();
+  try {
+    const stats = fs.fstatSync(descriptor);
+    if (!stats.isFile()) fail(`${label} is not a regular file: ${relative}`);
+    if (stats.size > MAX_ARTIFACT_BYTES) fail(`${label} exceeds size bound`);
+    // Post-open validation closes the check/open race: while the descriptor stays open, the
+    // path must still be symlink-free and resolve to exactly the expected root-contained file.
+    assertNoSymlinks();
+    let resolved;
+    try { resolved = fs.realpathSync(target); } catch { fail(`${label} path could not be resolved: ${relative}`); }
+    let realRoot;
+    try { realRoot = fs.realpathSync(rootDir); } catch { fail(`${label} repository root could not be resolved: ${rootDir}`); }
+    if (resolved !== path.resolve(realRoot, relative)) fail(`${label} resolved outside the expected root-contained path: ${relative}`);
+    let currentStats;
+    try { currentStats = fs.statSync(target); } catch { fail(`${label} is missing: ${relative}`); }
+    if (currentStats.dev !== stats.dev || currentStats.ino !== stats.ino) fail(`${label} path no longer references the opened file: ${relative}`);
+    const bytes = fs.readFileSync(descriptor);
+    if (bytes.length > MAX_ARTIFACT_BYTES) fail(`${label} exceeds size bound`);
+    return bytes;
+  } finally { fs.closeSync(descriptor); }
 }
 function readJson(root, relative, label) {
   const bytes = readBytes(root, relative, label);
@@ -39,19 +82,7 @@ function assertHash(actual, expected, label) {
   }
 }
 
-function isFunctionalPlan(plan) {
-  return isObject(plan) && (
-    plan.kind === FUNCTIONAL_DEPLOYMENT_KIND ||
-    plan.source === SOURCE_PATH ||
-    (Array.isArray(plan.nodes) && plan.nodes.some((node) => node?.id === "model-policy-zai-qualification"))
-  );
-}
-
-export function validateFunctionalDeploymentActivation(root, plan) {
-  if (!isFunctionalPlan(plan)) return { applicable: false };
-
-  const approvalFile = path.resolve(root, APPROVAL_PATH);
-  if (!fs.existsSync(approvalFile)) fail(`functional deployment detached approval is missing: ${APPROVAL_PATH}`);
+function validateFunctionalDeploymentApproval(root, plan) {
   const { value: approval } = readJson(root, APPROVAL_PATH, "functional deployment detached approval");
   exactKeys(approval, [
     "schema_version",
@@ -103,6 +134,35 @@ export function validateFunctionalDeploymentActivation(root, plan) {
   if (!isDeepStrictEqual(withoutApproval, candidate)) {
     fail("canonical plan does not equal the exact approved candidate plus approval");
   }
+  // Approval metadata is exactly {approved_by, approved_at}; any extra field (e.g. notes) is
+  // rejected so the approved canonical bytes are uniquely bound by the detached record.
+  exactKeys(plan.approval, ["approved_by", "approved_at"], "canonical plan approval");
 
-  return { applicable: true, candidateSha256 };
+  // Deterministic canonical plan bytes: the exact approved candidate object plus the matching
+  // plan approval, serialized with repository canonical formatting (JSON.stringify(..., null, 2)
+  // plus a trailing newline). Detached approval authorizes these bytes, not merely parsed equality.
+  const canonicalPlanBytes = Buffer.from(`${JSON.stringify({ ...candidate, approval: { approved_by: approval.approved_by, approved_at: approval.approved_at } }, null, 2)}\n`);
+
+  return { candidateSha256, canonicalPlanSha256: sha256(canonicalPlanBytes) };
+}
+
+// Unconditional exact-hash validation. Recognizability markers in the incoming plan never select
+// whether this validator runs; any plan that is not the exact approved candidate plus approval fails.
+export function validateFunctionalDeploymentActivation(root, plan) {
+  const { candidateSha256, canonicalPlanSha256 } = validateFunctionalDeploymentApproval(root, plan);
+  return { applicable: true, candidateSha256, canonicalPlanSha256 };
+}
+
+// Trusted activation-transition selection for a canonical repository plan.
+// Only two identities may be accepted or frozen as the active plan:
+//   1. the exact completed Pool Proof canonical plan (pinned SHA-256); or
+//   2. the exact detached-approved functional deployment candidate plus approval, whose
+//      canonical bytes must hash to the supplied active plan SHA-256.
+// Every different canonical replacement-plan hash fails closed.
+export function authorizeKnownCanonicalPlan(root, plan, sha) {
+  if (typeof sha !== "string" || !SHA256.test(sha)) fail("canonical plan SHA-256 is required for activation authorization");
+  if (sha === TRUSTED_ACTIVE_PLAN_SHA256) return { authorized: true, basis: "trusted-active-plan" };
+  const { candidateSha256, canonicalPlanSha256 } = validateFunctionalDeploymentApproval(root, plan);
+  if (sha !== canonicalPlanSha256) fail("active plan SHA-256 does not match the approved canonical plan bytes");
+  return { authorized: true, basis: "detached-functional-approval", candidateSha256, canonicalPlanSha256 };
 }

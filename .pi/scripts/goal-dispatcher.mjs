@@ -24,11 +24,13 @@ import {
   validatePhaseArtifact,
 } from "./goal-journal.mjs";
 import { validatePlan } from "./goal-plan.mjs";
+import { authorizeKnownCanonicalPlan } from "./functional-deployment-approval.mjs";
 
 const BOUNDS = {
   max_approver_length: 256,
   max_approval_context_length: 4096,
 };
+const CANONICAL_PLAN_RELATIVE_PATH = "docs/raw/plans/proposed-build-dag.json";
 
 function fail(message) { throw new Error(message); }
 function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
@@ -89,7 +91,7 @@ class FileLock {
 }
 
 export class GoalDispatcher {
-  constructor({ rootDir = process.cwd(), runId = process.env.GOAL_RUN_ID || "default", planPath = "docs/raw/plans/proposed-build-dag.json" } = {}) {
+  constructor({ rootDir = process.cwd(), runId = process.env.GOAL_RUN_ID || "default", planPath = CANONICAL_PLAN_RELATIVE_PATH } = {}) {
     this.rootDir = fs.realpathSync(path.resolve(rootDir));
     this.runId = safeSegment(runId, "runId");
     const resolvedPlan = path.isAbsolute(planPath) ? path.resolve(planPath) : path.resolve(this.rootDir, planPath);
@@ -168,11 +170,16 @@ export class GoalDispatcher {
     if (canonical(compare) === canonical(expected)) fs.unlinkSync(this.workspaceGuardPath);
   }
   _frontier(ledger) { return computeFrontier(ledger); }
+  // Authorization never depends on the configured plan path, aliases, governance-file presence,
+  // or recognizability markers: every init/archiveReset plan must be the exact trusted completed
+  // plan or the exact detached-approved functional deployment candidate plus approval.
+  _authorizePlan(plan, sha) { authorizeKnownCanonicalPlan(this.rootDir, plan, sha); }
 
   async init() {
     assertNoSymlinkAncestors(this.rootDir, this.ledgerDir);
     return this._withLock(() => {
       const { plan, sha } = validatePlan(this.planPath);
+      this._authorizePlan(plan, sha);
       if (fs.existsSync(this.ledgerPath)) {
         const ledger = this._readLedger();
         if (ledger.frozen_plan_sha !== sha) fail("plan drift detected on init");
@@ -543,6 +550,7 @@ export class GoalDispatcher {
     return this._withLock(() => {
       const ledger = this._readLedger();
       const { plan, sha } = validatePlan(this.planPath);
+      this._authorizePlan(plan, sha);
       if (sha !== confirmationHash) fail("confirmation hash does not match current approved plan SHA");
       const frontier = this._frontier(ledger);
       if (frontier.inProgress.length) {

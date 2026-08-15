@@ -61,7 +61,7 @@ Future Conceptualize calls receive the approved probe artifact through a bounded
 
 ## Implementation status
 
-Implementation is deferred until after the nine-node direct-task-first functional deployment. Required work is:
+Implementation is deferred until after the 17-node direct-task-first functional deployment. Required work is:
 
 1. a dedicated probe Worker profile and probe agent;
 2. the ADR-020 `probing` routing row;

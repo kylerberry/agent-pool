@@ -14,19 +14,27 @@ sources:
 
 ## Status
 
-Proposed and awaiting exact-hash approval. The completed Pool Proof plan remains authoritative and has no ready nodes; its exact canonical bytes are archived at `docs/raw/plans/completed-pool-proof-build-dag.json`. The tested goal-plan validator now requires a detached approval record and verifies candidate, source, scope-review, archive, canonical-plan, and approver bindings. No record exists yet, so activation fails closed.
+Proposed and awaiting exact-hash approval. The completed Pool Proof plan remains authoritative and has no ready nodes; its exact canonical bytes are archived at `docs/raw/plans/completed-pool-proof-build-dag.json`. Dispatcher initialization and archive reset authorize exact plan bytes before persistent mutation. Structural-only plans cannot dispatch: only the pinned completed plan bypasses the detached candidate/source/scope/archive/canonical/approver chain, and markers or filesystem aliases cannot downgrade authorization. No deployment approval record exists yet, so activation fails closed.
 
 ## Critical path
 
-1. qualify exact Z.ai GLM-5.2/GLM-5.3 under tie-capable, Moonshot-fallback-only policy;
-2. parameterize the real dogfood runner;
-3. complete the credential-strip Agent Pool dogfood task;
-4. expose the durable direct-task-first service;
-5. activate full CRAFTS artifacts;
-6. activate grading/audit verdicts;
-7. complete controller failure/budget/recovery policy;
-8. deliver through accepted ADR-015 and mandatory Gate 2; and
-9. deploy/restore the service on one host with complete traceability.
+1. establish the deployment bootstrap policy and live-qualify exact GLM-5.2 as the active builder primary under tie-capable, Moonshot-fallback-only routing;
+2. live-qualify exact GLM-5.3 at high tier with no active role (parallel with 3 after node 1);
+3. parameterize the real dogfood runner;
+4. complete the credential-strip Agent Pool dogfood task;
+5. expose the durable direct-task-first service;
+6. accept and retain only schema-valid, append-only CRAFTS artifacts with verified transcript objects or `audit_incomplete`;
+7. activate the full CRAFTS phase conductor;
+8. emit immutable recomputed Tier-1 attestations;
+9. form Tier-2 composite verdicts and the immutable audit chain;
+10. govern classified failure, retry, freezing, and the five resolutions;
+11. enforce per-node/per-DAG budget ceilings (parallel with 12 after node 10);
+12. quarantine and classify discovered work without topology authority;
+13. reconcile queue, lease, result, startup, and migration interruptions idempotently;
+14. assemble reverified connected components as ADR-015 PRs awaiting Gate 2 (parallel with 10–13 after node 9); stale-green returns to governed failure handling with no GitHub side effect;
+15. complete or return awaiting PRs only through authorized, signature-verified, replay-protected human Gate-2 records; comments are inert bounded revision data;
+16. operate, back up, empty-host restore, and clean up the stack on one private host (parallel with unfinished delivery work); and
+17. converge the restored release through one controlled direct-task-to-Gate-2 run — the sole release claim.
 
 Free-form specs/Gate 1, Graphify scheduling, eval calibration, agent-assisted probes, and ADR-037/038 remain post-launch.
 

@@ -19,7 +19,7 @@ A failed probe or other topology/scope discovery may cause the controller to ope
 
 ## Consequences
 
-This proposal is not part of the nine-node functional deployment path. Direct tasks do not use decomposition or Gate 1, so planning PRs add no launch value. Reassess only when free-form specification intake and Gate 1 implementation begins.
+This proposal is not part of the 17-node functional deployment path. Direct tasks do not use decomposition or Gate 1, so planning PRs add no launch value. Reassess only when free-form specification intake and Gate 1 implementation begins.
 
 GitHub becomes the collaboration and audit surface for DAG construction without making GitHub permissions controller policy. The controller trusts only immutable merged-manifest evidence, not comments, mutable PR state, or a Worker report.
 

@@ -48,4 +48,4 @@ Security-sensitive, production-routed, credential-bearing, or expanded probe wor
 
 Probes become cheap one-call evidence producers instead of miniature feature builds. Their durable artifacts constrain later planning and reduce drift and speculative architecture. The controller remains deterministic and the model remains advisory.
 
-This capability is post-launch work, outside the nine-node functional deployment critical path. Implementation requires a probe Worker profile/agent, probing routing row, strict input/output schemas, evidence persistence/projection, deterministic verification, downstream C consumption, and hostile tests proving the probe cannot become a hidden controller.
+This capability is post-launch work, outside the 17-node functional deployment critical path. Implementation requires a probe Worker profile/agent, probing routing row, strict input/output schemas, evidence persistence/projection, deterministic verification, downstream C consumption, and hostile tests proving the probe cannot become a hidden controller.

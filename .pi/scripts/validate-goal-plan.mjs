@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { validatePlan } from "./goal-plan.mjs";
-import { validateFunctionalDeploymentActivation } from "./functional-deployment-approval.mjs";
+import { authorizeKnownCanonicalPlan } from "./functional-deployment-approval.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const readJson = (path) => JSON.parse(readFileSync(resolve(root, path), "utf8"));
@@ -31,7 +31,7 @@ if (!approval.approved_by || Number.isNaN(Date.parse(approval.approved_at))) {
 const dagPath = resolve(root, "docs/raw/plans/proposed-build-dag.json");
 const { plan: dag, sha: dagSha } = validatePlan(dagPath);
 try {
-  validateFunctionalDeploymentActivation(root, dag);
+  authorizeKnownCanonicalPlan(root, dag, dagSha);
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 }

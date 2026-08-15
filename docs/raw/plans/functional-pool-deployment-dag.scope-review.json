@@ -1,23 +1,40 @@
 {
   "schema_version": 1,
   "candidate_path": "docs/raw/plans/functional-pool-deployment-dag.candidate.json",
-  "candidate_sha256": "846b7d7de37563e6e43abc659569b8736a2b7605e3fee0295da63bda1dc61017",
+  "candidate_sha256": "82cfe59c88b57e5fbcea27ce26d6c2406fea360e8e3025390d920326b01a6b9a",
   "nodes": {
-    "model-policy-zai-qualification": {
-      "observable_outcome": "Both exact Z.ai models become eligible only after deterministic policy validation and real Pool Worker qualification.",
+    "deployment-bootstrap-policy-and-glm52-qualification": {
+      "observable_outcome": "Exact zai/glm-5.2 becomes eligible only after deterministic tiered policy validation and a real Pool Worker qualification, and is the active building primary.",
       "primary_invariant": "Only exact qualified models route; Moonshot is fallback-only and evaluator tier is never lower than builder tier.",
-      "acceptance_oracle": "Focused registry/policy/preflight suites plus retained real qualification reports for GLM-5.2 and GLM-5.3.",
-      "production_seam": "Canonical model registry, tie-capable Worker routing/preflight configuration, and real provider qualification boundary; probing runtime remains post-launch.",
+      "acceptance_oracle": "Focused exact-ID/alias/case/wildcard registry, tier-tie, role-route, and Moonshot-primary rejection suites plus one independently verified real pinned-Pi GLM-5.2 qualification report with cost, cleanup, and immutability checks.",
+      "production_seam": "Canonical model registry, tie-capable Worker routing/preflight configuration, and the real provider qualification boundary; probing runtime remains post-launch.",
       "blast_radius": "Model Routing and Evaluation, Worker preflight, launcher authentication/usage evidence, and paid qualification commands.",
       "non_goals": [
-        "Empirical model calibration or threshold derivation.",
-        "Approval of aliases, wildcards, future Z.ai models, or new providers.",
+        "GLM-5.3 registration, eligibility, or qualification (separate node).",
+        "A probing role, profile, or empirical calibration.",
         "Modification of retained Pool Proof evidence."
       ],
       "exceptions": {
         "cross_domain": "Exact authorization is unsafe without both deterministic Model Routing policy and executable Agent Execution qualification.",
         "multi_contract": "Registry, capability-tier, routing, preflight, and qualification-report contracts jointly define one model's eligibility.",
         "multi_suite": "Policy/preflight tests and real paid qualification evidence establish different halves of the same eligibility claim."
+      }
+    },
+    "glm53-eligibility-qualification": {
+      "observable_outcome": "Exact zai/glm-5.3 becomes high-tier eligible after its own real Pool Worker qualification while no active role references it.",
+      "primary_invariant": "GLM-5.3 cannot route anywhere, including probing, until this node's qualification passes, and stays unreferenced by active deployment routing afterward.",
+      "acceptance_oracle": "Exact-ID/high-tier tie and unreferenced-routing tests plus one independently verified real GLM-5.3 qualification report with the same credential, cost, cleanup, and immutability checks.",
+      "production_seam": "Shared registry/preflight and qualification-report path introduced by the bootstrap policy node.",
+      "blast_radius": "Canonical model registry entries, Worker preflight configuration, and one paid qualification command/report.",
+      "non_goals": [
+        "Any probing policy row or execution profile.",
+        "Active direct-task role routing changes.",
+        "Eval calibration."
+      ],
+      "exceptions": {
+        "cross_domain": "Eligibility requires deterministic Model Routing admission and a real Agent Execution qualification report.",
+        "multi_contract": "Reuses the registry, tier, preflight, and qualification-report contracts; no new contract is introduced.",
+        "multi_suite": null
       }
     },
     "parameterized-agent-pool-dogfood-runner": {
@@ -38,7 +55,7 @@
       }
     },
     "credential-strip-zai-dogfood": {
-      "observable_outcome": "A qualified Z.ai Worker produces an independently verified Agent Pool commit that strips copied provider credentials without breaking offline resolution.",
+      "observable_outcome": "A qualified GLM-5.2 Worker produces an independently verified Agent Pool commit that strips copied provider credentials without breaking offline resolution.",
       "primary_invariant": "Private models.json contains only required provider metadata; authentication remains solely in private auth storage.",
       "acceptance_oracle": "Credential-canary red/green test plus runner-owned commit, path, isolation, resolution, and cleanup verification.",
       "production_seam": "Launcher provider-metadata projection exercised through the reviewed dogfood manifest.",
@@ -71,16 +88,31 @@
         "multi_suite": "Each domain suite plus a service-level test is required to prove the vertical slice."
       }
     },
-    "full-crafts-attempt-runtime": {
-      "observable_outcome": "A production direct-task attempt completes the governed CRAFTS lifecycle with schema-valid append-only artifacts.",
-      "primary_invariant": "No phase advances without valid durable predecessor evidence, correct capabilities, and valid model independence.",
-      "acceptance_oracle": "Full Worker fixture proving sequencing, security checkpoint, bounded repair loops, capability denial, artifact revisions, transcript handling, and cleanup.",
-      "production_seam": "Fresh Worker conductor and Orchestration phase-artifact persistence.",
-      "blast_radius": "Full Worker profile/skill/agents/contracts, attempt runtime, artifact store, transcript adapter, and focused tests.",
+    "crafts-artifact-ledger-and-transcript-retention": {
+      "observable_outcome": "A direct attempt accepts only schema-valid, attempt-bound, criteria-complete, append-only phase revisions linked to verified transcript objects or recorded audit_incomplete state.",
+      "primary_invariant": "No phase artifact, failure context, invocation/evidence locator, or transcript metadata can be overwritten, substituted, or accepted without an existing attempt and a validated artifact contract.",
+      "acceptance_oracle": "Hostile binding/schema/hash/replay rejection tests, restart-persistent ingestion/query fixture, and one public direct-attempt artifact-ingestion fixture.",
+      "production_seam": "CRAFTS schema validator and artifact-object/transcript adapters at the Agent Execution → Orchestration ingestion boundary.",
+      "blast_radius": "Phase-artifact validator, transcript adapter, Orchestration phase_artifacts records, and focused tests.",
       "non_goals": [
-        "Composite grading or empirical thresholds.",
-        "Graphify and target-provided extension onboarding.",
-        "GitHub delivery."
+        "Phase sequencing or the conductor lifecycle.",
+        "Evaluator choice, reruns, Tier-1/Tier-2 verdicts, retry, budget, delivery."
+      ],
+      "exceptions": {
+        "cross_domain": "Agent Execution produces artifacts but only Orchestration ingestion can make them durable evidence.",
+        "multi_contract": "CRAFTS artifact, security-trigger, and transcript-object contracts define acceptance at one boundary.",
+        "multi_suite": "Schema/hostile-input suites and restart/persistence suites prove validation and durability separately."
+      }
+    },
+    "full-crafts-phase-conductor": {
+      "observable_outcome": "A production direct-task attempt executes the sole allowed C/security/R/A/F/T/S lifecycle with bounded repair loops and persisted handoffs.",
+      "primary_invariant": "No phase advances without the validated predecessor artifact, immutable original criteria, correct phase capabilities, and an enforceable non-lower independent evaluator pairing.",
+      "acceptance_oracle": "Full-worker fixture proving normal sequencing, one A/F and one T/F loop, security-trigger routing, capability denial, pairing preflight failure before paid work, invalid-artifact fail-closed behavior, and teardown after retention success and failure.",
+      "production_seam": "Full Worker profile/conductor, phase-scoped launcher tools, model-routing selection port, and the ledger ingestion port.",
+      "blast_radius": "Full Worker profile/skills/agents/contracts, deterministic conductor, phase grants, routing ports, and focused tests.",
+      "non_goals": [
+        "Machine verdicts or deterministic test re-verification.",
+        "Empirical thresholds, budgets, or GitHub delivery."
       ],
       "exceptions": {
         "cross_domain": "Agent Execution sequencing and Orchestration append-only persistence form one phase-gate invariant.",
@@ -88,16 +120,31 @@
         "multi_suite": "Worker preflight and domain behavior tests cover independent enforcement layers."
       }
     },
-    "grading-and-audit-verdicts": {
-      "observable_outcome": "Every completed CRAFTS attempt receives one tamper-evident composite verdict traceable to criteria, models, commits, suites, evidence, and cost.",
-      "primary_invariant": "No agent claim can substitute for deterministic Tier 1, actual independent Tier 2 provenance, or immutable audit linkage.",
-      "acceptance_oracle": "Verification and persistence mutation/hostile-input tests plus an end-to-end graded fixture.",
-      "production_seam": "Verification evidence validation and Orchestration append-only audit ingestion/query.",
-      "blast_radius": "Tier-1/Tier-2 contracts, verifier services, evidence consumers, SQLite records, audit queries, and tests.",
+    "tier1-evidence-attestation": {
+      "observable_outcome": "Every completed CRAFTS implementation attempt receives an immutable Tier-1 pass/fail attestation bound to independently recomputed red/green evidence.",
+      "primary_invariant": "Worker prose and agent-authored paths cannot make Tier 1 pass; missing red/green evidence fails closed.",
+      "acceptance_oracle": "Base-red/post-green end-to-end fixture plus mutation tests for every binding: suite, commit, image, command, allowed path, criterion, environment.",
+      "production_seam": "General Verification Tier-1 service consuming R/F artifacts from the Orchestration artifact ledger.",
+      "blast_radius": "Verification domain Tier-1 contracts/service, evidence consumers, attestation records, and tests; sealed Pool-Proof evidence unchanged.",
       "non_goals": [
-        "Eval calibration or empirical winner publication.",
-        "GitHub PR assembly.",
-        "Verification writing implementation code."
+        "Evaluator scoring or composite verdict calculation.",
+        "Calibration thresholds or delivery."
+      ],
+      "exceptions": {
+        "cross_domain": "A fail-closed recomputed decision is a Verification outcome that Orchestration only records.",
+        "multi_contract": "Suite, commit, environment, path, and criterion evidence contracts jointly define one attestation.",
+        "multi_suite": "Mutation/hostile-input suites and the end-to-end fixture establish recomputation and retention separately."
+      }
+    },
+    "tier2-composite-verdict-audit": {
+      "observable_outcome": "Each Tier-1-complete attempt receives exactly one append-only composite verdict with a criterion-queryable audit chain using actual independent evaluator provenance and bootstrap gates.",
+      "primary_invariant": "Composite pass is impossible unless Tier 1 passed, criteria fit is complete, no blocking finding exists, evaluator independence is proven from an actual invocation, and every audit link is valid.",
+      "acceptance_oracle": "End-to-end graded fixture plus identical/conflicting replay and link-tamper tests for evaluator identity, tier relation, criterion, cost, artifact, suite, commit, image, and verdict link.",
+      "production_seam": "Tier-2/composite verifier and append-only Orchestration audit ingestion/query.",
+      "blast_radius": "Tier-2/composite contracts, verifier services, evaluator provenance records, SQLite audit records, queries, and tests.",
+      "non_goals": [
+        "Empirical threshold derivation or model-policy changes.",
+        "Retries, budgets, reconciliation, or PR assembly."
       ],
       "exceptions": {
         "cross_domain": "A verdict without durable audit persistence, or persistence without verification, cannot establish the observable outcome.",
@@ -105,55 +152,137 @@
         "multi_suite": "Verification and Orchestration tests establish both validation and append-only durability."
       }
     },
-    "controller-failure-budget-recovery": {
-      "observable_outcome": "The controller reaches one correct auditable terminal state across failure, spend exhaustion, restart, duplicate delivery, and discovered work.",
-      "primary_invariant": "SQLite-authoritative fenced state prevents duplicate paid attempts and silent topology/scope mutation while unrelated branches continue.",
-      "acceptance_oracle": "Deterministic fault injection across retry, budget, lease, queue, migration, result, reconciliation, discovery, and cleanup windows.",
-      "production_seam": "Orchestration lifecycle state machine, queue adapter, leases, result handling, reconciliation, budgets, and escalation.",
-      "blast_radius": "Orchestration contracts/store/services, queue integration, cleanup recovery, migrations, operational audit, and tests.",
+    "classified-failure-retry-and-resolution": {
+      "observable_outcome": "Logic/integration failure counters, branch freezing, retry context, and the five governed resolutions produce one auditable lifecycle result while unrelated branches continue.",
+      "primary_invariant": "Only authorized resolutions change counters or frozen branches; escalation and every resolution are durable and auditable.",
+      "acceptance_oracle": "Property and lifecycle tests for both ceilings, downward-only overrides, branch freeze versus unrelated frontier continuation, retry reset only through authorized resolution, and auditable retry/manual-fix/cancel/force-pass/amend handling including integration re-verification classification.",
+      "production_seam": "Orchestration lifecycle state machine, store, and dispatch consuming the durable composite verdict and failure context.",
+      "blast_radius": "Orchestration lifecycle/store/dispatch, attempt numbering, failure-context projection, and focused tests.",
       "non_goals": [
-        "Multi-host consensus or transactional outbox/inbox.",
-        "Automatic DAG amendment.",
-        "ADR-038 merge-based dependency unlock or provider hard spend controls."
+        "Spend accounting or budget admission.",
+        "Discovered-work intake.",
+        "Queue restart semantics or backup."
+      ],
+      "exceptions": {
+        "cross_domain": "Consumes Agent Execution failure evidence but Orchestration alone mutates lifecycle truth.",
+        "multi_contract": "Retry, classification, freeze, and resolution contracts share terminal-state semantics and cannot contradict each other.",
+        "multi_suite": null
+      }
+    },
+    "controller-budget-guardrails": {
+      "observable_outcome": "Validated cumulative backend cost stops a node or new DAG dispatch at the correct ceiling without losing in-flight results.",
+      "primary_invariant": "Every attempted backend cost is retained with valid currency semantics and charged exactly once to the incurring attempt; restart never resets totals.",
+      "acceptance_oracle": "Failed-primary-plus-fallback charged once, node and DAG exhaustion paths, restart-persistent totals, and currency hostility tests.",
+      "production_seam": "Cost ingestion and dispatch admission at the Orchestration boundary.",
+      "blast_radius": "Cost-report persistence/query, dispatch admission gate, audit state, and focused tests.",
+      "non_goals": [
+        "Fallback routing implementation (Agent Execution owns the fallback ledger).",
+        "Retry classification mechanics, discovery records, host backup/restore."
+      ],
+      "exceptions": {
+        "cross_domain": "Agent Execution produces fallback cost evidence; Orchestration alone enforces the admission gate.",
+        "multi_contract": null,
+        "multi_suite": null
+      }
+    },
+    "discovered-work-quarantine": {
+      "observable_outcome": "Bounded provenance-bound discoveries are classified as adjacent backlog, correctness/security blocker, or inert amendment recommendation without widening scope or mutating topology.",
+      "primary_invariant": "Discovery can never widen an attempt, enqueue work, alter dependencies or priorities, or mutate approved topology; blocker records escalate only through the governed failure path.",
+      "acceptance_oracle": "Hostile Worker-result/redaction tests, no enqueue/dependency/priority mutation assertions, amendment-recommendation inertness absent renewed Gate 1, and blocker escalation through the governed failure lifecycle.",
+      "production_seam": "Worker result boundary and append-only Orchestration evidence/classification records.",
+      "blast_radius": "Worker result contract, discovery validation/redaction, Orchestration classification records, and focused tests.",
+      "non_goals": [
+        "Decomposer invocation, partial re-decomposition, or executable amendment.",
+        "Gate 1 approval or probe evidence."
+      ],
+      "exceptions": {
+        "cross_domain": "A discovery attestation with no controller validation/persistence cannot be accepted safely; the bounded Worker-result boundary is the minimum seam.",
+        "multi_contract": null,
+        "multi_suite": null
+      }
+    },
+    "queue-and-restart-recovery": {
+      "observable_outcome": "Every ordinary controller/queue/lease/result interruption reconciles idempotently without duplicate paid work, lost terminal state, stale authority, or omitted counters, budgets, or discoveries.",
+      "primary_invariant": "SQLite-authoritative fenced state rejects stale, duplicate, or conflicting actors and terminal results and never infers success from partial state.",
+      "acceptance_oracle": "Crash-window matrix for committed-attempt/missing-job, duplicate job/result, expired lease/stale result, and result authorization; stale lease/token/CAS tests; fail-closed unsafe migration/startup; owned-sandbox recovery; and reopen verification preserving IDs, counters, budget totals, and discovery evidence.",
+      "production_seam": "Deterministic jobs, queue adapter, leases, SQLite lifecycle, startup reconciliation, and migrations.",
+      "blast_radius": "Orchestration contracts/store/services, queue integration, sandbox cleanup recovery, migrations, and tests.",
+      "non_goals": [
+        "Compose packaging, encrypted off-host backup, or empty-host restore.",
+        "Formal multi-host guarantees or transactional outbox/inbox."
       ],
       "exceptions": {
         "cross_domain": "Owned-resource recovery consumes Agent Execution outcomes but Orchestration alone mutates lifecycle truth.",
-        "multi_contract": "Retry, budget, lease, queue, result, discovery, and reconciliation contracts share terminal-state semantics and cannot contradict each other.",
+        "multi_contract": "Lease, queue, result, CAS, migration, and reconciliation contracts share terminal-state semantics.",
         "multi_suite": "State-machine, persistence, queue, sandbox-recovery, and migration suites cover distinct interruption boundaries."
       }
     },
-    "adr015-github-gate2-delivery": {
-      "observable_outcome": "Machine-green connected-component work reaches one reviewable GitHub PR and cannot complete without authorized human Gate 2.",
-      "primary_invariant": "Only reverified component commits with complete provenance enter trusted host-side delivery; GitHub never grants Worker authority.",
-      "acceptance_oracle": "Delivery/integration tests with replayed/forged events and one controlled PR lifecycle through human Gate 2.",
-      "production_seam": "Integration re-verification, ADR-015 PR assembly, trusted GitHub adapter, Gate 2, and governed revision intake.",
-      "blast_radius": "Integration and Delivery domain, orchestration delivery state, GitHub configuration/webhooks, credentials, and tests.",
+    "adr015-component-pr-assembly": {
+      "observable_outcome": "An accepted connected component is reverified at its composed head and materialized idempotently as exactly one provenance-bearing GitHub PR awaiting Gate 2.",
+      "primary_invariant": "Only reverified component commits with complete provenance enter trusted host-side delivery; no GitHub side effect occurs before successful re-verification, and stale/conflicting failures return to the governed failure lifecycle.",
+      "acceptance_oracle": "Deterministic component/grouping and provenance tests, integration re-verification tests proving changed suite hashes or red/missing evidence prevent PR creation/update with no GitHub side effect, GitHub-adapter contract tests for repository/ref/identity binding and idempotent branch/commit/PR effects, and a credential-canary test proving GitHub credentials occur only in the trusted host adapter.",
+      "production_seam": "Integration re-verification, ADR-015 PR assembly, and the trusted GitHub adapter.",
+      "blast_radius": "Integration and Delivery domain, orchestration delivery state, GitHub configuration/credentials, and tests.",
       "non_goals": [
-        "ADR-037 planning PRs.",
-        "ADR-038 one-PR-per-node mainline integration.",
-        "Automatic execution of comments or target deployment."
+        "Gate-2 review authorization or comment processing.",
+        "ADR-037 planning PRs or ADR-038 node-level mainline integration.",
+        "Automatic deployment."
       ],
       "exceptions": {
-        "cross_domain": "Verification, Orchestration, and Delivery are inseparable for a governed reviewable GitHub outcome.",
-        "multi_contract": "Component manifest, commit provenance, verdict, PR, webhook, review, and revision identities jointly prevent bypass and replay.",
-        "multi_suite": "Integration, delivery-adapter, webhook, credential-isolation, and end-to-end PR tests cover separate external boundaries."
+        "cross_domain": "Verification, Orchestration, and Delivery are inseparable for a governed reviewable GitHub outcome; the governed failure dependency makes the authoritative resolution boundary precede any privileged adapter use.",
+        "multi_contract": "Component manifest, commit provenance, verdict, and PR identities jointly prevent bypass and replay.",
+        "multi_suite": "Integration, delivery-adapter, and credential-isolation tests cover separate external boundaries."
       }
     },
-    "single-host-functional-pool-deployment": {
-      "observable_outcome": "A fresh single host can deploy, run, recover, restore, and audit the complete direct-task-to-Gate-2 service.",
-      "primary_invariant": "Every live effect and recovery decision is health-visible, least-privilege, durable, correlated, restorable, and backed by prior node contracts.",
-      "acceptance_oracle": "Empty-host deployment, restart-window tests, encrypted backup/restore drill, credential canaries, one real direct-task-to-Gate-2 trace, and complete hash traversal.",
+    "github-gate2-governed-review": {
+      "observable_outcome": "Only an authorized signature-verified replay-protected human review record can complete or return an awaiting PR, while comments become bounded non-executable revision inputs.",
+      "primary_invariant": "No caller, Worker, comment, small-diff exception, or automation can force completion without the authorized review record; comment content can never cause command, dispatch, topology, Gate-2, or delivery-state effects.",
+      "acceptance_oracle": "Controlled approval/rejection PR lifecycle plus forged signature, replay, wrong repository/ref/identity, caller/Worker/automation bypass, and hostile signed-comment/prompt-injection inertness tests.",
+      "production_seam": "GitHub event adapter and delivery state transitions under Gate-2 authority.",
+      "blast_radius": "Integration and Delivery domain, webhook/event verification, revision-input records, and tests.",
+      "non_goals": [
+        "PR assembly or integration re-verification.",
+        "Comment-driven execution or ADR-037 planning PRs.",
+        "ADR-038 merge-event dependency unlock semantics or target deployment."
+      ],
+      "exceptions": {
+        "cross_domain": "External GitHub events cross into trusted delivery state only through signature/replay verification owned by Integration and Delivery.",
+        "multi_contract": "Webhook, review-record, and revision-input contracts prevent bypass and execution.",
+        "multi_suite": "Event-verification and lifecycle suites cover separate authorization boundaries."
+      }
+    },
+    "single-host-operations-baseline": {
+      "observable_outcome": "A private pre-release host can start, diagnose, restart, migrate, back up, empty-host restore, retain, and clean up the direct-task/CRAFTS/grading/recovery stack without credential leakage, delivery adapters, delivery credentials, or duplicate terminal effects.",
+      "primary_invariant": "Every operational effect is health-visible, least-privilege, durable, fenced, requires no delivery-owned capability or credential, and claims no functional delivery before the release-convergence node.",
+      "acceptance_oracle": "Pinned composition, health/status, credential canaries over the injected Z.ai/queue/encryption/backup secrets, restart windows, WAL-safe encrypted off-host backup/restore drill, migration rollback, retention, and owned-resource cleanup tests.",
       "production_seam": "Single-host service composition and operational controls over already implemented application capabilities.",
       "blast_radius": "Deployment definitions, service configuration, health/logging, backup/restore, migrations, retention, operator docs, and system tests.",
       "non_goals": [
-        "New business capability, free-form specs, Gate 1, Graphify, eval calibration, or agent-assisted probes.",
-        "ADR-037/038, multi-host/multi-tenant operation, formal SLO/on-call, or automatic target deployment.",
-        "Model-session or attempt-sandbox reuse."
+        "Public release claim or Gate-2 capability proof.",
+        "Trusted GitHub adapter startup, GitHub/delivery credential injection, or any delivery-host composition requirement (owned by functional-pool-release-convergence).",
+        "New business capability or workflow.",
+        "Multi-host/multi-tenant operation or formal SLO/on-call."
       ],
       "exceptions": {
-        "cross_domain": "Deployment and one end-to-end trace necessarily compose all previously accepted runtime domains without changing their policy.",
-        "multi_contract": "Service health, secret, backup, restore, migration, retention, and trace contracts jointly define recoverable deployment readiness.",
-        "multi_suite": "Deterministic, Docker, retained-evidence, restart, backup/restore, and real end-to-end lanes establish different release properties."
+        "cross_domain": "Host composition exercises all previously accepted runtime domains without changing their policy or depending on the parallel delivery branch.",
+        "multi_contract": "Service health, secret, backup, restore, migration, and retention contracts jointly define recoverable operation.",
+        "multi_suite": "Composition, restart, backup/restore, credential-canary, and cleanup lanes establish different operational properties."
+      }
+    },
+    "functional-pool-release-convergence": {
+      "observable_outcome": "The restored single-host release composes the trusted host-side GitHub adapter under least-privilege credential injection and credential canaries, then completes one controlled authenticated direct task through qualified GLM-5.2 routing, full CRAFTS, grading, ADR-015 PR assembly, mandatory Gate 2, and final GitHub disposition with traversable IDs and hashes.",
+      "primary_invariant": "No live task is accepted as production-complete without the complete chain; GitHub credentials remain confined to the least-privilege trusted delivery adapter, and sealed Pool Proof and dogfood evidence remain unchanged.",
+      "acceptance_oracle": "One retained end-to-end restored-host trace including trusted host-side GitHub adapter composition, least-privilege GitHub credential injection, and credential-canary checks, plus deterministic aggregate, Docker, retained-report, backup/restore, cleanup, and immutable Pool Proof checks with independent hash traversal.",
+      "production_seam": "Release composition, including trusted host-side GitHub adapter composition and host credential injection, over accepted delivery and operations seams; no new policy seam.",
+      "blast_radius": "Release composition, the trusted host-side GitHub adapter configuration and its least-privilege credentials, one controlled end-to-end run, retained trace evidence, and release verification lanes.",
+      "non_goals": [
+        "New capability, probing, Gate 1, Graphify, or eval calibration.",
+        "ADR-037/038 or automatic target deployment."
+      ],
+      "exceptions": {
+        "cross_domain": "The release claim necessarily composes the delivery and operations branches, including the delivery-host GitHub adapter seam neither branch could verify alone, without reimplementing either.",
+        "multi_contract": "Reuses every prior node contract; the only new binding is the traversable release trace with the delivery-host composition contract.",
+        "multi_suite": "Deterministic, Docker, retained-evidence, backup/restore, real end-to-end, and credential-canary lanes establish different release properties."
       }
     }
   }

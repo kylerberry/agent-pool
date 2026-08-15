@@ -11,7 +11,7 @@ created: 2026-08-13
 
 Deploy the fastest trustworthy personal version of Agent Pool: authenticated caller-authored direct tasks execute in fresh Pool Workers, pass full CRAFTS and machine grading, survive ordinary single-host interruption, and arrive as reviewable GitHub pull requests behind human Gate 2.
 
-This phase follows the completed Pool Proof. It does not rewrite its ledger, reports, or evidence. The exact completed canonical plan is durably archived at `docs/raw/plans/completed-pool-proof-build-dag.json` with SHA-256 `fe62bd9b156976401f4571aea4fd60bcb512b005927b161e5d3e4610dce2d8e5`; it remains recoverable after the active canonical plan path eventually advances. The new unapproved candidate is `docs/raw/plans/functional-pool-deployment-dag.candidate.json` at SHA-256 `846b7d7de37563e6e43abc659569b8736a2b7605e3fee0295da63bda1dc61017`.
+This phase follows the completed Pool Proof. It does not rewrite its ledger, reports, or evidence. The exact completed canonical plan is durably archived at `docs/raw/plans/completed-pool-proof-build-dag.json` with SHA-256 `fe62bd9b156976401f4571aea4fd60bcb512b005927b161e5d3e4610dce2d8e5`; it remains recoverable after the active canonical plan path eventually advances. The new unapproved candidate is `docs/raw/plans/functional-pool-deployment-dag.candidate.json` at SHA-256 `82cfe59c88b57e5fbcea27ce26d6c2406fea360e8e3025390d920326b01a6b9a`.
 
 ## Product cut
 
@@ -56,25 +56,35 @@ Provider subscription/quota exhaustion is an availability outcome, not evidence 
 
 Eval-derived routing is post-launch calibration. The deployed bootstrap must be labeled provisional and retain the evaluator rule: evaluator model differs from the builder and is never lower tier; prefer a higher qualified tier, permit a tied different model only when no higher qualified evaluator is available.
 
-## Nine-node critical path
+## Seventeen-node critical path
 
 | # | Node | Observable outcome | Binding decisions |
 |---:|---|---|---|
-| 1 | `model-policy-zai-qualification` | Both exact Z.ai models are safely eligible under tiered, Moonshot-fallback-only routing. | ADR-007/008/020/021/030/032 |
-| 2 | `parameterized-agent-pool-dogfood-runner` | One reviewed Agent Pool task can use the real Minimal Pool Runtime without fixture-specific code. | Pool Proof boundary; ADR-028/032/035 |
-| 3 | `credential-strip-zai-dogfood` | A real Z.ai Worker removes copied provider credentials and the runner verifies the commit. | Stage 1 owned follow-up; ADR-032 |
-| 4 | `direct-task-first-service` | Authenticated direct tasks durably reach real Workers without decomposition. | ADR-010/014/027/028/031/035 |
-| 5 | `full-crafts-attempt-runtime` | Production attempts execute the complete governed phase lifecycle with durable artifacts. | ADR-020/026/029/032; CRAFTS contract |
-| 6 | `grading-and-audit-verdicts` | Every attempt receives one tamper-evident composite verdict and audit chain. | ADR-004/014/017/025/026 |
-| 7 | `controller-failure-budget-recovery` | Failure, spend, retry, discovery, lease, and restart behavior are bounded and recoverable. | ADR-011/012/013/016/023/024/031/033/036 |
-| 8 | `adr015-github-gate2-delivery` | Machine-green work reaches a mandatory human-reviewed connected-component PR. | ADR-015/017/031/032; ADR-037/038 deferred |
-| 9 | `single-host-functional-pool-deployment` | The direct-task-first pool runs and restores on one host with complete end-to-end traceability. | ADR-014/031/032/033 |
+| 1 | `deployment-bootstrap-policy-and-glm52-qualification` | Exact GLM-5.2 becomes the qualified active builder primary under tiered, Moonshot-fallback-only routing. | ADR-007/008/020/021/030/032 |
+| 2 | `glm53-eligibility-qualification` | Exact GLM-5.3 qualifies at high tier and stays unreferenced by active roles. | ADR-007/020/030/032; ADR-039 probing deferred |
+| 3 | `parameterized-agent-pool-dogfood-runner` | One reviewed Agent Pool task can use the real Minimal Pool Runtime without fixture-specific code. | Pool Proof boundary; ADR-028/032/035 |
+| 4 | `credential-strip-zai-dogfood` | A real Z.ai Worker removes copied provider credentials and the runner verifies the commit. | Stage 1 owned follow-up; ADR-032 |
+| 5 | `direct-task-first-service` | Authenticated direct tasks durably reach real Workers without decomposition. | ADR-010/014/027/028/031/035 |
+| 6 | `crafts-artifact-ledger-and-transcript-retention` | Only schema-valid, attempt-bound, append-only phase artifacts with verified transcript objects or `audit_incomplete` are retained. | ADR-014/026; CRAFTS contract; ADR-035 |
+| 7 | `full-crafts-phase-conductor` | Production attempts execute the complete governed phase lifecycle with durable artifacts. | ADR-020/026/029/032; CRAFTS contract |
+| 8 | `tier1-evidence-attestation` | Every implementation attempt receives an immutable recomputed Tier-1 pass/fail attestation. | ADR-004/017/025 |
+| 9 | `tier2-composite-verdict-audit` | Every Tier-1-complete attempt receives one composite verdict and audit chain. | ADR-004/014/017/025/026 |
+| 10 | `classified-failure-retry-and-resolution` | Failure classification, branch freezing, and the five governed resolutions form one auditable lifecycle. | ADR-011/012/016/023/024 |
+| 11 | `controller-budget-guardrails` | Validated cumulative cost stops nodes and new DAG dispatch at the correct ceiling. | ADR-013 |
+| 12 | `discovered-work-quarantine` | Bounded discoveries are classified without topology authority; blockers escalate through node 10. | ADR-024/036 |
+| 13 | `queue-and-restart-recovery` | Queue, lease, result, startup, and migration interruptions reconcile idempotently. | ADR-013/023/028/031; ADR-033 recovery semantics |
+| 14 | `adr015-component-pr-assembly` | A reverified connected component becomes exactly one provenance-bearing PR awaiting Gate 2; stale-green returns to governed failure handling with no GitHub side effect. | ADR-015/017/031/032; ADR-037/038 deferred |
+| 15 | `github-gate2-governed-review` | Only an authorized signature-verified replay-protected human record completes or returns an awaiting PR; comments are inert bounded revision data. | ADR-015/017/031 |
+| 16 | `single-host-operations-baseline` | A private pre-release host operates, backs up, restores, and cleans up the stack without credential leakage. | ADR-033 |
+| 17 | `functional-pool-release-convergence` | The restored single-host release completes one controlled direct task through Gate 2 with complete traceability. | ADR-014/031/032/033 |
+
+After node 1, nodes 2 and 3 may run concurrently; after node 10, nodes 11 and 12 may run concurrently; after node 9, the controller branch (10–13) and the delivery branch (14–15) may run concurrently; after node 13, node 16 may run concurrently with unfinished delivery work. Node 17 is the sole convergence and release gate.
 
 The candidate contains the exact change specifications and acceptance criteria. ADR-035 scope-review metadata is stored separately and never widens ADR-018's five-field node schema or Worker payload.
 
 ## Probe execution decision
 
-Agent-assisted probes are accepted as a post-launch capability, not part of these nine nodes. A probe resolves a material uncertainty by mocking a boundary, discovering unknowns, and producing evidence that constrains later CRAFTS sessions. It is not normal implementation work and does not run full or lite CRAFTS.
+Agent-assisted probes are accepted as a post-launch capability, not part of these 17 nodes. A probe resolves a material uncertainty by mocking a boundary, discovering unknowns, and producing evidence that constrains later CRAFTS sessions. It is not normal implementation work and does not run full or lite CRAFTS.
 
 A probe uses one fresh Worker session and one `probing` model call with bounded tools, paths, time, tokens, and cost. It emits a schema-valid evidence artifact containing hypothesis status (`supported`, `disproved`, or `inconclusive`), observations, commands, durable fixtures/contracts/mocks or non-routable seams, assumptions confirmed/rejected, dead ends, artifact hashes, and non-authoritative DAG implications. The deterministic controller validates and persists the artifact; the probe cannot grade, route, dispatch, amend topology, or expand its own scope.
 
@@ -86,7 +96,7 @@ Per ADR-020, probing is a distinct model-call role. Bootstrap routing is `zai/gl
 
 ADR-015 remains authoritative for this phase. A one-node direct task naturally produces one component and one PR. Connected components retain one commit per node and re-verification against the composed head.
 
-ADR-037 remains proposed and deferred: GitHub planning PRs do not accelerate direct-task-first deployment. ADR-038 remains proposed and deferred: node-level mainline integration will be reassessed from real delivery evidence. Node 8 records PR size, branch drift, integration retries, dependency-unlock latency, and operator friction for that decision.
+ADR-037 remains proposed and deferred: GitHub planning PRs do not accelerate direct-task-first deployment. ADR-038 remains proposed and deferred: node-level mainline integration will be reassessed from real delivery evidence. Node 14 records PR size, branch drift, and integration retries; node 15 records review disposition, dependency-unlock latency, and operator friction for that decision.
 
 ## Explicit post-launch work
 
@@ -105,12 +115,12 @@ The deployment excludes, in priority order after launch:
 
 This specification and candidate are proposed only. No node is ready and the completed `docs/raw/plans/proposed-build-dag.json` remains authoritative until Kyler approves the exact candidate and source hashes.
 
-Repository Builder tooling now enforces `docs/raw/specs/schemas/functional-pool-deployment-approval.schema.json`: `.pi/scripts/validate-goal-plan.mjs` recognizes this candidate by kind/source/root node and requires a detached approval record whose candidate, source, scope-review, and completed-plan-archive hashes match exact bytes. It also proves the canonical plan equals the candidate plus approval and that approval identity/time match. Missing records, generic notes, byte drift, archive drift, scope mismatch, or canonical-plan drift fail before activation. No detached approval record exists yet, so the candidate remains unapproved and cannot activate.
+Repository Builder tooling now enforces `docs/raw/specs/schemas/functional-pool-deployment-approval.schema.json`. Structural DAG validity is never dispatch authority: dispatcher initialization and archive reset validate and then authorize exact plan bytes before any ledger or archive mutation. The exact completed Pool Proof plan SHA-256 is the sole approval-free case; every other plan requires the complete detached approval chain binding candidate, source, scope review, completed-plan archive, canonical candidate-plus-approval equality, and approver identity/time. Plan markers, paths, symlinks, hard links, path swaps, and governance-file presence cannot select a weaker authorization path. Missing records, generic notes, byte drift, archive drift, scope mismatch, or canonical-plan drift fail before activation. No detached approval record exists yet, so the candidate remains unapproved and cannot activate.
 
 Activation must:
 
 1. display the candidate, source, scope-review, and completed-plan-archive paths/hashes;
-2. validate the nine ADR-018 nodes, topology, and separate ADR-035 scope-review record;
+2. validate the 17 ADR-018 nodes, topology, and separate ADR-035 scope-review record;
 3. obtain Kyler's detached exact-hash approval conforming to the deployment-approval schema;
 4. run the tested deployment-approval validator and require exact file-byte matches;
 5. generate a canonical approved plan by adding only validator-supported approval metadata;
@@ -118,4 +128,4 @@ Activation must:
 7. atomically replace the active canonical plan while preserving the tracked completed-plan archive;
 8. run `node .pi/scripts/validate-goal-plan.mjs` against the activated canonical plan;
 9. archive-reset the completed Pool Proof ledger with approver attribution and verified old-plan hash; and
-10. dispatch only the new ready root, `model-policy-zai-qualification`.
+10. dispatch only the new ready root, `deployment-bootstrap-policy-and-glm52-qualification`.

@@ -22,7 +22,7 @@ A probe is a one-call bounded Worker profile for mocking boundaries, discovering
 - Deterministic validation; no self-grading, dispatch, routing, or topology mutation.
 - Supported evidence may unlock approved dependents after integration; disproved evidence blocks and recommends amendment; inconclusive evidence fails.
 - Future C must consume the artifact, acknowledge settled uncertainty, and avoid recorded dead ends.
-- Implementation is post-launch, outside the nine-node deployment path.
+- Implementation is post-launch, outside the 17-node deployment path.
 
 ## Related
 

@@ -15,7 +15,7 @@ The supervisor orchestrator accepts a free-form feature spec, decomposes it into
 
 ## Current build phase
 
-Pool Proof is complete. The next phase is a proposed, exact-hash-gated nine-node direct-task-first deployment: qualify Z.ai, parameterize and dogfood the real runner, then activate the direct-task service, full CRAFTS/grading, recovery policy, accepted ADR-015 GitHub Gate 2, and single-host restore/traceability. The candidate is not active; the current ready frontier remains empty until approval.
+Pool Proof is complete. The next phase is a proposed, exact-hash-gated 17-node direct-task-first deployment: establish the bootstrap policy and qualify GLM-5.2 (with GLM-5.3 qualification in parallel), parameterize and dogfood the real runner, then activate the direct-task service, CRAFTS ledger/conductor, Tier-1/Tier-2 grading, the governed failure/retry lifecycle with budget, discovery, and recovery branches, accepted ADR-015 PR assembly behind GitHub Gate 2, the single-host operations baseline, and one release-convergence proof. The candidate is not active; the current ready frontier remains empty until approval.
 
 ## Operating model
 
@@ -32,6 +32,7 @@ Pool Proof is complete. The next phase is a proposed, exact-hash-gated nine-node
 ## Gating and evidence
 
 - Decomposition output is persisted and human-approved before dispatch.
+- Structural DAG validation is not dispatch authority. Dispatcher initialization and archive reset authorize exact plan bytes before persistent mutation; only the pinned completed plan bypasses detached approval, and no marker or filesystem alias selects weaker handling.
 - Tier 1 is deterministic and blocking: tests, lint, typecheck, static/security checks, and required red/green evidence.
 - Tier 2 applies a binary evidence-backed criteria-fit gate and anchored maintainability rubric; empirical thresholds replace bootstrap mode after calibration.
 - Every phase emits a schema-valid artifact; attempts carry failure context so retries do not start blind.
