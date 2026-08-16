@@ -36,7 +36,7 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/sources/2026-04-13_pool-worker-execution-context-schema|Pool Worker Execution Context Schema]] — `docs/raw/specs/schemas/pool-worker-execution-context.schema.json`
 - [[wiki/sources/2026-07-31_pool-worker-attempt-contract-schema|Pool Worker Attempt Contract Schema]] — `docs/raw/specs/schemas/pool-worker-attempt-contract.schema.json`
 - [[wiki/sources/2026-07-22_orchestrator-spec|Supervisor Orchestrator — Consolidated Specification]] — `docs/raw/specs/orchestrator-spec.md`
-- [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment]] — active 17-node build phase; exact-hash activation retained as historical evidence
+- [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment]] — superseded 2026-08-16 by the four-node replacement milestone plan; retained as historical evidence
 - [[wiki/sources/2026-08-13_adr-037-github-planning-pr-gate1|ADR-037: GitHub Planning PRs as Editable Gate 1 Manifests]] — proposed/deferred
 - [[wiki/sources/2026-08-13_adr-038-node-level-mainline-integration|ADR-038: Node-Level Mainline Integration]] — proposed/deferred
 - [[wiki/sources/2026-08-13_probe-node-workflow-proposal|Agent-Assisted Probe Workflow]] — accepted design; implementation deferred

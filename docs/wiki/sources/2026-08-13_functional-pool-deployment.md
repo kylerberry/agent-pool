@@ -3,7 +3,7 @@ title: Functional Pool Deployment — Direct-Task-First Build Phase
 type: source
 tags: [source, plan, deployment, direct-task, pool]
 created: 2026-08-13
-updated: 2026-08-13
+updated: 2026-08-16
 sources:
   - docs/raw/specs/functional-pool-deployment.md
   - docs/raw/plans/functional-pool-deployment-dag.candidate.json
@@ -14,7 +14,7 @@ sources:
 
 ## Status
 
-Approved and activated on 2026-08-15; the phase remains the active build plan. The detached exact-hash record that authorized activation is retained as **historical evidence** and no longer governs local dispatch: current authority is the approved plan's embedded human approval plus the ledger's frozen plan SHA (see `docs/raw/context/local-repository-builder-workflow.md`). The completed Pool Proof canonical bytes remain archived at `docs/raw/plans/completed-pool-proof-build-dag.json`. The active 17-node plan has one unreserved ready root: `deployment-bootstrap-policy-and-glm52-qualification`.
+Approved and activated on 2026-08-15; **superseded on 2026-08-16** by the four-node replacement milestone plan (`docs/raw/plans/proposed-build-dag.json`) before any node started — no 17-node work was reserved or executed. The superseded plan's exact bytes are archived at `docs/raw/plans/superseded-functional-deployment-build-dag.json`. The detached exact-hash approval artifacts are retained **historical evidence** and have not governed local dispatch since the 2026-08-16 governance simplification (`docs/raw/context/local-repository-builder-workflow.md`). The completed Pool Proof canonical bytes remain archived at `docs/raw/plans/completed-pool-proof-build-dag.json`.
 
 ## Critical path
 

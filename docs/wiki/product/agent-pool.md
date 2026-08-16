@@ -12,7 +12,7 @@ sources:
 
 The warm agent pool is the DAG-unaware execution substrate: ready capacity slots accept atomic jobs and start a fresh Pool Worker Pi process/session and workspace for every attempt. Slots may persist; conversational state never does. These runtime workers are distinct from Repository Builder sessions developing this codebase.
 
-Pool Proof is complete. The active 17-node build phase first qualifies Z.ai and dogfoods a parameterized real-repository runner, then activates the direct-task service, full CRAFTS/grading, recovery, accepted ADR-015 GitHub Gate 2, and single-host deployment. Its sole ready root remains unreserved; full free-form supervision and probing implementation are post-launch.
+Pool Proof is complete. The active four-node replacement milestone plan generalizes the proven runner to one approved real-repository task, composes authenticated direct-task intake through a SQLite-backed claim loop to a fresh Worker, builds the general deterministic verifier, and surfaces verified output as a local review branch and PR-ready artifact. Its sole ready root (`generalize-proven-runner`) remains unreserved; the superseded 17-node governance-heavy phase, full free-form supervision, and probing implementation remain post-launch work.
 
 ## Key constraints
 
@@ -30,4 +30,4 @@ The supervisor orchestrator builds on the pool by dispatching DAG nodes as ordin
 
 - [[wiki/architecture/supervisor-orchestrator|Supervisor Orchestrator]]
 - [[wiki/architecture/orchestrator-adr-map|Orchestrator ADR Map]]
-- [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment]]
+- [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment (superseded)]]

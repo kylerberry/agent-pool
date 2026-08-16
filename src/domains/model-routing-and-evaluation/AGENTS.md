@@ -2,7 +2,7 @@
 
 ## Terms
 
-- **Approved model**: One exact provider-qualified ID in the active canonical registry. The current implementation has the legacy five-model registry. The proposed target adds `zai/glm-5.2` and `zai/glm-5.3`; neither is active or eligible before exact-hash plan activation and real qualification.
+- **Approved model**: One exact provider-qualified ID in the active canonical registry. The current implementation has the legacy five-model registry. The proposed target adds `zai/glm-5.2` and `zai/glm-5.3`; neither is active or eligible before approved-plan activation and real qualification.
 - **Availability snapshot**: A strictly validated caller-provided set of currently usable approved models.
 - **Routing policy**: A versioned, actor-scoped mapping of roles to approved primary and fallback models.
 - **Routing decision**: Immutable, credential-free evidence of a deterministic role selection.

@@ -60,11 +60,22 @@ describe("replacement milestone DAG candidate", () => {
     assert.doesNotThrow(() => validatePlanObject(withApproval, Buffer.byteLength(JSON.stringify(withApproval))));
   });
 
-  test("the active proposed-build-dag.json remains distinct from the candidate", () => {
+  test("the active proposed-build-dag.json is the approved replacement milestone", () => {
     const active = readJson("docs/raw/plans/proposed-build-dag.json");
-    const activeIds = active.nodes.map((node) => node.id).sort();
-    const candidateIds = candidate.nodes.map((node) => node.id).sort();
-    assert.notDeepEqual(activeIds, candidateIds);
-    assert.equal(active.approval.approved_by !== undefined, true);
+    assert.equal(typeof active.approval?.approved_by, "string");
+    assert.equal(active.domain_boundaries_changed, false);
+    assert.deepEqual(active.nodes.map((node) => node.id), candidate.nodes.map((node) => node.id));
+    assert.deepEqual(
+      Object.fromEntries(active.nodes.map((node) => [node.id, [...node.depends_on]])),
+      Object.fromEntries(candidate.nodes.map((node) => [node.id, [...node.depends_on]])),
+    );
+  });
+
+  test("the superseded 17-node plan is archived byte-for-byte and distinct", () => {
+    const superseded = readJson("docs/raw/plans/superseded-functional-deployment-build-dag.json");
+    assert.equal(superseded.nodes.length, 17);
+    assert.equal(typeof superseded.approval?.approved_by, "string");
+    const activeIds = readJson("docs/raw/plans/proposed-build-dag.json").nodes.map((node) => node.id).sort();
+    assert.notDeepEqual(superseded.nodes.map((node) => node.id).sort(), activeIds);
   });
 });

@@ -106,9 +106,12 @@ agent may treat them as authorization for dispatch, initialization, or archive-r
 - `docs/raw/plans/functional-pool-deployment-dag.candidate.json`;
 - `docs/raw/plans/functional-pool-deployment-dag.scope-review.json`;
 - `docs/raw/plans/functional-pool-deployment-approval.json` (detached exact-hash approval);
-- `docs/raw/plans/completed-pool-proof-build-dag.json`.
+- `docs/raw/plans/completed-pool-proof-build-dag.json`;
+- `docs/raw/plans/superseded-functional-deployment-build-dag.json` (the 17-node plan approved
+  2026-08-15 and superseded 2026-08-16 before its root started).
 
-The active local plan is `docs/raw/plans/proposed-build-dag.json` with its embedded
-human-attributed `approval`. The unapproved four-node replacement candidate
-(`docs/raw/plans/replacement-milestone-dag.candidate.json`) is not active and requires a
-separate future approval and activation operation.
+The active local plan is the four-node replacement milestone at `docs/raw/plans/proposed-build-dag.json`
+with its embedded human-attributed `approval` (Kyler, 2026-08-16). The proposal artifact
+`docs/raw/plans/replacement-milestone-dag.candidate.json` is retained unchanged as evidence of
+what was approved; checkouts whose ledger freezes a superseded plan's SHA must `archive-reset`
+before dispatching the active plan.

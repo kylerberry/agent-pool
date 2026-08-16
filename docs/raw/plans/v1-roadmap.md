@@ -2,16 +2,18 @@
 
 ## Current approved build phase
 
-The completed Pool Proof is followed by the active 17-node direct-task-first deployment plan:
+The active plan is the four-node replacement milestone at `docs/raw/plans/proposed-build-dag.json`, approved by Kyler on 2026-08-16 under `docs/raw/context/local-repository-builder-workflow.md` (embedded human approval plus frozen plan SHA):
 
-- `docs/raw/specs/functional-pool-deployment.md` (historical evidence)
-- `docs/raw/plans/proposed-build-dag.json` (the active approved plan)
+1. generalize the proven runner to one approved real-repository task (`generalize-proven-runner`);
+2. compose authenticated direct-task intake through a SQLite-backed claim loop to one fresh Worker (`compose-direct-intake-to-execution`);
+3. build the general deterministic verifier for arbitrary approved task manifests (`general-deterministic-verifier`);
+4. surface verified output as a local review branch and PR-ready artifact (`surface-reviewable-output`).
 
-Local dispatch is governed generically per `docs/raw/context/local-repository-builder-workflow.md`: the plan's embedded human approval plus the frozen plan SHA. The exact candidate/source/scope/archive hashes approved on 2026-08-15 activated the phase and remain historical evidence. `deployment-bootstrap-policy-and-glm52-qualification` is the sole ready root; it remains unreserved until explicitly started.
+`generalize-proven-runner` is the sole ready root; it remains unreserved until explicitly started. Redis/BullMQ, Tier-2 grading, GitHub automation, connected-component assembly, and the operations baseline are deferred until the tracer path demonstrates the need.
 
-An unapproved four-node replacement milestone candidate exists at `docs/raw/plans/replacement-milestone-dag.candidate.json` (generalize-proven-runner → compose-direct-intake-to-execution + general-deterministic-verifier → surface-reviewable-output). It is not activated; activation requires a separate future approval and operation.
+The 17-node functional deployment plan approved on 2026-08-15 was superseded on 2026-08-16 before its root started. Its exact bytes are archived at `docs/raw/plans/superseded-functional-deployment-build-dag.json`; the 17-node sequence below is retained as the reference path for post-milestone work.
 
-## Deployment critical path
+## Superseded 17-node functional deployment path (reference)
 
 1. exact Z.ai GLM-5.2 scope, tie-capable tiers, Moonshot-fallback-only policy, and real GLM-5.2 qualification (`deployment-bootstrap-policy-and-glm52-qualification`);
 2. real GLM-5.3 qualification at high tier with no active role (`glm53-eligibility-qualification`);

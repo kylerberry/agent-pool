@@ -106,11 +106,17 @@ describe("local governance documentation authority", () => {
     }
   });
 
-  test("the active plan is approved and distinct from the unactivated replacement candidate", () => {
+  test("the active plan is the approved replacement milestone and the superseded 17-node plan is archived", () => {
     const active = JSON.parse(read("docs/raw/plans/proposed-build-dag.json"));
     const candidate = JSON.parse(read("docs/raw/plans/replacement-milestone-dag.candidate.json"));
     assert.equal(typeof active.approval?.approved_by, "string");
     assert.equal(candidate.approval, undefined);
-    assert.notDeepEqual(active.nodes.map((node) => node.id).sort(), candidate.nodes.map((node) => node.id).sort());
+    assert.deepEqual(
+      active.nodes.map((node) => node.id).sort(),
+      candidate.nodes.map((node) => node.id).sort(),
+    );
+    const superseded = JSON.parse(read("docs/raw/plans/superseded-functional-deployment-build-dag.json"));
+    assert.equal(superseded.nodes.length, 17);
+    assert.equal(typeof superseded.approval?.approved_by, "string");
   });
 });

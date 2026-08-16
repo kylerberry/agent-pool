@@ -3,7 +3,7 @@ title: Supervisor Orchestrator
 type: architecture
 tags: [orchestrator, dag, agents]
 created: 2026-07-22
-updated: 2026-08-13
+updated: 2026-08-16
 sources:
   - docs/raw/specs/orchestrator-spec.md
   - docs/raw/adr/orchestrator/
@@ -15,7 +15,7 @@ The supervisor orchestrator accepts a free-form feature spec, decomposes it into
 
 ## Current build phase
 
-Pool Proof is complete. The active exact-hash-gated phase is a 17-node direct-task-first deployment: establish the bootstrap policy and qualify GLM-5.2 (with GLM-5.3 qualification in parallel), parameterize and dogfood the real runner, then activate the direct-task service, CRAFTS ledger/conductor, Tier-1/Tier-2 grading, the governed failure/retry lifecycle with budget, discovery, and recovery branches, accepted ADR-015 PR assembly behind GitHub Gate 2, the single-host operations baseline, and one release-convergence proof. The sole ready root is `deployment-bootstrap-policy-and-glm52-qualification`; it is not reserved or started.
+Pool Proof is complete. The 17-node functional deployment plan approved on 2026-08-15 was superseded on 2026-08-16 before its root started; its bytes are archived at `docs/raw/plans/superseded-functional-deployment-build-dag.json`. The active plan is the four-node replacement milestone: generalize the proven runner to one approved real-repository task, compose authenticated direct-task intake through a SQLite-backed claim loop to a fresh Worker, build the general deterministic verifier, and surface verified output as a local review branch and PR-ready artifact. The sole ready root is `generalize-proven-runner`; it is not reserved or started. Tier-2 grading, budgets, discovery quarantine, restart recovery, component PR assembly, automated Gate 2, and the operations baseline remain deferred until the tracer path demonstrates need.
 
 ## Operating model
 
