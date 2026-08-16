@@ -23,7 +23,7 @@ A Repository Builder builds the infrastructure and environment in which Pool Wor
 
 Project-local `/goal` and `.pi/scripts/goal-dispatcher.mjs` keep strict, gitignored evidence for Repository Builder slices: approved-DAG hash, attempts, immutable CRAFTS phase revisions, and completion state. This is development-harness bookkeeping—not Pool Worker authority, product-runtime controller state, or evidence that the supervisor/pool already exists.
 
-Triggered work persists a plan-security checkpoint before Render and allows one C repair plus one re-review; a second critical/high result permits only `stop-and-rescope`. Assess and Tighten each allow one bounded `review → F → re-review` cycle. Further non-security findings require one review-hash-bound, human-attributed decision to defer within existing criteria or stop and rescope.
+Triggered work persists a plan-security checkpoint before Render and allows one C repair plus one re-review; a second critical/high result permits only `stop-and-rescope`. Assess and Tighten each allow one bounded `review → F → re-review` cycle. Further non-security findings require one direct attempt-scoped, human-attributed decision binding the exact exhausted phase/checkpoint target: defer within existing criteria or stop and rescope.
 
 Explicit retries preserve terminal attempts. Existing v1 journals upgrade through an exact-byte backup, while materially changed approved plans archive the old run and start a fresh journal. These are development-harness controls only—not supervisor or Pool Worker behavior.
 

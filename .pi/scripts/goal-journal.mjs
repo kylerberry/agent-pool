@@ -127,8 +127,61 @@ export function computeFrontier(ledger) {
   return result;
 }
 
-function phaseDecision(attempt, record) {
-  return attempt.decisions?.find((decision) => decision.bound_to === record.sha256) || null;
+// Direct attempt-scoped decision targets: {type: "phase"|"checkpoint", name, revision}. A
+// decision matches its target only when its attempt_id equals the attempt and the target is
+// structurally identical, or when it is a legacy hash-bound record whose hash resolves to
+// exactly one record of the same attempt with that derived target. Ambiguity or absence never
+// authorizes work.
+function sameTarget(a, b) {
+  return isObject(a) && isObject(b) && a.type === b.type && a.name === b.name && a.revision === b.revision;
+}
+
+function phaseRecordByRevision(attempt, phase, revision) {
+  return phaseRecords(attempt, phase)[revision - 1] || null;
+}
+
+function checkpointRecordByRevision(attempt, kind, revision) {
+  const records = attempt.checkpoints?.filter((checkpoint) => checkpoint.kind === kind) || [];
+  return records[revision - 1] || null;
+}
+
+export function legacyBoundTarget(attempt, hash) {
+  if (typeof hash !== "string" || !/^[0-9a-f]{64}$/.test(hash)) return null;
+  const matches = [];
+  for (const checkpoint of attempt.checkpoints || []) {
+    if (checkpoint.sha256 === hash) matches.push({ type: "checkpoint", name: checkpoint.kind, revision: (attempt.checkpoints || []).filter((item) => item.kind === checkpoint.kind).indexOf(checkpoint) + 1 });
+  }
+  for (const phase of PHASES) {
+    const records = phaseRecords(attempt, phase);
+    for (const record of records) {
+      if (record.sha256 === hash) matches.push({ type: "phase", name: phase, revision: records.indexOf(record) + 1 });
+    }
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function resolveDecisionTarget(attempt, decision) {
+  if (decision?.attempt_id !== undefined) {
+    return decision.attempt_id === attempt.attempt_id && isObject(decision.target) ? decision.target : null;
+  }
+  if (decision?.bound_to !== undefined) return legacyBoundTarget(attempt, decision.bound_to);
+  return null;
+}
+
+function decisionForTarget(attempt, target) {
+  return attempt.decisions?.find((decision) => sameTarget(resolveDecisionTarget(attempt, decision), target)) || null;
+}
+
+function phaseDecision(attempt, phase) {
+  const records = phaseRecords(attempt, phase);
+  if (!records.length) return null;
+  return decisionForTarget(attempt, { type: "phase", name: phase, revision: records.length });
+}
+
+function checkpointDecision(attempt, kind) {
+  const records = attempt.checkpoints?.filter((checkpoint) => checkpoint.kind === kind) || [];
+  if (!records.length) return null;
+  return decisionForTarget(attempt, { type: "checkpoint", name: kind, revision: records.length });
 }
 
 export function boundFixTarget(attempt) {
@@ -136,7 +189,7 @@ export function boundFixTarget(attempt) {
     const records = phaseRecords(attempt, phase);
     const latest = records.at(-1);
     if (latest && latest.status === "needs_fix") {
-      const decision = phaseDecision(attempt, latest);
+      const decision = phaseDecision(attempt, phase);
       if (!decision || decision.outcome !== "defer-and-proceed") {
         const boundF = phaseRecords(attempt, "F").find((f) => f.bound_to === latest.sha256);
         if (!boundF || boundF.status !== "passed") return latest;
@@ -149,8 +202,7 @@ export function boundFixTarget(attempt) {
 function revisableOrDecision(attempt, phase) {
   const records = phaseRecords(attempt, phase);
   if (records.length < 2) return { phase };
-  const latest = records.at(-1);
-  return { decision: latest.sha256 };
+  return { decision: { type: "phase", name: phase, revision: records.length } };
 }
 
 function phaseEffectivelyPassed(attempt, phase) {
@@ -159,7 +211,7 @@ function phaseEffectivelyPassed(attempt, phase) {
   if (!latest) return false;
   if (latest.status === "passed") return true;
   if (latest.status === "needs_fix") {
-    const decision = phaseDecision(attempt, latest);
+    const decision = phaseDecision(attempt, phase);
     return decision?.outcome === "defer-and-proceed";
   }
   return false;
@@ -202,9 +254,8 @@ export function nextAction(attempt) {
     if (!latestPlanSecurity) return { checkpoint: "plan-security" };
     if (latestPlanSecurity.status === "needs-replan") {
       if (psCount < 2) return { phase: "C" };
-      const boundTo = latestPlanSecurity.sha256;
-      const decision = phaseDecision(attempt, { sha256: boundTo });
-      if (!decision) return { decision: boundTo };
+      const decision = checkpointDecision(attempt, "plan-security");
+      if (!decision) return { decision: { type: "checkpoint", name: "plan-security", revision: psCount } };
       if (decision.outcome === "stop-and-rescope") return { outcome: "stop-and-rescope" };
       const hasCriticalHigh = (latestPlanSecurity.findings || []).some((f) => ["critical", "high"].includes(f.severity));
       if (hasCriticalHigh) fail("defer-and-proceed is not allowed for unresolved critical/high plan-security findings");
@@ -218,12 +269,12 @@ export function nextAction(attempt) {
     if (latest.status === "passed") continue;
     if (["R", "S"].includes(phase)) return revisableOrDecision(attempt, phase);
     if (latest.status === "needs_fix") {
-      const decision = phaseDecision(attempt, latest);
+      const decision = phaseDecision(attempt, phase);
       if (decision?.outcome === "defer-and-proceed") continue;
       if (decision?.outcome === "stop-and-rescope") return { outcome: "stop-and-rescope" };
 
       const needsFixCount = records.filter((record) => record.status === "needs_fix").length;
-      if (needsFixCount >= 2) return { decision: latest.sha256 };
+      if (needsFixCount >= 2) return { decision: { type: "phase", name: phase, revision: records.length } };
 
       const boundF = phaseRecords(attempt, "F").find((f) => f.bound_to === latest.sha256);
       if (!boundF || boundF.status !== "passed") return { phase: "F" };
@@ -409,23 +460,52 @@ export function validateCheckpoint(checkpoint, { attempt }) {
   return checkpoint;
 }
 
+function validateDecisionTarget(target) {
+  exactKeys(target, ["type", "name", "revision"], "decision target");
+  if (target.type === "phase") {
+    if (!PHASES.has(target.name)) fail("decision target phase name is invalid");
+  } else if (target.type === "checkpoint") {
+    if (!CHECKPOINT_KINDS.has(target.name)) fail("decision target checkpoint name is invalid");
+  } else {
+    fail("decision target type is invalid");
+  }
+  if (!Number.isInteger(target.revision) || target.revision < 1) fail("decision target revision is invalid");
+  return target;
+}
+
+// New decisions bind directly to the attempt and an exact {type,name,revision} target. Legacy
+// hash-bound records remain structurally valid as historical evidence but cannot be recorded as
+// new decisions.
 export function validateDecision(decision, { attempt }) {
-  exactKeysOptional(decision, ["kind", "bound_to", "outcome", "decided_by", "reason"], ["path", "sha256", "recorded_at"], "human decision");
+  const legacy = decision?.bound_to !== undefined && decision?.attempt_id === undefined;
+  if (legacy) {
+    exactKeysOptional(decision, ["kind", "bound_to", "outcome", "decided_by", "reason"], ["path", "sha256", "recorded_at"], "human decision");
+  } else {
+    exactKeysOptional(decision, ["kind", "attempt_id", "target", "outcome", "decided_by", "reason"], ["path", "sha256", "recorded_at"], "human decision");
+  }
   if (decision.kind !== "human-decision") fail("decision kind is invalid");
-  if (!/^[0-9a-f]{64}$/.test(decision.bound_to)) fail("decision bound_to hash is invalid");
+  if (legacy) {
+    if (!/^[0-9a-f]{64}$/.test(decision.bound_to)) fail("decision bound_to hash is invalid");
+  } else {
+    if (typeof decision.attempt_id !== "string" || !decision.attempt_id.trim()) fail("decision attempt_id is invalid");
+    if (decision.attempt_id !== attempt.attempt_id) fail("decision attempt_id does not match the attempt");
+    validateDecisionTarget(decision.target);
+  }
   if (!DECISION_OUTCOMES.has(decision.outcome)) fail("decision outcome is invalid");
   if (typeof decision.decided_by !== "string" || !decision.decided_by.trim()) fail("decision decided_by is invalid");
   if (typeof decision.reason !== "string" || !decision.reason.trim()) fail("decision reason is invalid");
 
-  const boundCheckpoint = attempt.checkpoints?.find((checkpoint) => checkpoint.sha256 === decision.bound_to);
-  const boundPhase = [...PHASES].flatMap((phase) => phaseRecords(attempt, phase).map((record) => ({ phase, record })))
-    .find(({ record }) => record.sha256 === decision.bound_to);
   if (decision.outcome === "defer-and-proceed") {
-    if (boundCheckpoint?.kind === "plan-security") {
-      const hasCriticalHigh = (boundCheckpoint.findings || []).some((f) => ["critical", "high"].includes(f.severity));
+    const target = resolveDecisionTarget(attempt, decision);
+    if (target?.type === "checkpoint") {
+      const checkpoint = checkpointRecordByRevision(attempt, target.name, target.revision);
+      const hasCriticalHigh = (checkpoint?.findings || []).some((f) => ["critical", "high"].includes(f.severity));
       if (hasCriticalHigh) fail("defer-and-proceed is not allowed for unresolved critical/high plan-security findings");
-    } else if (!boundPhase || !["A", "T"].includes(boundPhase.phase) || boundPhase.record.status !== "needs_fix") {
-      fail("defer-and-proceed is allowed only for exhausted A or T review findings");
+    } else {
+      const record = target ? phaseRecordByRevision(attempt, target.name, target.revision) : null;
+      if (!target || target.type !== "phase" || !["A", "T"].includes(target.name) || !record || record.status !== "needs_fix") {
+        fail("defer-and-proceed is allowed only for exhausted A or T review findings");
+      }
     }
   }
 
@@ -450,9 +530,13 @@ export function assertCanRecordCheckpoint(attempt, checkpoint) {
   return true;
 }
 
-export function assertCanRecordDecision(attempt, boundTo) {
+export function assertCanRecordDecision(attempt, decision) {
   const expected = nextAction(attempt);
-  if (!expected || expected.complete || expected.decision !== boundTo) fail("no human decision is expected for this bound hash");
+  if (!expected || expected.complete || typeof expected.decision !== "object") fail("no human decision is expected for this attempt");
+  if (decision?.bound_to !== undefined || typeof decision?.attempt_id !== "string") fail("no human decision is expected for this attempt; new decisions must bind directly to the attempt and target");
+  if (decision.attempt_id !== attempt.attempt_id || !sameTarget(decision.target, expected.decision)) {
+    fail("no human decision is expected for the supplied target");
+  }
   return true;
 }
 

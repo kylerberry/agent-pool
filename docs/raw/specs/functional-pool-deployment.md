@@ -1,17 +1,25 @@
 ---
 audience: repository-builder
 subject: product-runtime
-status: proposed-awaiting-exact-hash-approval
+status: historical-evidence
 created: 2026-08-13
 ---
 
 # Functional Pool Deployment — Direct-Task-First Build Phase
 
+> **Historical (non-authoritative for local dispatch).** This specification and its exact-hash
+> approval artifacts (`functional-pool-deployment-dag.candidate.json`, its all-node scope review,
+> and `functional-pool-deployment-approval.json`) are retained as immutable evidence of the
+> 2026-08-15 activation. They no longer govern local Repository Builder dispatch: current
+> authority is `docs/raw/context/local-repository-builder-workflow.md` — a structurally valid
+> plan with one human-attributed `approval` object and the ledger's frozen plan SHA. The active
+> plan remains `docs/raw/plans/proposed-build-dag.json`.
+
 ## Purpose
 
 Deploy the fastest trustworthy personal version of Agent Pool: authenticated caller-authored direct tasks execute in fresh Pool Workers, pass full CRAFTS and machine grading, survive ordinary single-host interruption, and arrive as reviewable GitHub pull requests behind human Gate 2.
 
-This phase follows the completed Pool Proof. It does not rewrite its ledger, reports, or evidence. The exact completed canonical plan is durably archived at `docs/raw/plans/completed-pool-proof-build-dag.json` with SHA-256 `fe62bd9b156976401f4571aea4fd60bcb512b005927b161e5d3e4610dce2d8e5`; it remains recoverable after the active canonical plan path eventually advances. The new unapproved candidate is `docs/raw/plans/functional-pool-deployment-dag.candidate.json` at SHA-256 `82cfe59c88b57e5fbcea27ce26d6c2406fea360e8e3025390d920326b01a6b9a`.
+This phase follows the completed Pool Proof. It does not rewrite its ledger, reports, or evidence. The exact completed canonical plan is durably archived at `docs/raw/plans/completed-pool-proof-build-dag.json` with SHA-256 `fe62bd9b156976401f4571aea4fd60bcb512b005927b161e5d3e4610dce2d8e5`; it remains recoverable after the active canonical plan path eventually advances. The activation-time candidate `docs/raw/plans/functional-pool-deployment-dag.candidate.json` at SHA-256 `82cfe59c88b57e5fbcea27ce26d6c2406fea360e8e3025390d920326b01a6b9a` was approved and activated on 2026-08-15; its approval artifacts are retained as immutable evidence.
 
 ## Product cut
 
@@ -113,9 +121,14 @@ The deployment excludes, in priority order after launch:
 
 ## Approval and activation
 
-This specification and candidate are proposed only. No node is ready and the completed `docs/raw/plans/proposed-build-dag.json` remains authoritative until Kyler approves the exact candidate and source hashes.
+> **Activation-time historical wording.** This section preserves the approval gates as they
+> read before activation. Kyler's exact-hash approval was then obtained and the 2026-08-15
+> activation completed; the approval artifacts are retained as immutable evidence only (see
+> the header banner). Nothing in this section is current local dispatch authority.
 
-Repository Builder tooling now enforces `docs/raw/specs/schemas/functional-pool-deployment-approval.schema.json`. Structural DAG validity is never dispatch authority: dispatcher initialization and archive reset validate and then authorize exact plan bytes before any ledger or archive mutation. The exact completed Pool Proof plan SHA-256 is the sole approval-free case; every other plan requires the complete detached approval chain binding candidate, source, scope review, completed-plan archive, canonical candidate-plus-approval equality, and approver identity/time. Plan markers, paths, symlinks, hard links, path swaps, and governance-file presence cannot select a weaker authorization path. Missing records, generic notes, byte drift, archive drift, scope mismatch, or canonical-plan drift fail before activation. No detached approval record exists yet, so the candidate remains unapproved and cannot activate.
+At drafting time this specification and candidate were proposed only. No node was ready and the completed `docs/raw/plans/proposed-build-dag.json` remained authoritative until Kyler approved the exact candidate and source hashes.
+
+Repository Builder tooling then enforced `docs/raw/specs/schemas/functional-pool-deployment-approval.schema.json`. Structural DAG validity is never dispatch authority: dispatcher initialization and archive reset validate and then authorize exact plan bytes before any ledger or archive mutation. The exact completed Pool Proof plan SHA-256 is the sole approval-free case; every other plan requires the complete detached approval chain binding candidate, source, scope review, completed-plan archive, canonical candidate-plus-approval equality, and approver identity/time. Plan markers, paths, symlinks, hard links, path swaps, and governance-file presence cannot select a weaker authorization path. Missing records, generic notes, byte drift, archive drift, scope mismatch, or canonical-plan drift fail before activation. At that time no detached approval record existed, so the candidate remained unapproved until activation; the subsequently recorded detached approval completed the activation, and the approval chain is retained as immutable evidence.
 
 Activation must:
 

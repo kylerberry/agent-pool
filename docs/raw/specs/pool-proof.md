@@ -1,7 +1,7 @@
 ---
 audience: repository-builder
 subject: product-runtime
-status: proposed
+status: historical-evidence
 created: 2026-08-05
 ---
 
@@ -10,6 +10,10 @@ created: 2026-08-05
 ## Status and authority
 
 This specification is **proposed**. It defines the next bounded build phase but does not authorize implementation, replacement of the approved build DAG, or reset of the local Repository Builder ledger.
+
+> **Historical (non-authoritative for local dispatch).** The Pool Proof build phase is complete
+> and its exact-hash governance is retained as immutable evidence only. Current local Repository
+> Builder dispatch authority is `docs/raw/context/local-repository-builder-workflow.md`.
 
 Until Kyler approves this specification and its candidate DAG:
 

@@ -17,7 +17,7 @@ A DAG node is the smallest independently verifiable vertical slice that preserve
 ## Key decisions
 
 - Split independently acceptable outcomes and unrelated cleanup, refactoring, documentation, or follow-on capability work.
-- Permit cross-domain/contract/suite work only where inseparable for one outcome; require a concise scope rationale at Gate 1.
+- Permit cross-domain/contract/suite work only where inseparable for one outcome; record a concise rationale only for **exceptional** nodes in an optional sidecar — ordinary nodes need no scope metadata.
 - Preserve ADR-018’s exact five emitted fields. Non-goals and scope rationale are proposal-review metadata, never Worker payload or runtime state.
 - A Worker cannot broaden an approved node; use [[wiki/sources/2026-08-13_adr-036-discovered-work-and-dag-amendment|discovered-work records]] for new findings.
 

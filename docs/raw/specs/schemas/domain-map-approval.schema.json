@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "domain-map-approval.schema.json",
   "title": "ADR-034 Domain Map Approval Record",
-  "description": "Durable, mechanically checkable approval record for the ADR-034 human-approved bounded-domain map. The record binds the approved map file to its SHA-256 so the /goal skill can detect tampering or drift before feature-slice dispatch.",
+  "description": "Durable, mechanically checkable approval record for the ADR-035 bounded-domain map. Required only for plans declaring domain_boundaries_changed: true; the record binds the approved map file to its SHA-256 so the /goal skill can detect tampering or drift before dispatch of such plans.",
   "type": "object",
   "additionalProperties": false,
   "required": ["map_path", "map_sha256", "approved_by", "approved_at"],

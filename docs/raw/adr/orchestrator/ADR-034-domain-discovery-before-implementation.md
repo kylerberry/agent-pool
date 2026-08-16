@@ -22,3 +22,7 @@ Subsequent domain changes follow normal ADR/spec and S-phase documentation rules
 ## Consequences
 
 The autonomous build starts with explicit ownership and stable vocabulary rather than file-first architecture. The initial map may evolve, but changes are deliberate and documented rather than incidental.
+
+## Amendment (2026-08-16): conditional map governance
+
+The initial domain-discovery gate is unchanged, but re-approving the domain map for every feature plan is not required. Local Repository Builder plans carry a plan-level boolean `domain_boundaries_changed`; only a plan declaring `true` must present the approved domain-map record with a matching map SHA-256 before dispatch. Absence of the signal (legacy plans) and `false` mean no boundary change and perform no map reads; non-boolean values fail closed. The signal is a human-approved semantic declaration. See `docs/raw/context/local-repository-builder-workflow.md`.

@@ -2,13 +2,14 @@
 
 ## Current approved build phase
 
-The completed Pool Proof is followed by the approved 17-node direct-task-first deployment plan:
+The completed Pool Proof is followed by the active 17-node direct-task-first deployment plan:
 
-- `docs/raw/specs/functional-pool-deployment.md`
-- `docs/raw/plans/functional-pool-deployment-dag.candidate.json`
-- `docs/raw/plans/functional-pool-deployment-dag.scope-review.json`
+- `docs/raw/specs/functional-pool-deployment.md` (historical evidence)
+- `docs/raw/plans/proposed-build-dag.json` (the active approved plan)
 
-The exact candidate/source/scope/archive hashes were approved on 2026-08-15 and activated through the guarded `/goal` path. `deployment-bootstrap-policy-and-glm52-qualification` is the sole ready root; it remains unreserved until explicitly started.
+Local dispatch is governed generically per `docs/raw/context/local-repository-builder-workflow.md`: the plan's embedded human approval plus the frozen plan SHA. The exact candidate/source/scope/archive hashes approved on 2026-08-15 activated the phase and remain historical evidence. `deployment-bootstrap-policy-and-glm52-qualification` is the sole ready root; it remains unreserved until explicitly started.
+
+An unapproved four-node replacement milestone candidate exists at `docs/raw/plans/replacement-milestone-dag.candidate.json` (generalize-proven-runner → compose-direct-intake-to-execution + general-deterministic-verifier → surface-reviewable-output). It is not activated; activation requires a separate future approval and operation.
 
 ## Deployment critical path
 

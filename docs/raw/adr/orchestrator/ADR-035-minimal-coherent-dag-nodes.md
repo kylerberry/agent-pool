@@ -21,9 +21,9 @@ Every proposed DAG node represents exactly one independently verifiable outcome.
 
 A node must be split when it contains two outcomes that can be accepted independently, bundles a refactor/cleanup/documentation change not required to establish its outcome, or relies on later node work to make its own acceptance meaningful.
 
-A node may cross domains, change more than one durable contract, or require multiple acceptance suites only when those changes are inseparable for one correct observable outcome. The proposal records a concise scope rationale for each such exception. It is a Gate 1 review requirement, not permission to broaden the node after approval.
+A node may cross domains, change more than one durable contract, or require multiple acceptance suites only when those changes are inseparable for one correct observable outcome. The proposal records a concise scope rationale for each such **exceptional** node in an optional sidecar; ordinary nodes need no scope metadata. It is a Gate 1 review requirement, not permission to broaden the node after approval.
 
-ADR-018’s emitted node schema remains exactly five fields. Scope rationale and non-goals are proposal-review metadata keyed to a node ID; they are not Worker payload, runtime state, or model-authoritative topology. A future proposal-validator implementation must mechanically reject missing required scope metadata and surface cross-domain/contract/suite exceptions for Gate 1 review. It cannot mechanically prove minimality; that remains an explicit human approval judgment.
+ADR-018’s emitted node schema remains exactly five fields. Scope rationale and non-goals are proposal-review metadata keyed to a node ID; they are not Worker payload, runtime state, or model-authoritative topology. A proposal validator must mechanically validate the optional exceptional-only sidecar when present (repository-contained regular file, plan-node-ID subset, concise non-empty rationale per exceptional node) and surface cross-domain/contract/suite exceptions for Gate 1 review. It cannot mechanically prove minimality; that remains an explicit human approval judgment.
 
 Once Gate 1 approves a DAG, a Worker executes only the approved node outcome. Newly identified work follows ADR-036; it is not folded into the active attempt.
 

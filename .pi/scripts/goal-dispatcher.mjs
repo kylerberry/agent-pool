@@ -24,7 +24,6 @@ import {
   validatePhaseArtifact,
 } from "./goal-journal.mjs";
 import { validatePlan } from "./goal-plan.mjs";
-import { authorizeKnownCanonicalPlan } from "./functional-deployment-approval.mjs";
 
 const BOUNDS = {
   max_approver_length: 256,
@@ -97,6 +96,7 @@ export class GoalDispatcher {
     const resolvedPlan = path.isAbsolute(planPath) ? path.resolve(planPath) : path.resolve(this.rootDir, planPath);
     this.planPath = fs.realpathSync(resolvedPlan);
     if (!isWithin(this.rootDir, this.planPath)) fail("plan path must be inside the repository root");
+    this.planRelative = path.relative(this.rootDir, this.planPath);
     this.ledgerBase = path.join(this.rootDir, ".pi", "goal-runs");
     this.ledgerDir = path.join(this.ledgerBase, this.runId);
     this.ledgerPath = path.join(this.ledgerDir, "ledger.json");
@@ -132,7 +132,7 @@ export class GoalDispatcher {
     return normalizeLedger(ledger);
   }
   _writeLedger(ledger) { ledger.updated_at = new Date().toISOString(); atomicWriteJson(this.ledgerPath, ledger); }
-  _assertNoDrift(ledger) { const current = sha256File(this.planPath); if (current !== ledger.frozen_plan_sha) fail(`plan drift detected: frozen ${ledger.frozen_plan_sha}, current ${current}`); }
+  _assertNoDrift(ledger) { const { sha } = this._verifiedPlanSnapshot(); if (sha !== ledger.frozen_plan_sha) fail(`plan drift detected: frozen ${ledger.frozen_plan_sha}, current ${sha}`); }
   _guardIdentity(nodeId, attemptId, nextActionValue = null) {
     const guard = { run_id: this.runId, node_id: nodeId, attempt_id: attemptId, workspace: this.rootDir };
     if (nextActionValue !== null) guard.next_action = nextActionValue;
@@ -170,16 +170,16 @@ export class GoalDispatcher {
     if (canonical(compare) === canonical(expected)) fs.unlinkSync(this.workspaceGuardPath);
   }
   _frontier(ledger) { return computeFrontier(ledger); }
-  // Authorization never depends on the configured plan path, aliases, governance-file presence,
-  // or recognizability markers: every init/archiveReset plan must be the exact trusted completed
-  // plan or the exact detached-approved functional deployment candidate plus approval.
-  _authorizePlan(plan, sha) { authorizeKnownCanonicalPlan(this.rootDir, plan, sha); }
+  // Every authorization and mutation consumes one verified repository-file snapshot of the plan:
+  // root-contained, symlink-free, read and hashed from the verified descriptor. Generic local plan
+  // authorization is structural validity plus one non-empty human-attributed approval object in
+  // that snapshot; no detached candidate/source/scope/archive approval is consulted.
+  _verifiedPlanSnapshot() { return validatePlan(this.rootDir, this.planRelative); }
 
   async init() {
     assertNoSymlinkAncestors(this.rootDir, this.ledgerDir);
     return this._withLock(() => {
-      const { plan, sha } = validatePlan(this.planPath);
-      this._authorizePlan(plan, sha);
+      const { plan, sha } = this._verifiedPlanSnapshot();
       if (fs.existsSync(this.ledgerPath)) {
         const ledger = this._readLedger();
         if (ledger.frozen_plan_sha !== sha) fail("plan drift detected on init");
@@ -194,7 +194,7 @@ export class GoalDispatcher {
 
   status() {
     const ledger = this._readLedger();
-    const current = sha256File(this.planPath);
+    const { sha: current } = this._verifiedPlanSnapshot();
     return { run_id: ledger.run_id, frozen_plan_sha: ledger.frozen_plan_sha, current_plan_sha: current, planDrift: current !== ledger.frozen_plan_sha, ...this._frontier(ledger) };
   }
 
@@ -205,13 +205,13 @@ export class GoalDispatcher {
       const frontier = this._frontier(ledger);
       const nodeId = frontier.inProgress[0] || null;
       if (!nodeId) {
-        const current = sha256File(this.planPath);
+        const { sha: current } = this._verifiedPlanSnapshot();
         return { run_id: ledger.run_id, frozen_plan_sha: ledger.frozen_plan_sha, current_plan_sha: current, planDrift: current !== ledger.frozen_plan_sha, ...frontier, active_attempt: null };
       }
       const attempt = ledger.nodes[nodeId].attempts.at(-1);
       const action = nextAction(attempt);
       this._ensureWorkspaceGuard(nodeId, attempt.attempt_id, action);
-      const current = sha256File(this.planPath);
+      const { sha: current } = this._verifiedPlanSnapshot();
       return {
         run_id: ledger.run_id,
         frozen_plan_sha: ledger.frozen_plan_sha,
@@ -300,13 +300,16 @@ export class GoalDispatcher {
 
   async recordPhase(nodeId, attemptId, phase, artifact) {
     if (!PHASES.has(phase)) fail(`invalid phase: ${phase}`);
-    const { plan } = validatePlan(this.planPath);
-    const planNode = plan.nodes.find((node) => node.id === nodeId);
-    if (!planNode) fail(`unknown plan node: ${nodeId}`);
-    validatePhaseArtifact(artifact, { nodeId, attemptId, phase, acceptanceCriteria: planNode.acceptance_criteria });
+    // The ledger lock is acquired before any plan read: one verified snapshot supplies the node
+    // criteria, structural validation, and the frozen-SHA drift comparison, so a transient plan
+    // swap cannot persist criteria that never matched the frozen approved plan.
     return this._withLock(() => {
+      const { plan, sha } = this._verifiedPlanSnapshot();
+      const planNode = plan.nodes.find((node) => node.id === nodeId);
+      if (!planNode) fail(`unknown plan node: ${nodeId}`);
+      validatePhaseArtifact(artifact, { nodeId, attemptId, phase, acceptanceCriteria: planNode.acceptance_criteria });
       const ledger = this._readLedger();
-      this._assertNoDrift(ledger);
+      if (sha !== ledger.frozen_plan_sha) fail(`plan drift detected: frozen ${ledger.frozen_plan_sha}, current ${sha}`);
       const node = ledger.nodes[nodeId];
       const attempt = node?.attempts.find((item) => item.attempt_id === attemptId);
       if (!attempt) fail(`unknown node or attempt: ${nodeId}/${attemptId}`);
@@ -372,7 +375,7 @@ export class GoalDispatcher {
       if (!attempt) fail(`unknown node or attempt: ${nodeId}/${attemptId}`);
       if (node.status !== "in_progress" || attempt.final_status !== null) fail("decisions can be recorded only for an active attempt");
       validateDecision(decision, { attempt });
-      assertCanRecordDecision(attempt, decision.bound_to);
+      assertCanRecordDecision(attempt, decision);
       const digest = hashJson(decision);
       const existing = attempt.decisions.find((item) => item.sha256 === digest);
       if (existing) return { path: existing.path, sha256: digest, replayed: true };
@@ -454,7 +457,7 @@ export class GoalDispatcher {
   async _emitCandidate(ledger, nodeId, attemptId) {
     try {
       const { emitEvalCandidate } = await import("../extensions/eval-telemetry/core.mjs");
-      const { plan } = validatePlan(this.planPath);
+      const { plan } = this._verifiedPlanSnapshot();
       return emitEvalCandidate({ rootDir: this.rootDir, runId: this.runId, plan, ledger, nodeId, attemptId });
     } catch (error) {
       return { status: "degraded", error_code: typeof error?.code === "string" ? error.code : "candidate_write_failed" };
@@ -468,7 +471,7 @@ export class GoalDispatcher {
       const ledger = JSON.parse(raw);
       if (ledger.schema_version === JOURNAL_SCHEMA_VERSION) return { upgraded: false, reason: "already_v2" };
       if (ledger.schema_version !== 1) fail(`unsupported ledger schema_version: ${ledger.schema_version}`);
-      validatePlan(this.planPath);
+      this._verifiedPlanSnapshot();
       assertNoSymlinkAncestors(this.rootDir, this.archiveDir);
       const backupName = `${crypto.createHash("sha256").update(raw).digest("hex")}.json`;
       const backupPath = path.join(this.archiveDir, backupName);
@@ -547,10 +550,13 @@ export class GoalDispatcher {
     if (typeof confirmationHash !== "string" || !/^[0-9a-f]{64}$/.test(confirmationHash)) fail("confirmationHash must be the current approved plan SHA-256");
     if (typeof approvedBy !== "string" || !approvedBy.trim() || approvedBy.length > BOUNDS.max_approver_length) fail("approvedBy is invalid");
     if (typeof reason !== "string" || !reason.trim() || reason.length > BOUNDS.max_approval_context_length) fail("reason is invalid");
+    // All validation happens before any mutation: the plan snapshot, confirmation hash, and
+    // frontier are checked first, then the run is copied and the archived ledger is verified as a
+    // regular non-symlinked file whose digest matches the active ledger before the active run is
+    // removed. A failure at any point leaves the active run and prior archive entries unchanged.
     return this._withLock(() => {
       const ledger = this._readLedger();
-      const { plan, sha } = validatePlan(this.planPath);
-      this._authorizePlan(plan, sha);
+      const { plan, sha } = this._verifiedPlanSnapshot();
       if (sha !== confirmationHash) fail("confirmation hash does not match current approved plan SHA");
       const frontier = this._frontier(ledger);
       if (frontier.inProgress.length) {
@@ -558,12 +564,19 @@ export class GoalDispatcher {
         const active = ledger.nodes[activeNode].attempts.at(-1);
         fail(`active attempt in progress: ${activeNode}/${active.attempt_id}; terminate or escalate before reset`);
       }
+      const activeLedgerStats = fs.lstatSync(this.ledgerPath);
+      if (activeLedgerStats.isSymbolicLink() || !activeLedgerStats.isFile()) fail("active ledger must be a regular non-symlinked file");
+      const activeLedgerDigest = sha256File(this.ledgerPath);
       assertNoSymlinkAncestors(this.rootDir, this.archiveDir);
       fs.mkdirSync(this.archiveDir, { recursive: true });
       const archiveName = `${this.runId}-${Date.now()}-${crypto.randomUUID()}`;
       const archivePath = path.join(this.archiveDir, archiveName);
       assertNoSymlinkAncestors(this.rootDir, archivePath);
       fs.cpSync(this.ledgerDir, archivePath, { recursive: true });
+      const archivedLedgerPath = path.join(archivePath, "ledger.json");
+      const archivedLedgerStats = fs.lstatSync(archivedLedgerPath);
+      if (archivedLedgerStats.isSymbolicLink() || !archivedLedgerStats.isFile()) fail("archived ledger verification failed: not a regular non-symlinked file");
+      if (sha256File(archivedLedgerPath) !== activeLedgerDigest) fail("archived ledger verification failed: digest does not match the active ledger");
       fs.rmSync(this.ledgerDir, { recursive: true, force: true });
       const nodes = Object.fromEntries(plan.nodes.map((node) => [node.id, { status: "pending", depends_on: [...node.depends_on], attempts: [] }]));
       const now = new Date().toISOString();
@@ -578,13 +591,14 @@ export class GoalDispatcher {
         amendments: [],
         reset_from: {
           archived_to: path.relative(this.rootDir, archivePath),
+          archived_ledger_sha256: activeLedgerDigest,
           previous_plan_sha: ledger.frozen_plan_sha,
           approved_by: approvedBy.trim(),
           reason: reason.trim(),
           reset_at: now,
         },
       });
-      return { archived_to: archivePath, reset: true };
+      return { archived_to: archivePath, archived_ledger_sha256: activeLedgerDigest, reset: true };
     });
   }
 }

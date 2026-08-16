@@ -12,52 +12,21 @@ import { hashJson, JOURNAL_SCHEMA_VERSION } from "./goal-journal.mjs";
 function sha256File(filePath) { return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex"); }
 
 function makePlan(root, { approvedAt } = {}) {
-  // Fully valid detached functional approval fixture: plan.json equals the exact candidate plus a
-  // matching approval identity, and the candidate/source/scope-review/archive/approval files bind
-  // by SHA-256 exactly as production authorization requires.
+  // Generic local Repository Builder plan fixture: structurally valid nodes plus one
+  // human-attributed approval object. No detached functional-deployment governance files
+  // are required or consulted.
   const approvedAtValue = approvedAt || new Date(Date.now() - 60_000).toISOString();
-  const candidate = {
+  const plan = {
     schema_version: 1,
-    kind: "repository-builder-functional-pool-deployment-dag-candidate",
-    source: "docs/raw/specs/functional-pool-deployment.md",
     nodes: [
       { id: "a", intent: "A", change_spec: "Do A", acceptance_criteria: ["A works"], depends_on: [] },
       { id: "b", intent: "B", change_spec: "Do B", acceptance_criteria: ["B works"], depends_on: ["a"] },
       { id: "c", intent: "C", change_spec: "Do C", acceptance_criteria: ["C works"], depends_on: ["a"] },
     ],
+    approval: { approved_by: "test", approved_at: approvedAtValue },
   };
-  const sha256Bytes = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
-  const specsDir = path.join(root, "docs", "raw", "specs");
-  const plansDir = path.join(root, "docs", "raw", "plans");
-  fs.mkdirSync(specsDir, { recursive: true });
-  fs.mkdirSync(plansDir, { recursive: true });
-  const sourcePath = path.join(specsDir, "functional-pool-deployment.md");
-  fs.writeFileSync(sourcePath, "functional pool deployment fixture source\n");
-  const candidatePath = path.join(plansDir, "functional-pool-deployment-dag.candidate.json");
-  const candidateBytes = Buffer.from(`${JSON.stringify(candidate, null, 2)}\n`);
-  fs.writeFileSync(candidatePath, candidateBytes);
-  const scopeReviewPath = path.join(plansDir, "functional-pool-deployment-dag.scope-review.json");
-  fs.writeFileSync(scopeReviewPath, JSON.stringify({
-    candidate_path: "docs/raw/plans/functional-pool-deployment-dag.candidate.json",
-    candidate_sha256: sha256Bytes(candidateBytes),
-    nodes: Object.fromEntries(candidate.nodes.map((node) => [node.id, { reviewed: true }])),
-  }));
-  fs.writeFileSync(path.join(plansDir, "completed-pool-proof-build-dag.json"), completedPlanBytes);
-  fs.writeFileSync(path.join(plansDir, "functional-pool-deployment-approval.json"), JSON.stringify({
-    schema_version: 1,
-    candidate_path: "docs/raw/plans/functional-pool-deployment-dag.candidate.json",
-    candidate_sha256: sha256Bytes(candidateBytes),
-    source_path: "docs/raw/specs/functional-pool-deployment.md",
-    source_sha256: sha256Bytes(fs.readFileSync(sourcePath)),
-    scope_review_path: "docs/raw/plans/functional-pool-deployment-dag.scope-review.json",
-    scope_review_sha256: sha256Bytes(fs.readFileSync(scopeReviewPath)),
-    completed_plan_archive_path: "docs/raw/plans/completed-pool-proof-build-dag.json",
-    completed_plan_archive_sha256: sha256Bytes(completedPlanBytes),
-    approved_by: "test",
-    approved_at: approvedAtValue,
-  }));
   const planPath = path.join(root, "plan.json");
-  fs.writeFileSync(planPath, Buffer.from(`${JSON.stringify({ ...candidate, approval: { approved_by: "test", approved_at: approvedAtValue } }, null, 2)}\n`));
+  fs.writeFileSync(planPath, Buffer.from(`${JSON.stringify(plan, null, 2)}\n`));
   return planPath;
 }
 
@@ -68,10 +37,11 @@ function writeCanonicalPlan(root, bytes) {
   fs.writeFileSync(canonicalPath, bytes);
   return canonicalPath;
 }
-const unknownCanonicalPlanBytes = () => Buffer.from(`${JSON.stringify({
+const arbitraryPlanBytes = (overrides = {}) => Buffer.from(`${JSON.stringify({
   schema_version: 1,
-  nodes: [{ id: "unknown-replacement", intent: "U", change_spec: "U", acceptance_criteria: ["U works"], depends_on: [] }],
-  approval: { approved_by: "attacker", approved_at: new Date(Date.now() - 60_000).toISOString(), notes: "approved" },
+  nodes: [{ id: "replacement-node", intent: "U", change_spec: "U", acceptance_criteria: ["U works"], depends_on: [] }],
+  approval: { approved_by: "kyler", approved_at: new Date(Date.now() - 60_000).toISOString() },
+  ...overrides,
 }, null, 2)}\n`);
 const scratchPlanBytes = () => Buffer.from(`${JSON.stringify({
   schema_version: 1,
@@ -324,9 +294,10 @@ describe("GoalDispatcher", () => {
     await dispatcher.recordPhase(active.node_id, active.attempt_id, "C", c2);
     const ps2 = { kind: "plan-security", status: "needs-replan", reviewed_c_sha256: hashJson(c2), reviewed_c_revision: 2, triggers: ["trust-boundary-change"], findings: [{ severity: "high", finding: "x", exploitability: "y", smallestSafeFix: "z" }] };
     await dispatcher.recordCheckpoint(active.node_id, active.attempt_id, ps2);
-    assert.equal(dispatcher.resume().active_attempt.next_action.decision, hashJson(ps2));
-    await assert.rejects(dispatcher.recordDecision(active.node_id, active.attempt_id, { kind: "human-decision", bound_to: hashJson(ps2), outcome: "defer-and-proceed", decided_by: "kyler", reason: "proceed" }), /defer-and-proceed is not allowed/);
-    await dispatcher.recordDecision(active.node_id, active.attempt_id, { kind: "human-decision", bound_to: hashJson(ps2), outcome: "stop-and-rescope", decided_by: "kyler", reason: "stop" });
+    const psTarget = { type: "checkpoint", name: "plan-security", revision: 2 };
+    assert.deepEqual(dispatcher.resume().active_attempt.next_action.decision, psTarget);
+    await assert.rejects(dispatcher.recordDecision(active.node_id, active.attempt_id, { kind: "human-decision", attempt_id: active.attempt_id, target: psTarget, outcome: "defer-and-proceed", decided_by: "kyler", reason: "proceed" }), /defer-and-proceed is not allowed/);
+    await dispatcher.recordDecision(active.node_id, active.attempt_id, { kind: "human-decision", attempt_id: active.attempt_id, target: psTarget, outcome: "stop-and-rescope", decided_by: "kyler", reason: "stop" });
     assert.equal(dispatcher.status().inProgress.length, 0);
   });
 
@@ -387,27 +358,6 @@ describe("GoalDispatcher", () => {
     const changedPlan = JSON.parse(fs.readFileSync(planPath, "utf8"));
     changedPlan.approval.notes = "owner-approved replacement plan";
     fs.writeFileSync(planPath, Buffer.from(`${JSON.stringify(changedPlan, null, 2)}\n`));
-    await assert.rejects(dispatcher.archiveReset({ confirmationHash: sha256File(planPath), approvedBy: "kyler", reason: "reset" }), /plan approval.*missing or unknown fields/i);
-    // A replacement plan requires full detached re-approval of changed candidate bytes: rewrite the
-    // candidate, scope review, and detached approval record so they bind the new candidate SHA-256.
-    const plansDir = path.join(root, "docs", "raw", "plans");
-    const reapprovedAt = new Date(Date.now() - 30_000).toISOString();
-    const candidatePath = path.join(plansDir, "functional-pool-deployment-dag.candidate.json");
-    const reapprovedCandidate = JSON.parse(fs.readFileSync(candidatePath, "utf8"));
-    reapprovedCandidate.nodes[0].intent = "A reapproved";
-    const reapprovedCandidateBytes = Buffer.from(`${JSON.stringify(reapprovedCandidate, null, 2)}\n`);
-    fs.writeFileSync(candidatePath, reapprovedCandidateBytes);
-    const scopeReviewPath = path.join(plansDir, "functional-pool-deployment-dag.scope-review.json");
-    const scopeReview = JSON.parse(fs.readFileSync(scopeReviewPath, "utf8"));
-    scopeReview.candidate_sha256 = sha256File(candidatePath);
-    fs.writeFileSync(scopeReviewPath, JSON.stringify(scopeReview, null, 2));
-    const approvalPath = path.join(plansDir, "functional-pool-deployment-approval.json");
-    const approvalRecord = JSON.parse(fs.readFileSync(approvalPath, "utf8"));
-    approvalRecord.candidate_sha256 = sha256File(candidatePath);
-    approvalRecord.scope_review_sha256 = sha256File(scopeReviewPath);
-    approvalRecord.approved_at = reapprovedAt;
-    fs.writeFileSync(approvalPath, JSON.stringify(approvalRecord, null, 2));
-    fs.writeFileSync(planPath, Buffer.from(`${JSON.stringify({ ...reapprovedCandidate, approval: { approved_by: approvalRecord.approved_by, approved_at: reapprovedAt } }, null, 2)}\n`));
     const currentApprovedHash = sha256File(planPath);
     await assert.rejects(dispatcher.archiveReset({ confirmationHash: frozen, approvedBy: "kyler", reason: "reset" }), /current approved plan SHA/);
     const result = await dispatcher.archiveReset({ confirmationHash: currentApprovedHash, approvedBy: "kyler", reason: "approved plan changed" });
@@ -419,6 +369,75 @@ describe("GoalDispatcher", () => {
     assert.equal(ledger.reset_from.approved_by, "kyler");
     assert.equal(ledger.reset_from.reason, "approved plan changed");
     assert.deepEqual(dispatcher.status().ready, ["a"]);
+  });
+
+  test("archive-reset failures leave the active ledger and archive unchanged", async () => {
+    await dispatcher.init();
+    const snapshotArchive = () => fs.existsSync(dispatcher.archiveDir)
+      ? fs.readdirSync(dispatcher.archiveDir).sort().map((name) => [name, fs.statSync(path.join(dispatcher.archiveDir, name)).mtimeMs])
+      : [];
+    const frozen = dispatcher.status().frozen_plan_sha;
+    const ledgerBefore = fs.readFileSync(dispatcher.ledgerPath);
+    const archiveBefore = snapshotArchive();
+    // Wrong confirmation hash: no mutation.
+    await assert.rejects(dispatcher.archiveReset({ confirmationHash: "0".repeat(64), approvedBy: "kyler", reason: "reset" }), /current approved plan SHA/);
+    // Drifted plan bytes that fail validation: no mutation.
+    fs.writeFileSync(planPath, Buffer.from("{ not json"));
+    await assert.rejects(dispatcher.archiveReset({ confirmationHash: frozen, approvedBy: "kyler", reason: "reset" }), /parse error|not found|missing/);
+    // Missing approval in the on-disk plan: no mutation.
+    const noApproval = JSON.parse(scratchPlanBytes().toString("utf8"));
+    delete noApproval.approval;
+    fs.writeFileSync(planPath, Buffer.from(`${JSON.stringify(noApproval, null, 2)}\n`));
+    await assert.rejects(dispatcher.archiveReset({ confirmationHash: sha256File(planPath), approvedBy: "kyler", reason: "reset" }), /approval/);
+    assert.deepEqual(fs.readFileSync(dispatcher.ledgerPath), ledgerBefore);
+    assert.deepEqual(snapshotArchive(), archiveBefore);
+    // Active attempt: no mutation.
+    fs.writeFileSync(planPath, scratchPlanBytes());
+    const scratchDispatcher = new GoalDispatcher({ rootDir: root, planPath, runId: "scratch" });
+    await scratchDispatcher.init();
+    const active = await scratchDispatcher.start();
+    const activeLedgerBefore = fs.readFileSync(scratchDispatcher.ledgerPath);
+    const activeArchiveBefore = snapshotArchive();
+    await assert.rejects(scratchDispatcher.archiveReset({ confirmationHash: sha256File(planPath), approvedBy: "kyler", reason: "reset" }), /active attempt/);
+    assert.deepEqual(fs.readFileSync(scratchDispatcher.ledgerPath), activeLedgerBefore);
+    assert.deepEqual(snapshotArchive(), activeArchiveBefore);
+    await scratchDispatcher.complete(active.node_id, active.attempt_id, "failed");
+  });
+
+  test("archive-reset verifies the archived ledger before removing the active run", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    await dispatcher.complete(active.node_id, active.attempt_id, "failed");
+    const frozen = dispatcher.status().frozen_plan_sha;
+    const activeLedgerDigest = sha256File(dispatcher.ledgerPath);
+    const result = await dispatcher.archiveReset({ confirmationHash: frozen, approvedBy: "kyler", reason: "verify ordering" });
+    const archivedLedgerPath = path.join(result.archived_to, "ledger.json");
+    assert.ok(fs.existsSync(archivedLedgerPath), "archived ledger must exist after reset");
+    const archivedStats = fs.lstatSync(archivedLedgerPath);
+    assert.equal(archivedStats.isSymbolicLink(), false);
+    assert.equal(archivedStats.isFile(), true);
+    assert.equal(sha256File(archivedLedgerPath), activeLedgerDigest);
+    const ledger = JSON.parse(fs.readFileSync(dispatcher.ledgerPath, "utf8"));
+    assert.equal(ledger.reset_from.archived_to, path.relative(dispatcher.rootDir, result.archived_to));
+    assert.equal(ledger.reset_from.archived_ledger_sha256, activeLedgerDigest);
+    assert.deepEqual(dispatcher.status().ready, ["a"]);
+  });
+
+  test("archive-reset preserves the active run when the archive copy fails", async () => {
+    await dispatcher.init();
+    const active = await dispatcher.start();
+    await dispatcher.complete(active.node_id, active.attempt_id, "failed");
+    const frozen = dispatcher.status().frozen_plan_sha;
+    const ledgerBefore = fs.readFileSync(dispatcher.ledgerPath);
+    const originalCpSync = fs.cpSync;
+    fs.cpSync = () => { throw new Error("injected copy failure"); };
+    try {
+      await assert.rejects(dispatcher.archiveReset({ confirmationHash: frozen, approvedBy: "kyler", reason: "reset" }), /injected copy failure/);
+    } finally {
+      fs.cpSync = originalCpSync;
+    }
+    assert.deepEqual(fs.readFileSync(dispatcher.ledgerPath), ledgerBefore);
+    assert.deepEqual(dispatcher.status().failed, ["a"]);
   });
 
   test("upgrade and archive-reset reject a symlinked archive directory", async () => {
@@ -530,13 +549,13 @@ describe("GoalDispatcher", () => {
     const a2 = artifact("A", active.node_id, active.attempt_id, { status: "needs_fix" });
     a2.summary = "second assessment";
     await dispatcher.recordPhase(active.node_id, active.attempt_id, "A", a2);
-    const a2Hash = hashJson(a2);
     guard = JSON.parse(fs.readFileSync(guardPath, "utf8"));
-    assert.deepEqual(guard.next_action, { decision: a2Hash });
+    assert.deepEqual(guard.next_action, { decision: { type: "phase", name: "A", revision: 2 } });
 
     await dispatcher.recordDecision(active.node_id, active.attempt_id, {
       kind: "human-decision",
-      bound_to: a2Hash,
+      attempt_id: active.attempt_id,
+      target: { type: "phase", name: "A", revision: 2 },
       outcome: "defer-and-proceed",
       decided_by: "kyler",
       reason: "accept residual local maintainability risk",
@@ -568,114 +587,134 @@ describe("GoalDispatcher", () => {
     await dispatcher.complete(active.node_id, active.attempt_id, "passed");
   });
 
-  describe("canonical plan authorization", () => {
-    test("init rejects a marker-free unknown canonical plan with no governance files and writes no ledger", async () => {
-      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-canonical-"));
+  describe("generic plan authorization", () => {
+    test("init accepts any structurally valid approved plan without detached governance files", async () => {
+      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-generic-"));
       try {
-        const canonicalPath = writeCanonicalPlan(localRoot, unknownCanonicalPlanBytes());
-        assert.equal(fs.existsSync(path.join(localRoot, "docs", "raw", "plans", "completed-pool-proof-build-dag.json")), false);
+        const planPath = path.join(localRoot, "arbitrary-plan.json");
+        fs.writeFileSync(planPath, arbitraryPlanBytes());
         assert.equal(fs.existsSync(path.join(localRoot, "docs", "raw", "plans", "functional-pool-deployment-approval.json")), false);
-        const canonical = new GoalDispatcher({ rootDir: localRoot, planPath: canonicalPath });
-        await assert.rejects(canonical.init(), /detached approval is missing/i);
-        assert.equal(fs.existsSync(canonical.ledgerPath), false);
+        const dispatcher = new GoalDispatcher({ rootDir: localRoot, planPath });
+        assert.equal((await dispatcher.init()).created, true);
+        assert.equal((await dispatcher.init()).created, false);
+        assert.deepEqual(dispatcher.status().ready, ["replacement-node"]);
       } finally { fs.rmSync(localRoot, { recursive: true, force: true }); }
     });
 
-    test("init rejects a scratch-path symlink aliasing the canonical physical plan", async () => {
-      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-canonical-"));
+    test("init rejects plans without approval and writes no ledger", async () => {
+      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-generic-"));
       try {
-        const canonicalPath = writeCanonicalPlan(localRoot, unknownCanonicalPlanBytes());
-        const aliasPath = path.join(localRoot, "scratch-alias.json");
-        fs.symlinkSync(canonicalPath, aliasPath);
-        const aliased = new GoalDispatcher({ rootDir: localRoot, planPath: aliasPath });
-        await assert.rejects(aliased.init(), /detached approval is missing/i);
-        assert.equal(fs.existsSync(aliased.ledgerPath), false);
+        const plan = JSON.parse(arbitraryPlanBytes().toString("utf8"));
+        delete plan.approval;
+        const planPath = path.join(localRoot, "no-approval.json");
+        fs.writeFileSync(planPath, JSON.stringify(plan, null, 2));
+        const dispatcher = new GoalDispatcher({ rootDir: localRoot, planPath });
+        await assert.rejects(dispatcher.init(), /approval/);
+        assert.equal(fs.existsSync(dispatcher.ledgerPath), false);
       } finally { fs.rmSync(localRoot, { recursive: true, force: true }); }
     });
 
-    test("init rejects a canonical path symlinked to a noncanonical physical plan", async () => {
-      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-canonical-"));
+    test("init rejects malformed approval and blank approver", async () => {
+      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-generic-"));
+      try {
+        for (const mutate of [(plan) => { delete plan.approval.approved_by; }, (plan) => { plan.approval.extra = "field"; }, (plan) => { plan.approval.approved_by = "   "; }]) {
+          const plan = JSON.parse(arbitraryPlanBytes().toString("utf8"));
+          mutate(plan);
+          const planPath = path.join(localRoot, "malformed.json");
+          fs.writeFileSync(planPath, JSON.stringify(plan, null, 2));
+          const dispatcher = new GoalDispatcher({ rootDir: localRoot, planPath });
+          await assert.rejects(dispatcher.init(), /approval/);
+          assert.equal(fs.existsSync(dispatcher.ledgerPath), false);
+        }
+      } finally { fs.rmSync(localRoot, { recursive: true, force: true }); }
+    });
+
+    test("init rejects unknown node fields, dangling dependencies, and cycles", async () => {
+      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-generic-"));
+      try {
+        for (const mutate of [
+          (plan) => { plan.nodes[0].extra = "field"; },
+          (plan) => { plan.nodes[0].depends_on = ["missing"]; },
+          (plan) => { plan.nodes[0].depends_on = ["replacement-node"]; },
+        ]) {
+          const plan = JSON.parse(arbitraryPlanBytes().toString("utf8"));
+          mutate(plan);
+          const planPath = path.join(localRoot, "invalid.json");
+          fs.writeFileSync(planPath, JSON.stringify(plan, null, 2));
+          const dispatcher = new GoalDispatcher({ rootDir: localRoot, planPath });
+          await assert.rejects(dispatcher.init(), /missing or unknown fields|invalid dependency|cycle/);
+          assert.equal(fs.existsSync(dispatcher.ledgerPath), false);
+        }
+      } finally { fs.rmSync(localRoot, { recursive: true, force: true }); }
+    });
+
+    test("init accepts an in-root path alias whose verified bytes are the approved physical plan", async () => {
+      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-generic-"));
       try {
         const physicalPath = path.join(localRoot, "physical-plan.json");
-        fs.writeFileSync(physicalPath, unknownCanonicalPlanBytes());
-        const canonicalPath = path.join(localRoot, "docs", "raw", "plans", "proposed-build-dag.json");
-        fs.mkdirSync(path.dirname(canonicalPath), { recursive: true });
-        fs.symlinkSync(physicalPath, canonicalPath);
-        const throughSymlink = new GoalDispatcher({ rootDir: localRoot, planPath: canonicalPath });
-        await assert.rejects(throughSymlink.init(), /detached approval is missing/i);
-        assert.equal(fs.existsSync(throughSymlink.ledgerPath), false);
+        fs.writeFileSync(physicalPath, arbitraryPlanBytes());
+        const aliasPath = path.join(localRoot, "scratch-alias.json");
+        fs.symlinkSync(physicalPath, aliasPath);
+        const aliased = new GoalDispatcher({ rootDir: localRoot, planPath: aliasPath });
+        // Authority is the verified approved bytes, not the invocation path: the constructor
+        // resolves the alias to the in-root physical plan and dispatch reads those bytes.
+        assert.equal((await aliased.init()).created, true);
+        assert.deepEqual(aliased.status().ready, ["replacement-node"]);
       } finally { fs.rmSync(localRoot, { recursive: true, force: true }); }
     });
 
-    test("archive-reset rejects an unknown canonical replacement and leaves ledger and archive byte-for-byte unchanged", async () => {
-      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-canonical-"));
-      const snapshotArchive = () => fs.existsSync(path.join(localRoot, ".pi", "goal-runs", ".archived"))
-        ? fs.readdirSync(path.join(localRoot, ".pi", "goal-runs", ".archived")).sort().map((name) => [name, fs.readFileSync(path.join(localRoot, ".pi", "goal-runs", ".archived", name))])
-        : [];
+    test("init rejects a scratch path swapped post-construction to a symlinked valid plan", async () => {
+      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-generic-"));
       try {
-        const canonicalPath = writeCanonicalPlan(localRoot, completedPlanBytes);
-        const canonical = new GoalDispatcher({ rootDir: localRoot, planPath: canonicalPath });
-        assert.equal((await canonical.init()).created, true);
-        const ledgerBefore = fs.readFileSync(canonical.ledgerPath);
-        const archiveBefore = snapshotArchive();
-        fs.writeFileSync(canonicalPath, unknownCanonicalPlanBytes());
-        assert.equal(fs.existsSync(path.join(localRoot, "docs", "raw", "plans", "completed-pool-proof-build-dag.json")), false);
-        assert.equal(fs.existsSync(path.join(localRoot, "docs", "raw", "plans", "functional-pool-deployment-approval.json")), false);
-        await assert.rejects(
-          canonical.archiveReset({ confirmationHash: sha256File(canonicalPath), approvedBy: "attacker", reason: "swap plan" }),
-          /detached approval is missing/i,
-        );
-        assert.deepEqual(fs.readFileSync(canonical.ledgerPath), ledgerBefore);
-        assert.deepEqual(snapshotArchive(), archiveBefore);
-      } finally { fs.rmSync(localRoot, { recursive: true, force: true }); }
-    });
-
-    test("init accepts the exact trusted completed plan at the canonical path with no governance files", async () => {
-      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-canonical-"));
-      try {
-        const trustedPath = writeCanonicalPlan(localRoot, completedPlanBytes);
-        const trusted = new GoalDispatcher({ rootDir: localRoot, planPath: trustedPath });
-        assert.equal((await trusted.init()).created, true);
-        assert.equal((await trusted.init()).created, false);
-      } finally { fs.rmSync(localRoot, { recursive: true, force: true }); }
-    });
-
-    test("init rejects a hard-link alias of the canonical physical plan and writes no ledger", async () => {
-      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-canonical-"));
-      try {
-        const canonicalPath = writeCanonicalPlan(localRoot, unknownCanonicalPlanBytes());
-        const hardLinkPath = path.join(localRoot, "hard-linked-plan.json");
-        fs.linkSync(canonicalPath, hardLinkPath);
-        const linked = new GoalDispatcher({ rootDir: localRoot, planPath: hardLinkPath });
-        await assert.rejects(linked.init(), /detached approval is missing/i);
-        assert.equal(fs.existsSync(linked.ledgerPath), false);
-      } finally { fs.rmSync(localRoot, { recursive: true, force: true }); }
-    });
-
-    test("init rejects a scratch path swapped post-construction to the canonical physical plan and writes no ledger", async () => {
-      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-canonical-"));
-      try {
-        const canonicalPath = writeCanonicalPlan(localRoot, unknownCanonicalPlanBytes());
+        const physicalPath = path.join(localRoot, "physical-plan.json");
+        fs.writeFileSync(physicalPath, arbitraryPlanBytes());
         const scratchPath = path.join(localRoot, "scratch-plan.json");
         fs.writeFileSync(scratchPath, scratchPlanBytes());
         const swapped = new GoalDispatcher({ rootDir: localRoot, planPath: scratchPath });
         fs.rmSync(scratchPath);
-        fs.symlinkSync(canonicalPath, scratchPath);
-        await assert.rejects(swapped.init(), /detached approval is missing/i);
+        fs.symlinkSync(physicalPath, scratchPath);
+        await assert.rejects(swapped.init(), /symbolic link/);
         assert.equal(fs.existsSync(swapped.ledgerPath), false);
       } finally { fs.rmSync(localRoot, { recursive: true, force: true }); }
     });
 
-    test("init rejects a structurally valid scratch plan with no governance files", async () => {
-      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-canonical-"));
+    test("archive-reset accepts an arbitrary approved replacement plan and records the verified archive", async () => {
+      const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "goal-generic-"));
       try {
-        writeCanonicalPlan(localRoot, completedPlanBytes);
-        const scratchPath = path.join(localRoot, "scratch-plan.json");
-        fs.writeFileSync(scratchPath, scratchPlanBytes());
-        const scratch = new GoalDispatcher({ rootDir: localRoot, planPath: scratchPath });
-        await assert.rejects(scratch.init(), /detached approval is missing/i);
-        assert.equal(fs.existsSync(scratch.ledgerPath), false);
+        const planPath = path.join(localRoot, "arbitrary-plan.json");
+        fs.writeFileSync(planPath, arbitraryPlanBytes());
+        const dispatcher = new GoalDispatcher({ rootDir: localRoot, planPath });
+        assert.equal((await dispatcher.init()).created, true);
+        const frozen = dispatcher.status().frozen_plan_sha;
+        const replacement = JSON.parse(arbitraryPlanBytes().toString("utf8"));
+        replacement.nodes.push({ id: "second-node", intent: "S", change_spec: "S", acceptance_criteria: ["S works"], depends_on: ["replacement-node"] });
+        fs.writeFileSync(planPath, Buffer.from(`${JSON.stringify(replacement, null, 2)}\n`));
+        const result = await dispatcher.archiveReset({ confirmationHash: sha256File(planPath), approvedBy: "kyler", reason: "replacement plan approved" });
+        assert.ok(fs.existsSync(path.join(result.archived_to, "ledger.json")));
+        assert.deepEqual(dispatcher.status().ready, ["replacement-node"]);
+        assert.equal(dispatcher.status().frozen_plan_sha, sha256File(planPath));
       } finally { fs.rmSync(localRoot, { recursive: true, force: true }); }
+    });
+  });
+
+  describe("locked verified plan snapshots", () => {
+    test("recordPhase validates criteria and drift from one locked snapshot", async () => {
+      await dispatcher.init();
+      const active = await dispatcher.start();
+      await dispatcher.recordPhase(active.node_id, active.attempt_id, "C", artifact("C", active.node_id, active.attempt_id));
+      const frozenPlan = JSON.parse(fs.readFileSync(planPath, "utf8"));
+      const transient = structuredClone(frozenPlan);
+      transient.nodes[0].acceptance_criteria = ["Transient criterion"];
+      const transientArtifact = artifact("R", active.node_id, active.attempt_id);
+      transientArtifact.acceptance_criteria_status = [{ criterion: "Transient criterion", status: "met", evidence: [] }];
+      // A transiently swapped plan cannot get its criteria persisted: the snapshot SHA no longer
+      // matches the frozen plan, so recordPhase must fail closed on drift.
+      fs.writeFileSync(planPath, Buffer.from(`${JSON.stringify(transient, null, 2)}\n`));
+      await assert.rejects(dispatcher.recordPhase(active.node_id, active.attempt_id, "R", transientArtifact), /drift/);
+      // Restoring the frozen bytes still rejects an artifact built against transient criteria.
+      fs.writeFileSync(planPath, Buffer.from(`${JSON.stringify(frozenPlan, null, 2)}\n`));
+      await assert.rejects(dispatcher.recordPhase(active.node_id, active.attempt_id, "R", transientArtifact), /must map every original criterion/);
+      await dispatcher.recordPhase(active.node_id, active.attempt_id, "R", artifact("R", active.node_id, active.attempt_id));
     });
   });
 

@@ -21,6 +21,7 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/architecture/domain-driven-documentation|Domain-Driven Documentation]]
 - [[wiki/architecture/initial-domain-map|Initial Domain Map (approved)]]
 - [[wiki/architecture/repository-builder-vs-pool-worker|Repository Builder vs Pool Worker]]
+- [[wiki/sources/2026-08-16_local-repository-builder-workflow|Local Repository Builder /goal Workflow]] — canonical local plan-governance authority
 - [[wiki/output/agents-building-agents-handoff|Agents Building Agents Handoff]]
 - [[wiki/log|Activity Log]]
 - [[wiki/operations/test-governance|Test Governance]]
@@ -31,10 +32,11 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/sources/2026-08-13_test-governance|Test Governance]] — `docs/raw/context/test-governance.md`
 - [[wiki/sources/2026-04-13_initial-domain-map|Initial Domain Map]] — `docs/raw/context/initial-domain-map.md`
 - [[wiki/sources/2026-04-13_repository-builder-vs-pool-worker|Repository Builder and Pool Worker Role Boundary]] — `docs/raw/context/repository-builder-vs-pool-worker.md`
+- [[wiki/sources/2026-08-16_local-repository-builder-workflow|Local Repository Builder /goal Workflow]] — `docs/raw/context/local-repository-builder-workflow.md`
 - [[wiki/sources/2026-04-13_pool-worker-execution-context-schema|Pool Worker Execution Context Schema]] — `docs/raw/specs/schemas/pool-worker-execution-context.schema.json`
 - [[wiki/sources/2026-07-31_pool-worker-attempt-contract-schema|Pool Worker Attempt Contract Schema]] — `docs/raw/specs/schemas/pool-worker-attempt-contract.schema.json`
 - [[wiki/sources/2026-07-22_orchestrator-spec|Supervisor Orchestrator — Consolidated Specification]] — `docs/raw/specs/orchestrator-spec.md`
-- [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment]] — active exact-hash 17-node build phase
+- [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment]] — active 17-node build phase; exact-hash activation retained as historical evidence
 - [[wiki/sources/2026-08-13_adr-037-github-planning-pr-gate1|ADR-037: GitHub Planning PRs as Editable Gate 1 Manifests]] — proposed/deferred
 - [[wiki/sources/2026-08-13_adr-038-node-level-mainline-integration|ADR-038: Node-Level Mainline Integration]] — proposed/deferred
 - [[wiki/sources/2026-08-13_probe-node-workflow-proposal|Agent-Assisted Probe Workflow]] — accepted design; implementation deferred
@@ -78,4 +80,4 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/sources/2026-04-13_crafts-phase-artifact-contract|CRAFTS Phase Artifact Contract]]
 - [[wiki/sources/2026-04-13_v1-roadmap|v1 Roadmap]]
 - [[wiki/sources/2026-07-25_approved-v1-build-dag|Superseded Repository Builder v1 Build DAG]] — historical full-v1 build sequence
-- [[wiki/sources/2026-08-05_pool-proof-specification|Pool Proof Specification (Approved Build Phase)]] — `docs/raw/specs/pool-proof.md`; canonical DAG at `docs/raw/plans/proposed-build-dag.json`
+- [[wiki/sources/2026-08-05_pool-proof-specification|Pool Proof Specification (Completed Build Phase)]] — `docs/raw/specs/pool-proof.md`; completed canonical DAG archived at `docs/raw/plans/completed-pool-proof-build-dag.json`

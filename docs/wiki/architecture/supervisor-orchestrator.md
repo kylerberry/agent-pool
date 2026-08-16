@@ -32,7 +32,7 @@ Pool Proof is complete. The active exact-hash-gated phase is a 17-node direct-ta
 ## Gating and evidence
 
 - Decomposition output is persisted and human-approved before dispatch.
-- Structural DAG validation is not dispatch authority. Dispatcher initialization and archive reset authorize exact plan bytes before persistent mutation; only the pinned completed plan bypasses detached approval, and no marker or filesystem alias selects weaker handling.
+- Structural DAG validation is not the product-runtime dispatch gate; decomposition output is persisted and human-approved before dispatch. (Local Repository Builder dispatch is governed generically by the approved plan plus frozen plan SHA per `docs/raw/context/local-repository-builder-workflow.md`.)
 - Tier 1 is deterministic and blocking: tests, lint, typecheck, static/security checks, and required red/green evidence.
 - Tier 2 applies a binary evidence-backed criteria-fit gate and anchored maintainability rubric; empirical thresholds replace bootstrap mode after calibration.
 - Every phase emits a schema-valid artifact; attempts carry failure context so retries do not start blind.

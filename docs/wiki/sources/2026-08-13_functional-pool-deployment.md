@@ -14,7 +14,7 @@ sources:
 
 ## Status
 
-Approved and activated on 2026-08-15. The detached record binds candidate, source, scope review, completed-plan archive, canonical bytes, and approver identity. The completed Pool Proof canonical bytes remain archived at `docs/raw/plans/completed-pool-proof-build-dag.json`; its ledger was archive-reset only after exact-byte authorization. The active 17-node plan has one unreserved ready root: `deployment-bootstrap-policy-and-glm52-qualification`. Structural-only plans cannot dispatch, and markers or filesystem aliases cannot downgrade authorization.
+Approved and activated on 2026-08-15; the phase remains the active build plan. The detached exact-hash record that authorized activation is retained as **historical evidence** and no longer governs local dispatch: current authority is the approved plan's embedded human approval plus the ledger's frozen plan SHA (see `docs/raw/context/local-repository-builder-workflow.md`). The completed Pool Proof canonical bytes remain archived at `docs/raw/plans/completed-pool-proof-build-dag.json`. The active 17-node plan has one unreserved ready root: `deployment-bootstrap-policy-and-glm52-qualification`.
 
 ## Critical path
 

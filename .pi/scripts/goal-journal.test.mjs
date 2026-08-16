@@ -40,14 +40,14 @@ function artifact(phase, nodeId, attemptId, { status = "passed", flow = "C-R-A-F
     transcript_path: null, phase_data: phaseData(phase, flow, triggers),
   };
 }
-function makeAttempt({ flow = "C-R-A-F-T-S", phases = {}, checkpoints = [], decisions = [] } = {}) {
-  return { attempt_id: "a-attempt-1", sequence: 1, flow, started_at: new Date().toISOString(), base_git: { available: false }, phases, phase_history: {}, checkpoints, decisions, final_status: null };
+function makeAttempt({ flow = "C-R-A-F-T-S", phases = {}, checkpoints = [], decisions = [], attemptId = "a-attempt-1" } = {}) {
+  return { attempt_id: attemptId, sequence: 1, flow, started_at: new Date().toISOString(), base_git: { available: false }, phases, phase_history: {}, checkpoints, decisions, final_status: null };
 }
 function record(dispatcherLike, attempt, phase, art, { triggers } = {}) {
   const digest = hashJson(art);
   const revision = (attempt.phase_history?.[phase]?.length || 0) + (attempt.phases?.[phase] ? 1 : 0) + 1;
   const fileName = revision === 1 ? `${phase}.json` : `${phase}-${revision}.json`;
-  const record = { path: `phases/a/a-attempt-1/${fileName}`, sha256: digest, status: art.status, recorded_at: new Date().toISOString() };
+  const record = { path: `phases/a/${attempt.attempt_id}/${fileName}`, sha256: digest, status: art.status, recorded_at: new Date().toISOString() };
   if (phase === "C") record.triggers = triggers || art.phase_data.security_triggers;
   if (phase === "F") {
     const target = boundFixTarget(attempt);
@@ -65,12 +65,16 @@ function checkpointRecord(kind, status, overrides = {}) {
   return { ...base, ...overrides };
 }
 
-function decisionRecord(outcome, overrides = {}) {
-  return { kind: "human-decision", bound_to: "p".repeat(64), outcome, decided_by: "kyler", reason: "reason", path: "decisions/a/a-attempt-1/decision-1.json", sha256: "d".repeat(64), recorded_at: new Date().toISOString(), ...overrides };
+function decisionInput(target, overrides = {}) {
+  return { kind: "human-decision", attempt_id: "a-attempt-1", target, outcome: "defer-and-proceed", decided_by: "kyler", reason: "reason", ...overrides };
 }
+function decisionRecord(target, overrides = {}) {
+  return { ...decisionInput(target), path: "decisions/a/a-attempt-1/decision-1.json", sha256: "d".repeat(64), recorded_at: new Date().toISOString(), ...overrides };
+}
+const legacyDecisionRecord = (boundTo, overrides = {}) => ({ kind: "human-decision", bound_to: boundTo, outcome: "defer-and-proceed", decided_by: "kyler", reason: "reason", path: "decisions/a/a-attempt-1/decision-1.json", sha256: "d".repeat(64), recorded_at: new Date().toISOString(), ...overrides });
 
 describe("goal-journal", () => {
-  test("normalizeLedger upgrades to v2 and fills defaults", () => {
+  test("normalizeLedger upgrades to the current schema and fills defaults", () => {
     const ledger = normalizeLedger({ run_id: "default" });
     assert.equal(ledger.schema_version, JOURNAL_SCHEMA_VERSION);
     assert.deepEqual(ledger.nodes, {});
@@ -137,7 +141,7 @@ describe("goal-journal", () => {
     assert.deepEqual(nextAction(attempt), { phase: "C" });
   });
 
-  test("nextAction second plan-security needs-replan requires human decision", () => {
+  test("nextAction second plan-security needs-replan expects an attempt-scoped checkpoint decision target", () => {
     const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
     const c1 = artifact("C", "a", "a-attempt-1", { triggers: ["trust-boundary-change"] });
     record({}, attempt, "C", c1, { triggers: ["trust-boundary-change"] });
@@ -147,8 +151,7 @@ describe("goal-journal", () => {
     record({}, attempt, "C", c2, { triggers: ["trust-boundary-change"] });
     const ps2 = checkpointRecord("plan-security", "needs-replan", { reviewed_c_sha256: attempt.phases.C.sha256, reviewed_c_revision: 2, triggers: ["trust-boundary-change"], findings: [{ severity: "high", finding: "x", exploitability: "y", smallestSafeFix: "z" }] });
     attempt.checkpoints.push(ps2);
-    const action = nextAction(attempt);
-    assert.equal(action.decision, ps2.sha256);
+    assert.deepEqual(nextAction(attempt), { decision: { type: "checkpoint", name: "plan-security", revision: 2 } });
   });
 
   test("defer-and-proceed rejected for critical/high plan-security findings", () => {
@@ -160,11 +163,11 @@ describe("goal-journal", () => {
     record({}, attempt, "C", artifact("C", "a", "a-attempt-1", { triggers: ["trust-boundary-change"] }), { triggers: ["trust-boundary-change"] });
     const ps2 = checkpointRecord("plan-security", "needs-replan", { reviewed_c_sha256: attempt.phases.C.sha256, reviewed_c_revision: 2, triggers: ["trust-boundary-change"], findings: [{ severity: "high", finding: "x", exploitability: "y", smallestSafeFix: "z" }] });
     attempt.checkpoints.push(ps2);
-    attempt.decisions.push(decisionRecord("defer-and-proceed", { bound_to: ps2.sha256 }));
+    attempt.decisions.push(decisionRecord({ type: "checkpoint", name: "plan-security", revision: 2 }, { outcome: "defer-and-proceed" }));
     assert.throws(() => nextAction(attempt), /defer-and-proceed is not allowed/);
   });
 
-  test("bounded A/F/A loop reaches human decision after second needs_fix", () => {
+  test("bounded A/F/A loop reaches an attempt-scoped phase decision target", () => {
     const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
     record({}, attempt, "C", artifact("C", "a", "a-attempt-1"));
     record({}, attempt, "R", artifact("R", "a", "a-attempt-1"));
@@ -175,11 +178,10 @@ describe("goal-journal", () => {
     const a2 = artifact("A", "a", "a-attempt-1", { status: "needs_fix" });
     a2.summary = "second";
     record({}, attempt, "A", a2);
-    const action = nextAction(attempt);
-    assert.equal(action.decision, attempt.phases.A.sha256);
+    assert.deepEqual(nextAction(attempt), { decision: { type: "phase", name: "A", revision: 2 } });
   });
 
-  test("bounded T/F/T loop reaches human decision after second needs_fix", () => {
+  test("bounded T/F/T loop reaches an attempt-scoped phase decision target", () => {
     const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
     record({}, attempt, "C", artifact("C", "a", "a-attempt-1"));
     record({}, attempt, "R", artifact("R", "a", "a-attempt-1"));
@@ -191,8 +193,7 @@ describe("goal-journal", () => {
     const t2 = artifact("T", "a", "a-attempt-1", { status: "needs_fix" });
     t2.summary = "second";
     record({}, attempt, "T", t2);
-    const action = nextAction(attempt);
-    assert.equal(action.decision, attempt.phases.T.sha256);
+    assert.deepEqual(nextAction(attempt), { decision: { type: "phase", name: "T", revision: 2 } });
   });
 
   test("C non-passing is revisable up to a bounded human decision", () => {
@@ -203,8 +204,7 @@ describe("goal-journal", () => {
     const c2 = artifact("C", "a", "a-attempt-1", { status: "needs_fix" });
     c2.summary = "revised";
     record({}, attempt, "C", c2);
-    const action = nextAction(attempt);
-    assert.equal(action.decision, attempt.phases.C.sha256);
+    assert.deepEqual(nextAction(attempt), { decision: { type: "phase", name: "C", revision: 2 } });
   });
 
   test("R-S non-passing is revisable up to a bounded human decision", () => {
@@ -215,8 +215,7 @@ describe("goal-journal", () => {
     const r2 = artifact("R", "a", "a-attempt-1", { status: "needs_fix", flow: "R-S" });
     r2.summary = "revised";
     record({}, attempt, "R", r2);
-    const action = nextAction(attempt);
-    assert.equal(action.decision, attempt.phases.R.sha256);
+    assert.deepEqual(nextAction(attempt), { decision: { type: "phase", name: "R", revision: 2 } });
   });
 
   test("F revision is bound to the specific A or T review that requested it", () => {
@@ -283,12 +282,182 @@ describe("goal-journal", () => {
     assert.throws(() => validatePhaseArtifact(t, { nodeId: "a", attemptId: "a-attempt-1", phase: "T", acceptanceCriteria: ["criterion"] }), /cannot contain critical or high/);
   });
 
-  test("validateDecision rejects invalid outcomes and defer outside A/T review", () => {
-    const attempt = makeAttempt();
-    assert.throws(() => validateDecision(decisionRecord("proceed", { bound_to: "a".repeat(64) }), { attempt }), /outcome is invalid/);
+  describe("direct attempt-scoped human decisions", () => {
+    test("validateDecision accepts the exact direct schema for an exhausted A review", () => {
+      const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
+      record({}, attempt, "C", artifact("C", "a", "a-attempt-1"));
+      record({}, attempt, "R", artifact("R", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      record({}, attempt, "F", artifact("F", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      const decision = decisionInput({ type: "phase", name: "A", revision: 2 });
+      assert.equal(validateDecision(decision, { attempt }), decision);
+    });
 
-    const c = artifact("C", "a", "a-attempt-1", { status: "needs_fix" });
-    record({}, attempt, "C", c);
-    assert.throws(() => validateDecision(decisionRecord("defer-and-proceed", { bound_to: attempt.phases.C.sha256 }), { attempt }), /only for exhausted A or T/);
+    test("validateDecision rejects a mismatched attempt_id", () => {
+      const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
+      record({}, attempt, "C", artifact("C", "a", "a-attempt-1"));
+      record({}, attempt, "R", artifact("R", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      record({}, attempt, "F", artifact("F", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      assert.throws(() => validateDecision(decisionInput({ type: "phase", name: "A", revision: 2 }, { attempt_id: "other-attempt" }), { attempt }), /attempt_id/);
+    });
+
+    test("validateDecision rejects unknown fields, malformed targets, and blank actor/reason", () => {
+      const attempt = makeAttempt();
+      assert.throws(() => validateDecision(decisionInput({ type: "phase", name: "A", revision: 1 }, { extra: 1 }), { attempt }), /unknown fields/);
+      assert.throws(() => validateDecision({ kind: "human-decision", attempt_id: "a-attempt-1", bound_to: "a".repeat(64), outcome: "defer-and-proceed", decided_by: "kyler", reason: "r" }, { attempt }), /bound_to|missing or unknown/);
+      assert.throws(() => validateDecision(decisionInput({ type: "phase", name: "A" }), { attempt }), /target/);
+      assert.throws(() => validateDecision(decisionInput({ type: "suite", name: "A", revision: 1 }), { attempt }), /target type/);
+      assert.throws(() => validateDecision(decisionInput({ type: "phase", name: "B", revision: 1 }), { attempt }), /target phase/);
+      assert.throws(() => validateDecision(decisionInput({ type: "phase", name: "A", revision: 0 }), { attempt }), /target revision/);
+      assert.throws(() => validateDecision(decisionInput({ type: "phase", name: "A", revision: "2" }), { attempt }), /target revision/);
+      assert.throws(() => validateDecision(decisionInput({ type: "phase", name: "A", revision: 1 }, { decided_by: "  " }), { attempt }), /decided_by/);
+      assert.throws(() => validateDecision(decisionInput({ type: "phase", name: "A", revision: 1 }, { reason: "" }), { attempt }), /reason/);
+      assert.throws(() => validateDecision(decisionInput({ type: "phase", name: "A", revision: 1 }, { outcome: "proceed" }), { attempt }), /outcome is invalid/);
+    });
+
+    test("validateDecision rejects defer-and-proceed outside exhausted A/T reviews", () => {
+      const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
+      const c1 = artifact("C", "a", "a-attempt-1", { status: "needs_fix" });
+      record({}, attempt, "C", c1);
+      const c2 = artifact("C", "a", "a-attempt-1", { status: "needs_fix" });
+      c2.summary = "revised";
+      record({}, attempt, "C", c2);
+      assert.throws(() => validateDecision(decisionInput({ type: "phase", name: "C", revision: 2 }), { attempt }), /only for exhausted A or T/);
+
+      record({}, attempt, "C", artifact("C", "a", "a-attempt-1"));
+      record({}, attempt, "R", artifact("R", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "passed" }));
+      assert.throws(() => validateDecision(decisionInput({ type: "phase", name: "A", revision: 1 }), { attempt }), /only for exhausted A or T/);
+    });
+
+    test("assertCanRecordDecision requires exact structural equality with the expected target", () => {
+      const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
+      record({}, attempt, "C", artifact("C", "a", "a-attempt-1"));
+      record({}, attempt, "R", artifact("R", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      record({}, attempt, "F", artifact("F", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      assert.ok(assertCanRecordDecision(attempt, decisionInput({ type: "phase", name: "A", revision: 2 })));
+      assert.throws(() => assertCanRecordDecision(attempt, decisionInput({ type: "phase", name: "A", revision: 1 })), /no human decision is expected/);
+      assert.throws(() => assertCanRecordDecision(attempt, decisionInput({ type: "phase", name: "T", revision: 2 })), /no human decision is expected/);
+      assert.throws(() => assertCanRecordDecision(attempt, decisionInput({ type: "checkpoint", name: "plan-security", revision: 2 })), /no human decision is expected/);
+    });
+
+    test("assertCanRecordDecision rejects a non-exhausted target", () => {
+      const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
+      record({}, attempt, "C", artifact("C", "a", "a-attempt-1"));
+      record({}, attempt, "R", artifact("R", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      assert.throws(() => assertCanRecordDecision(attempt, decisionInput({ type: "phase", name: "A", revision: 1 })), /no human decision is expected/);
+    });
+
+    test("a recorded direct decision unblocks the exhausted phase", () => {
+      const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
+      record({}, attempt, "C", artifact("C", "a", "a-attempt-1"));
+      record({}, attempt, "R", artifact("R", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      record({}, attempt, "F", artifact("F", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      attempt.decisions.push(decisionRecord({ type: "phase", name: "A", revision: 2 }, { outcome: "defer-and-proceed" }));
+      assert.deepEqual(nextAction(attempt), { phase: "T" });
+    });
+
+    test("F binds to a later T needs_fix rather than a deferred A, and the loop completes", () => {
+      const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
+      record({}, attempt, "C", artifact("C", "a", "a-attempt-1"));
+      record({}, attempt, "R", artifact("R", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      assert.deepEqual(nextAction(attempt), { phase: "F" });
+      record({}, attempt, "F", artifact("F", "a", "a-attempt-1"));
+      assert.deepEqual(nextAction(attempt), { phase: "A" });
+      const a2 = artifact("A", "a", "a-attempt-1", { status: "needs_fix" });
+      a2.summary = "second";
+      record({}, attempt, "A", a2);
+      assert.deepEqual(nextAction(attempt), { decision: { type: "phase", name: "A", revision: 2 } });
+      attempt.decisions.push(decisionRecord({ type: "phase", name: "A", revision: 2 }, { outcome: "defer-and-proceed" }));
+      assert.deepEqual(nextAction(attempt), { phase: "T" });
+
+      // The deferred A revision no longer requests a fix; a subsequent T needs_fix must bind F.
+      const t1 = artifact("T", "a", "a-attempt-1", { status: "needs_fix" });
+      record({}, attempt, "T", t1);
+      const t1Sha = attempt.phases.T.sha256;
+      assert.equal(boundFixTarget(attempt)?.sha256, t1Sha);
+      assert.notEqual(boundFixTarget(attempt)?.sha256, attempt.phases.A.sha256);
+      assert.deepEqual(nextAction(attempt), { phase: "F" });
+      const fForT = artifact("F", "a", "a-attempt-1");
+      fForT.summary = "for T";
+      record({}, attempt, "F", fForT);
+      assert.equal(attempt.phases.F.bound_to, t1Sha);
+      assert.notEqual(attempt.phases.F.bound_to, attempt.phases.A.sha256);
+
+      // The bound fix satisfies T revision 1 and the bounded loop completes without new decisions.
+      assert.deepEqual(nextAction(attempt), { phase: "T" });
+      const t2 = artifact("T", "a", "a-attempt-1");
+      t2.summary = "second";
+      record({}, attempt, "T", t2);
+      assert.deepEqual(nextAction(attempt), { phase: "S" });
+      record({}, attempt, "S", artifact("S", "a", "a-attempt-1"));
+      assert.deepEqual(nextAction(attempt), { complete: true });
+    });
+
+    test("phaseEffectivelyPassed honors a defer decision recorded against a non-A/T phase", () => {
+      const attempt = makeAttempt({ flow: "R-S" });
+      record({}, attempt, "R", artifact("R", "a", "a-attempt-1", { status: "needs_fix", flow: "R-S" }));
+      attempt.decisions.push(decisionRecord({ type: "phase", name: "R", revision: 1 }, { outcome: "defer-and-proceed" }));
+      assert.deepEqual(nextAction(attempt), { phase: "S" });
+    });
+
+    test("a stop-and-rescope direct decision terminates the loop", () => {
+      const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
+      record({}, attempt, "C", artifact("C", "a", "a-attempt-1"));
+      record({}, attempt, "R", artifact("R", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      record({}, attempt, "F", artifact("F", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      attempt.decisions.push(decisionRecord({ type: "phase", name: "A", revision: 2 }, { outcome: "stop-and-rescope" }));
+      assert.deepEqual(nextAction(attempt), { outcome: "stop-and-rescope" });
+    });
+  });
+
+  describe("legacy hash-bound decisions", () => {
+    test("a legacy bound_to decision still unblocks the matching exhausted review", () => {
+      const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
+      record({}, attempt, "C", artifact("C", "a", "a-attempt-1"));
+      record({}, attempt, "R", artifact("R", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      record({}, attempt, "F", artifact("F", "a", "a-attempt-1"));
+      const a2 = artifact("A", "a", "a-attempt-1", { status: "needs_fix" });
+      a2.summary = "second";
+      record({}, attempt, "A", a2);
+      attempt.decisions.push(legacyDecisionRecord(attempt.phases.A.sha256));
+      assert.deepEqual(nextAction(attempt), { phase: "T" });
+    });
+
+    test("a legacy bound_to decision does not authorize a different target", () => {
+      const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
+      record({}, attempt, "C", artifact("C", "a", "a-attempt-1"));
+      record({}, attempt, "R", artifact("R", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      record({}, attempt, "F", artifact("F", "a", "a-attempt-1"));
+      record({}, attempt, "A", artifact("A", "a", "a-attempt-1", { status: "needs_fix" }));
+      attempt.decisions.push(legacyDecisionRecord("0".repeat(64)));
+      assert.deepEqual(nextAction(attempt), { decision: { type: "phase", name: "A", revision: 2 } });
+    });
+
+    test("a legacy plan-security checkpoint decision still resolves", () => {
+      const attempt = makeAttempt({ flow: "C-R-A-F-T-S" });
+      const c1 = artifact("C", "a", "a-attempt-1", { triggers: ["trust-boundary-change"] });
+      record({}, attempt, "C", c1, { triggers: ["trust-boundary-change"] });
+      const ps1 = checkpointRecord("plan-security", "needs-replan", { reviewed_c_sha256: attempt.phases.C.sha256, triggers: ["trust-boundary-change"], findings: [{ severity: "low", finding: "x", exploitability: "y", smallestSafeFix: "z" }] });
+      attempt.checkpoints.push(ps1);
+      record({}, attempt, "C", artifact("C", "a", "a-attempt-1", { triggers: ["trust-boundary-change"] }), { triggers: ["trust-boundary-change"] });
+      const ps2 = checkpointRecord("plan-security", "needs-replan", { reviewed_c_sha256: attempt.phases.C.sha256, reviewed_c_revision: 2, triggers: ["trust-boundary-change"], findings: [{ severity: "low", finding: "x", exploitability: "y", smallestSafeFix: "z" }], sha256: "b".repeat(64) });
+      attempt.checkpoints.push(ps2);
+      attempt.decisions.push(legacyDecisionRecord(ps2.sha256));
+      assert.deepEqual(nextAction(attempt), { phase: "R" });
+    });
   });
 });

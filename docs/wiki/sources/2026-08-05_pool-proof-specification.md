@@ -1,18 +1,18 @@
 ---
-title: Pool Proof Specification (Approved Build Phase)
+title: Pool Proof Specification (Completed Build Phase)
 type: source
-tags: [source, pool-proof, approved, agent-execution]
+tags: [source, pool-proof, completed, agent-execution]
 created: 2026-08-05
-updated: 2026-08-12
+updated: 2026-08-16
 audience: repository-builder
 subject: product-runtime
 sources:
   - docs/raw/specs/pool-proof.md
   - docs/raw/plans/pool-proof-build-dag.candidate.json
-  - docs/raw/plans/proposed-build-dag.json
+  - docs/raw/plans/completed-pool-proof-build-dag.json
 ---
 
-# Pool Proof Specification (Approved Build Phase)
+# Pool Proof Specification (Completed Build Phase)
 
 Kyler approved the exact source specification SHA-256 `96d8ece41dd820c04b45b8c3468a8c1b1bcf8ce8ffabec82d1f258ce08125de5` and candidate DAG SHA-256 `9e176ea505cff322f1cd864b4aead3b158b5c5ad04b828b01d5f0968dc9f792e` on 2026-08-05.
 
@@ -50,12 +50,11 @@ The superseded 17-node local ledger was archived before reset at `.pi/goal-runs/
 
 Both approved nodes have passed. Stage 2 retained evidence is `packages/pool-proof-harness/reports/stage-2-proof-report.json` at SHA-256 `ebf9840337149ee89b4cbee97fe9306dee9ed2f782ba145de957664fd057a401`: two persistent slots processed three real Moonshot fixture jobs, the launcher-owned Worker termination was contained, the remaining job dispatched, two commits were independently verified, and SQLite state and cleanup were verified.
 
-The retained report uses bounded, unsalted isolation commitments with separate attempt binding rather than raw attempt data. Pool Proof remains fixture-only. Persistent per-attempt sandbox lifecycle is now proven separately. The proposed functional deployment begins with Z.ai qualification, then a parameterized runner and separately reviewed Agent Pool credential-strip dogfood task; it remains exact-hash gated and unapproved.
+The retained report uses bounded, unsalted isolation commitments with separate attempt binding rather than raw attempt data. Pool Proof remains fixture-only. Persistent per-attempt sandbox lifecycle is now proven separately. The functional deployment was approved and activated on 2026-08-15; its detached exact-hash activation record is now historical evidence under `docs/raw/context/local-repository-builder-workflow.md`.
 
 ## Raw sources
 
 - `docs/raw/specs/pool-proof.md`
 - `docs/raw/plans/pool-proof-build-dag.candidate.json`
-- `docs/raw/plans/proposed-build-dag.json`
 - `docs/raw/plans/completed-pool-proof-build-dag.json`
-- [[wiki/sources/2026-08-13_functional-pool-deployment|Proposed Functional Pool Deployment]]
+- [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment]]
