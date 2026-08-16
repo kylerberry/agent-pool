@@ -1,5 +1,43 @@
 # Repository Agent Instructions
 
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
 ## Current Actor: Repository Builder
 
 Unless a trusted `.agent-pool/execution-context.json` marker explicitly identifies this session as a Pool Worker and the worker-harness preflight passes, you are a **Repository Builder** implementing the agent-pool product. The repository's subject matter does not make you a member of the pool.
@@ -44,7 +82,7 @@ Do not duplicate canonical instructions into `CLAUDE.md`; update the sibling `AG
 ## Project Workflows
 
 - Repository Builders use local `craft`; Pool Workers use the explicitly loaded `packages/worker-harness` `craft-pool` skill.
-- Use `graphify` for codebase architecture and relationship queries.
+- For early CRAFTS planning and code-relationship questions, query `graphify-out/graph.json` when it is present and current before broad codebase scanning. It is an ignored, regenerable, code-structure aid: check its health/provenance and verify claims in source and tests. Use `docs/wiki/` and raw artifacts for prose knowledge and decisions; never treat Graphify's generated wiki as canonical.
 - Use `pi-subagents` when defining or coordinating project agents and chains.
 
 ## Domain-Driven Source Layout
