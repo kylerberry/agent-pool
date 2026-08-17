@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "task-run-evidence.schema.json",
+  "title": "Task Run Evidence",
+  "description": "Runner-owned evidence for one approved task manifest executed through the Minimal Pool Runtime. Contains no host paths, credentials, prompts, container IDs, or raw model output; diagnostics are redacted and capped at 300 characters.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_sha256",
+    "task_id",
+    "base_commit",
+    "attempt_id",
+    "result_id",
+    "selected_model",
+    "status",
+    "process",
+    "result_commit",
+    "verifier_checks",
+    "base_state_evidence",
+    "cleanup_disposition",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "manifest_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "task_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "base_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "attempt_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "result_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "selected_model": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "status": { "enum": ["passed", "failed"] },
+    "process": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exit_code", "signal_code", "timed_out", "pid_present"],
+      "properties": {
+        "exit_code": { "type": ["integer", "null"] },
+        "signal_code": { "type": ["string", "null"], "maxLength": 32 },
+        "timed_out": { "type": "boolean" },
+        "pid_present": { "type": "boolean" }
+      }
+    },
+    "result_commit": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+    "verifier_checks": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "passed"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "passed": { "type": "boolean" }
+        }
+      }
+    },
+    "base_state_evidence": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "exit_code", "timed_out"],
+        "properties": {
+          "command": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "type": "string", "maxLength": 256 } },
+          "exit_code": { "type": "integer" },
+          "timed_out": { "type": "boolean" }
+        }
+      }
+    },
+    "cleanup_disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workspace_removed", "session_removed"],
+      "properties": {
+        "workspace_removed": { "type": "boolean" },
+        "session_removed": { "type": "boolean" }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "finished_at", "failure_code", "detail"],
+      "properties": {
+        "started_at": { "type": "string", "format": "date-time" },
+        "finished_at": { "type": "string", "format": "date-time" },
+        "failure_code": { "type": ["string", "null"], "maxLength": 256 },
+        "detail": { "type": ["string", "null"], "maxLength": 301 }
+      }
+    }
+  }
+}
