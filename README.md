@@ -2,9 +2,9 @@
 
 A self-hosted supervisor-orchestrator for coding agents.
 
-It turns a free-form feature specification into a human-approved DAG of verifiable work units, dispatches ready nodes to a warm pool of coding agents, grades each result through deterministic and model-judged gates, and delivers reviewable GitHub artifacts with a durable audit trail.
+The target architecture turns a free-form feature specification into a human-approved DAG of verifiable work units, dispatches ready nodes to a warm pool of coding agents, grades each result through deterministic and model-judged gates, and ultimately delivers reviewable GitHub artifacts with a durable audit trail.
 
-> **Status:** Design complete; pre-implementation.
+> **Status:** Pool Proof is complete. The repository is implementing the approved four-node replacement milestone toward the first usable pool; GitHub automation remains deferred.
 
 ## Why
 
@@ -27,7 +27,7 @@ Ready frontier → warm coding-agent pool → node results
     ↓
 Tier 1 evidence + Tier 2 assessment → retry / escalate / continue
     ↓
-Connected-component PRs and GitHub delivery
+Connected-component PRs and GitHub delivery (deferred)
 ```
 
 - The **deterministic controller** owns lifecycle state, dispatch, budgets, retries, escalation, audit records, and PR assembly.
@@ -49,7 +49,7 @@ For an autonomous implementation brief, use [`docs/goal-prompt.md`](docs/goal-pr
 
 ## Project conventions
 
-- Code will be organized by bounded domain under `src/domains/<domain>/`.
+- Code is organized by bounded domain under `src/domains/<domain>/`.
 - Every domain owns `AGENTS.md`; its sibling `CLAUDE.md` contains only `@AGENTS.md`.
 - `docs/raw/` contains canonical source artifacts; `docs/wiki/` is the derived, navigable knowledge base.
 - `.pi/` is the Repository Builder harness (`craft`, `/goal`, and `local-craft-*`).
@@ -67,6 +67,18 @@ For an autonomous implementation brief, use [`docs/goal-prompt.md`](docs/goal-pr
 - Model routing and reliability thresholds are empirically evaluated.
 
 See [`docs/wiki/architecture/orchestrator-adr-map.md`](docs/wiki/architecture/orchestrator-adr-map.md) for the full ADR map.
+
+## Validation
+
+Requires Node.js 24 or newer.
+
+```bash
+npm run typecheck
+npm run test:all
+npm run proof:reports:verify
+```
+
+See [`docs/wiki/operations/test-governance.md`](docs/wiki/operations/test-governance.md) for the required test lanes.
 
 ## License
 

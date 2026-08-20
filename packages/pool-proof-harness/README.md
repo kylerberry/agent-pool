@@ -44,7 +44,7 @@ npm run proof:task:run -- \
 - Every git invocation in `run-task.ts` routes through `hardened-git.ts`.
 - The runner starts from the pinned 40-hex base commit, uses a fresh isolated Worker and
   sandbox, and produces at most one commit touching only the manifest's allowed paths.
-- Runner-owned evidence is written only after successful schema validation and never into
-  `packages/pool-proof-harness/reports/`.
-- Container runtime is resolved with `shell:false` and verified as a regular non-symlink
-  executable before the sandbox is launched.
+- Candidate runner-owned evidence from `run-task.ts` is written only after successful schema
+  validation and never into `packages/pool-proof-harness/reports/` before explicit retained-report publication.
+- In `run-task.ts`, the container runtime is resolved with `shell:false` and verified as a
+  regular non-symlink executable before the sandbox is launched.
