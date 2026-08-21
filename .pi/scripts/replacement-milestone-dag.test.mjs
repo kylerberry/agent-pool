@@ -6,9 +6,9 @@ import { describe, test } from "node:test";
 const root = path.resolve(import.meta.dirname, "../..");
 const readJson = (relative) => JSON.parse(fs.readFileSync(path.join(root, relative), "utf8"));
 
-// The four-node replacement milestone DAG is an unapproved candidate. It must never be activated
-// by this work: the active proposed-build-dag.json and the local ledger remain distinct, and the
-// candidate carries no approval object.
+// The original four-node replacement milestone remains an unapproved historical candidate.
+// The active plan is its approved repository-bound successor; both candidate artifacts remain
+// approval-free while proposed-build-dag.json is the only dispatch authority.
 describe("replacement milestone DAG candidate", () => {
   const candidate = readJson("docs/raw/plans/replacement-milestone-dag.candidate.json");
 
@@ -60,14 +60,15 @@ describe("replacement milestone DAG candidate", () => {
     assert.doesNotThrow(() => validatePlanObject(withApproval, Buffer.byteLength(JSON.stringify(withApproval))));
   });
 
-  test("the active proposed-build-dag.json is the approved replacement milestone", () => {
+  test("the active proposed-build-dag.json is the approved repository-bound milestone", () => {
     const active = readJson("docs/raw/plans/proposed-build-dag.json");
+    const repositoryBoundCandidate = readJson("docs/raw/plans/repository-bound-pool-milestone.candidate.json");
     assert.equal(typeof active.approval?.approved_by, "string");
     assert.equal(active.domain_boundaries_changed, false);
-    assert.deepEqual(active.nodes.map((node) => node.id), candidate.nodes.map((node) => node.id));
+    assert.deepEqual(active.nodes.map((node) => node.id), repositoryBoundCandidate.nodes.map((node) => node.id));
     assert.deepEqual(
       Object.fromEntries(active.nodes.map((node) => [node.id, [...node.depends_on]])),
-      Object.fromEntries(candidate.nodes.map((node) => [node.id, [...node.depends_on]])),
+      Object.fromEntries(repositoryBoundCandidate.nodes.map((node) => [node.id, [...node.depends_on]])),
     );
   });
 
