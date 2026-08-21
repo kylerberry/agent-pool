@@ -9,18 +9,12 @@ created: 2026-08-05
 
 ## Status and authority
 
-This specification is **proposed**. It defines the next bounded build phase but does not authorize implementation, replacement of the approved build DAG, or reset of the local Repository Builder ledger.
+This specification is historical evidence for a completed bounded build phase. It does not authorize implementation or replacement of the active approved plan.
 
-> **Historical (non-authoritative for local dispatch).** The Pool Proof build phase is complete
-> and its exact-hash governance is retained as immutable evidence only. Current local Repository
-> Builder dispatch authority is `docs/raw/context/local-repository-builder-workflow.md`.
+> **Historical (non-authoritative for active dispatch).** The Pool Proof build phase is complete
+> and its exact-hash governance is retained as immutable evidence only.
 
-Until Kyler approves this specification and its candidate DAG:
-
-- `docs/raw/plans/proposed-build-dag.json` remains the approved plan;
-- `.pi/goal-runs/default/ledger.json` remains its local development record;
-- no Pool Proof node may begin;
-- the existence of this document grants no Pool Worker authority to a Repository Builder session.
+The existence of this document grants no Pool Worker authority to a Repository Builder session.
 
 ## Purpose
 
@@ -422,7 +416,7 @@ At minimum, deterministic tests must reject or contain:
 - forged `AGENT_POOL_ACTOR` without verified launch context;
 - stale, mismatched, malformed, or replayed actor context;
 - mismatched node, attempt, repository, branch, workspace, package/profile, model, or result identity;
-- ambient Repository Builder skills, `/goal`, `local-craft-*`, global Pi resources, or prior sessions appearing in a Worker;
+- ambient development resources, global Pi resources, or prior sessions appearing in a Worker;
 - target instructions attempting to redefine actor or capabilities;
 - provider/GitHub credential access through environment, files, process inspection, or inherited home/config paths;
 - absolute path, `..`, symlink, and realpath escapes;
@@ -505,7 +499,7 @@ Pre-approval rules:
 
 - validate its flat ADR-018 shape, references, and topology independently;
 - keep it without an `approval` object;
-- do not modify the current approved DAG or local ledger;
+- do not modify the current approved DAG;
 - stop for Kyler's approval after presenting the candidate hash, nodes, ready frontier, domain-map approval status, and deferred scope.
 
 On explicit approval only:
@@ -515,9 +509,9 @@ On explicit approval only:
 3. Generate the canonical approved plan from the parsed candidate by adding only the validator-supported `approval` object. Its `notes` must include the exact `candidate_path`, `candidate_sha256`, `source_path`, and `source_sha256` Kyler approved.
 4. Mechanically assert that removing `approval` from the generated canonical plan yields the same JSON value as the immutable candidate; no node or top-level plan field may change during activation.
 5. Update the canonical goal sequencing and actor/runtime documentation without deleting the deferred v1 objective.
-6. Write the generated approved plan to `docs/raw/plans/proposed-build-dag.json` and run `node .pi/scripts/validate-goal-plan.mjs`.
-7. Display both hashes: the human-approved candidate hash and the validator-approved canonical plan hash. Use the latter as the `archive-reset` confirmation hash.
-8. Archive the existing local goal run and initialize a fresh ledger through the approver-attributed `archive-reset` path.
-9. Dispatch only the new ready node in a fresh local CRAFTS slice.
+6. Write the generated approved plan to `docs/raw/plans/proposed-build-dag.json` and validate it.
+7. Display both hashes: the human-approved candidate hash and the validated canonical plan hash.
+8. Retain prior approved-plan history as evidence.
+9. Dispatch only the new ready node through the approved runtime path.
 
 Approval of candidate and source hashes does not approve later edits to either file. The prior approved plan and its ledger history remain recoverable evidence; they are not rewritten to imply Pool Proof was always the plan.

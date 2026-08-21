@@ -7,13 +7,11 @@ created: 2026-08-13
 
 # Functional Pool Deployment — Direct-Task-First Build Phase
 
-> **Historical (non-authoritative for local dispatch).** This specification and its exact-hash
+> **Historical (non-authoritative for active dispatch).** This specification and its exact-hash
 > approval artifacts (`functional-pool-deployment-dag.candidate.json`, its all-node scope review,
 > and `functional-pool-deployment-approval.json`) are retained as immutable evidence of the
-> 2026-08-15 activation. They no longer govern local Repository Builder dispatch: current
-> authority is `docs/raw/context/local-repository-builder-workflow.md` — a structurally valid
-> plan with one human-attributed `approval` object and the ledger's frozen plan SHA. The active
-> plan remains `docs/raw/plans/proposed-build-dag.json`.
+> 2026-08-15 activation. They are not active dispatch authority. The active plan remains
+> `docs/raw/plans/proposed-build-dag.json`.
 
 ## Purpose
 
@@ -124,7 +122,7 @@ The deployment excludes, in priority order after launch:
 > **Activation-time historical wording.** This section preserves the approval gates as they
 > read before activation. Kyler's exact-hash approval was then obtained and the 2026-08-15
 > activation completed; the approval artifacts are retained as immutable evidence only (see
-> the header banner). Nothing in this section is current local dispatch authority.
+> the header banner). Nothing in this section is current dispatch authority.
 
 At drafting time this specification and candidate were proposed only. No node was ready and the completed `docs/raw/plans/proposed-build-dag.json` remained authoritative until Kyler approved the exact candidate and source hashes.
 
@@ -139,6 +137,6 @@ Activation must:
 5. generate a canonical approved plan by adding only validator-supported approval metadata;
 6. prove removal of that approval object reproduces the approved candidate JSON value;
 7. atomically replace the active canonical plan while preserving the tracked completed-plan archive;
-8. run `node .pi/scripts/validate-goal-plan.mjs` against the activated canonical plan;
-9. archive-reset the completed Pool Proof ledger with approver attribution and verified old-plan hash; and
+8. validate the activated canonical plan;
+9. retain the completed Pool Proof plan as historical evidence; and
 10. dispatch only the new ready root, `deployment-bootstrap-policy-and-glm52-qualification`.

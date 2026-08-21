@@ -23,7 +23,6 @@ Added a structural test suite at `.pi/scripts/domain-scaffolding.test.mjs` that 
 
 - RED: `node --test .pi/scripts/domain-scaffolding.test.mjs` failed with 21 failures against base commit `62f815d867fec76e7ef2067f6cb8e3b0d3cec21b`.
 - GREEN: Same suite passed with 21 passes after scaffolding.
-- Validator: `node .pi/scripts/validate-goal-plan.mjs` passed with `map_sha256=fb20cbaadf9d6e1972fd42ad536d430f5d6f9fc40c18413f71c7dd78b1f9d775`.
 
 ## Scope preserved
 

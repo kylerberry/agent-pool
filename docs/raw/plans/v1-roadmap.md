@@ -2,7 +2,7 @@
 
 ## Current approved build phase
 
-The active plan is the four-node replacement milestone at `docs/raw/plans/proposed-build-dag.json`, approved by Kyler on 2026-08-16 under `docs/raw/context/local-repository-builder-workflow.md` (embedded human approval plus frozen plan SHA):
+The active plan is the four-node replacement milestone at `docs/raw/plans/proposed-build-dag.json`, approved by Kyler on 2026-08-16:
 
 1. generalize the proven runner to one approved real-repository task (`generalize-proven-runner`);
 2. compose authenticated direct-task intake through a SQLite-backed claim loop to one fresh Worker (`compose-direct-intake-to-execution`);

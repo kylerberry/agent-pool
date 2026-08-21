@@ -14,7 +14,7 @@ sources:
 
 ## Status
 
-Approved and activated on 2026-08-15; **superseded on 2026-08-16** by the four-node replacement milestone plan (`docs/raw/plans/proposed-build-dag.json`) before any node started — no 17-node work was reserved or executed. The superseded plan's exact bytes are archived at `docs/raw/plans/superseded-functional-deployment-build-dag.json`. The detached exact-hash approval artifacts are retained **historical evidence** and have not governed local dispatch since the 2026-08-16 governance simplification (`docs/raw/context/local-repository-builder-workflow.md`). The completed Pool Proof canonical bytes remain archived at `docs/raw/plans/completed-pool-proof-build-dag.json`.
+Approved and activated on 2026-08-15; **superseded on 2026-08-16** by the four-node replacement milestone plan (`docs/raw/plans/proposed-build-dag.json`) before any node started — no 17-node work was reserved or executed. The superseded plan's exact bytes are archived at `docs/raw/plans/superseded-functional-deployment-build-dag.json`. The detached exact-hash approval artifacts are retained **historical evidence** and are not active dispatch authority. The completed Pool Proof canonical bytes remain archived at `docs/raw/plans/completed-pool-proof-build-dag.json`.
 
 ## Critical path
 

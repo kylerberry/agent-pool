@@ -1,3 +1,0 @@
-# 2026-07-25 — development harness — harden local `/goal` dispatch
-
-Added a durable, ignored Repository Builder run ledger under `.pi/goal-runs/` with frozen-plan drift detection, stable node/attempt IDs, atomic phase/completion artifacts, schema and original-criteria validation, idempotent replay, phase ordering, resumable next-phase calculation, one-writer-per-worktree enforcement, and deterministic ready-frontier derivation. Updated local CRAFTS instructions to use Pi `subagent` calls instead of stale `AgentSpawn` wording. The approved ADR-018 DAG remains immutable; runtime state stays in the local ledger.

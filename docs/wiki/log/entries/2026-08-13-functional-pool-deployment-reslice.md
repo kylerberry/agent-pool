@@ -1,11 +1,6 @@
 # 2026-08-13 — Functional pool deployment DAG reslice
 
-Resliced the unapproved functional deployment candidate from nine to 17 ADR-035-coherent nodes after independent ADR-035 review found bundled outcomes (GLM-5.2+GLM-5.3 qualification, CRAFTS artifacts+lifecycle, Tier 1+Tier 2, controller failure/budget/discovery/recovery, delivery+Gate 2, operations+release proof). Every substantive acceptance clause from the nine-node candidate is conserved verbatim in the replacement nodes; a red-tested conservation matrix in `.pi/scripts/functional-deployment-reslice.test.mjs` enforces it.
-
-Topology: `deployment-bootstrap-policy-and-glm52-qualification` is the sole root. GLM-5.3 qualification, the controller branch (failure → budget/discovery → recovery), and the delivery branch (component PR assembly → Gate-2 review) run concurrently where safe. `functional-pool-release-convergence` is the only release claim.
-
-Mandatory plan-security amendments applied: `adr015-component-pr-assembly` depends on `classified-failure-retry-and-resolution` so stale/conflicting re-verification returns to the governed failure lifecycle with no GitHub side effect; Gate-2 comments and prompt-injection content are inert bounded revision data only; `goal-plan.mjs` rejects duplicate `depends_on` entries.
-
-Plan activation was also hardened after hostile marker, alias, and path-swap review. Canonical/scratch authorization modes were removed: every dispatcher `init` and `archive-reset` structurally validates and then authorizes exact plan bytes before persistent mutation. Only the pinned completed Pool Proof SHA is approval-free; every other plan requires the complete detached exact-hash chain. Marker deletion, missing governance files, symlinks, hard links, post-construction path swaps, and structurally valid generic approval cannot downgrade this boundary.
-
-Candidate SHA-256: `82cfe59c88b57e5fbcea27ce26d6c2406fea360e8e3025390d920326b01a6b9a`. The ADR-035 scope review is regenerated for all 17 IDs and bound to that hash. The candidate remains unapproved: no detached approval record exists, the completed Pool Proof canonical plan/archive, ledger, and retained reports are unchanged, and nothing activated or dispatched.
+Resliced the functional deployment candidate from nine to 17 ADR-035-coherent nodes after
+independent review identified bundled outcomes. The candidate remains historical evidence:
+`docs/raw/plans/superseded-functional-deployment-build-dag.json` preserves the later approved
+17-node plan, superseded before any node started by the four-node replacement milestone.

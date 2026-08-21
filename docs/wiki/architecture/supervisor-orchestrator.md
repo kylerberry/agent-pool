@@ -32,7 +32,7 @@ Pool Proof is complete. The 17-node functional deployment plan approved on 2026-
 ## Gating and evidence
 
 - Decomposition output is persisted and human-approved before dispatch.
-- Structural DAG validation is not the product-runtime dispatch gate; decomposition output is persisted and human-approved before dispatch. (Local Repository Builder dispatch is governed generically by the approved plan plus frozen plan SHA per `docs/raw/context/local-repository-builder-workflow.md`.)
+- Structural DAG validation is not the product-runtime dispatch gate; decomposition output is persisted and human-approved before dispatch.
 - Tier 1 is deterministic and blocking: tests, lint, typecheck, static/security checks, and required red/green evidence.
 - Tier 2 applies a binary evidence-backed criteria-fit gate and anchored maintainability rubric; empirical thresholds replace bootstrap mode after calibration.
 - Every phase emits a schema-valid artifact; attempts carry failure context so retries do not start blind.

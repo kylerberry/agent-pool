@@ -52,7 +52,6 @@ For an autonomous implementation brief, use [`docs/goal-prompt.md`](docs/goal-pr
 - Code is organized by bounded domain under `src/domains/<domain>/`.
 - Every domain owns `AGENTS.md`; its sibling `CLAUDE.md` contains only `@AGENTS.md`.
 - `docs/raw/` contains canonical source artifacts; `docs/wiki/` is the derived, navigable knowledge base.
-- `.pi/` is the Repository Builder harness (`craft`, `/goal`, and `local-craft-*`).
 - `packages/orchestrator-harness/` owns control-plane Pi checkpoints such as spec decomposition; its executable package is delivered by the approved build DAG.
 - `packages/worker-harness/` is the explicitly loaded Pool Worker Pi package (`craft-pool` and runtime `craft-*`) and remains DAG-unaware.
 - Pool Worker identity requires a trusted per-attempt execution marker and fail-closed preflight; repository subject matter alone never changes the current actor.

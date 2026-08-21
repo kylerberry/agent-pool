@@ -53,7 +53,7 @@ Two human gates bracket the pipeline; everything between them is machine-gated a
 
 ### 2.1 Actor Boundary: Builder vs. Worker
 
-A **Repository Builder** is a local Pi session implementing this product. It uses `.pi/`, `/goal`, `craft`, and `local-craft-*`; it is not a member of the pool. A **Pool Worker** is a fresh runtime Pi session executing one node attempt through the explicitly loaded `packages/worker-harness` package.
+A **Repository Builder** is a local development session implementing this product; it is not a member of the pool. A **Pool Worker** is a fresh runtime Pi session executing one node attempt through the explicitly loaded `packages/worker-harness` package.
 
 Pool Worker identity is machine-readable, not inferred from prompts or repository subject matter. The trusted supervisor sets `AGENT_POOL_ACTOR=pool-worker` plus expected node, attempt, repository, and branch values, writes launcher-owned `.agent-pool/execution-context.json` conforming to `pool-worker-execution-context.schema.json`, and runs the worker-harness preflight before any paid model call. Preflight binds marker identity and target to launcher expectations and enforces a five-minute freshness window; missing, replayed, or invalid context fails closed. See `docs/raw/context/repository-builder-vs-pool-worker.md`.
 

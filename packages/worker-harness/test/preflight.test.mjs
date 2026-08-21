@@ -418,7 +418,7 @@ test("worker routing excludes orchestrator-side decomposition", () => {
 
 test("runtime resources are not locally auto-discovered", () => {
   for (const name of ["planner", "builder", "evaluator", "security", "sharpener"]) {
-    assert.equal(readFileSync(join(repoRoot, `.pi/agents/local-craft-${name}.md`), "utf8").includes(`name: local-craft-${name}`), true);
+    assert.equal(existsSync(join(repoRoot, `.pi/agents/local-craft-${name}.md`)), false);
     assert.equal(existsSync(join(repoRoot, `.pi/agents/craft-${name}.md`)), false);
   }
   assert.equal(existsSync(join(repoRoot, ".pi/skills/craft-pool/SKILL.md")), false);

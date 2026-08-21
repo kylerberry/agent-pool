@@ -1,110 +1,70 @@
 # Repository Agent Instructions
 
-## 1. Think Before Coding
+## Working Style
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-
-## 2. Simplicity First
-
-**Minimum code that solves the problem. Nothing speculative.**
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-## 3. Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
+- Clarify ambiguity that blocks a correct implementation; do not silently choose between materially different interpretations.
+- State consequential assumptions and tradeoffs.
+- Prefer the smallest solution that satisfies the request.
+- Do not add speculative features, abstractions, configurability, or impossible-case handling.
+- Touch only requested code and match existing style.
+- Remove imports, variables, functions, and files made obsolete by your change.
+- Mention unrelated problems without fixing them unless asked.
+- Every changed line should trace to the request.
 
 ## Current Actor: Repository Builder
 
-Unless a trusted `.agent-pool/execution-context.json` marker explicitly identifies this session as a Pool Worker and the worker-harness preflight passes, you are a **Repository Builder** implementing the agent-pool product. The repository's subject matter does not make you a member of the pool.
+Unless a trusted `.agent-pool/execution-context.json` marker identifies this session as a Pool Worker and the worker-harness preflight passes, you are a **Repository Builder** implementing the agent-pool product. Repository subject matter does not make you a member of the pool.
 
-Repository Builders use local `.pi/` resources, `/goal`, `craft`, and `local-craft-*` agents. Do not invoke `craft-pool` or behave as though the supervisor, queue, or pool already exists. Runtime-only Pool Worker resources live under `packages/worker-harness/` and are loaded explicitly by the future supervisor.
+Repository Builders work directly from repository specifications and tests. Do not invoke `craft-pool` or behave as though the supervisor, queue, or pool already exists. Trusted product-runtime code explicitly loads runtime-only Pool Worker resources from `packages/worker-harness/`.
 
 See `docs/raw/context/repository-builder-vs-pool-worker.md`.
 
 ## Project Purpose
 
-This repository designs and implements an agent-pool / supervisor-orchestrator system: a warm pool of coding agents plus a deterministic controller that can decompose free-form work into gated, auditable units, dispatch those units to agents, grade outcomes, and deliver reviewable GitHub artifacts.
+This repository implements an agent-pool and supervisor-orchestrator system: a warm pool of coding agents plus a deterministic controller that decomposes free-form work into gated, auditable units, dispatches them, grades outcomes, and produces reviewable GitHub artifacts.
 
-## Documentation Lookup
+## Documentation
 
-Before non-trivial planning or code changes:
-
-1. Read `docs/AGENTS.md`.
-2. Read `docs/wiki/index.md`.
-3. Read relevant wiki pages for the task.
-4. Open `docs/raw/` artifacts only when exact source wording, acceptance criteria, or ADR rationale is needed.
+Before non-trivial work, read `docs/AGENTS.md`, `docs/wiki/index.md`, and relevant wiki pages. Read relevant raw sources for binding requirements or conflict resolution. Raw sources win over the wiki; flag contradictions and update the wiki when appropriate.
 
 Do not duplicate canonical docs into the repository root. Project knowledge lives in `docs/`.
 
-When recording durable change history, add one activity-log fragment under `docs/wiki/log/entries/`; do not append feature-branch entries directly to `docs/wiki/log.md`.
+For meaningful durable changes, add one activity-log fragment under `docs/wiki/log/entries/`; do not append feature-branch entries directly to `docs/wiki/log.md`.
 
-## Source Of Truth
+## Instruction Files
 
-- `docs/wiki/` = synthesized project map and working knowledge.
-- `docs/raw/` = canonical source artifacts.
-- If wiki conflicts with raw source, raw source wins. Flag contradiction and update wiki when appropriate.
-
-## Agent Instruction Files
-
-`AGENTS.md` is the canonical instruction file at every scope. A sibling `CLAUDE.md` must contain only:
+`AGENTS.md` is canonical at every scope. A sibling `CLAUDE.md` must contain only:
 
 ```md
 @AGENTS.md
 ```
 
-Do not duplicate canonical instructions into `CLAUDE.md`; update the sibling `AGENTS.md` instead.
+Update `AGENTS.md`; never duplicate its instructions into `CLAUDE.md`.
 
 ## Project Workflows
 
-- Repository Builders use local `craft`; Pool Workers use the explicitly loaded `packages/worker-harness` `craft-pool` skill.
-- For early CRAFTS planning and code-relationship questions, query `graphify-out/graph.json` when it is present and current before broad codebase scanning. It is an ignored, regenerable, code-structure aid: check its health/provenance and verify claims in source and tests. Use `docs/wiki/` and raw artifacts for prose knowledge and decisions; never treat Graphify's generated wiki as canonical.
+- For code-relationship questions, query a current, provenance-checked `graphify-out/graph.json` before broad scanning. Verify graph claims in source and tests. Use canonical project docs—not generated Graphify wiki output—for prose knowledge and decisions.
 - Use `pi-subagents` when defining or coordinating project agents and chains.
 
-## Domain-Driven Source Layout
+## Source Layout
 
-Application code belongs under `src/domains/<domain>/`. Each domain owns its business rules and exposes narrow interfaces; cross-domain interaction uses explicit services, events, or contracts rather than another domain's internals.
+Product domain logic belongs under `src/domains/<domain>/`. Harness and adapter code may live in its owning package but must depend on domains through narrow public interfaces.
 
-Every domain directory must contain a canonical `AGENTS.md` with actionable domain terms, invariants, interfaces, trust boundaries, verification guidance, and common footguns. Its sibling `CLAUDE.md` must contain only `@AGENTS.md`. Before editing a domain, read its local `AGENTS.md` after the repository and docs instructions.
+Before editing a domain, read its local `AGENTS.md`. Every domain requires canonical `AGENTS.md` and pointer-only `CLAUDE.md`.
 
-The CRAFTS S — Sharpen phase keeps domain instructions and affected wiki pages current when work creates durable knowledge. Canonical decisions and requirements are added to `docs/raw/` first; do not record transient implementation noise.
+Keep domain instructions and affected documentation current when implementation establishes durable knowledge. Record canonical requirements or decisions under `docs/raw/` first; omit transient implementation noise.
 
-## Test Governance
+## Verification
 
-Use the explicit lanes in `docs/raw/context/test-governance.md`: `npm run test:all` for deterministic aggregate evidence, `npm run test:docker` for non-skipping Docker evidence, `npm run proof:reports:verify` for retained-report verification, and explicit Stage 1/2 commands for real-model proof only. Tests immediately clean only resources they create, never mutate tracked fixtures/configuration, and never claim isolation, persistence, or concurrency from source scans, timing sleeps, or synchronous `Promise.all`.
+Follow the lanes and evidence rules in `docs/raw/context/test-governance.md`. Use `npm run test:all` for deterministic aggregate evidence and `npm run test:docker` when non-skipping Docker evidence is required.
 
-## Code Changes
+## Architecture Changes
 
-Respect ADRs before changing architecture, runtime, persistence, orchestration semantics, model routing, grading, retry policy, storage, or integration boundaries.
+Read relevant ADRs before changing architecture, runtime, persistence, orchestration semantics, model routing, grading, retry policy, storage, or integration boundaries.
 
 Current anchors:
+
 - `docs/wiki/index.md`
 - `docs/raw/specs/orchestrator-spec.md`
-- `docs/raw/context/local-repository-builder-workflow.md` (current local workflow authority)
-- `docs/raw/specs/functional-pool-deployment.md` (historical evidence; no longer local dispatch authority)
 - `docs/raw/specs/crafts-phase-artifact-contract.md`
 - `docs/raw/adr/orchestrator/`
