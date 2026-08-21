@@ -21,6 +21,8 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/architecture/domain-driven-documentation|Domain-Driven Documentation]]
 - [[wiki/architecture/initial-domain-map|Initial Domain Map (approved)]]
 - [[wiki/architecture/repository-builder-vs-pool-worker|Repository Builder vs Pool Worker]]
+- [[wiki/sources/2026-08-16_local-repository-builder-workflow|Local Repository Builder /goal Workflow]] — canonical local plan-governance authority
+- [[wiki/sources/2026-08-20_repository-bound-pool-milestone|Repository-Bound Pool Milestone]] — approved active local plan
 - [[wiki/output/agents-building-agents-handoff|Agents Building Agents Handoff]]
 - [[wiki/log|Activity Log]]
 - [[wiki/operations/test-governance|Test Governance]]

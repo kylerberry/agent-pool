@@ -36,6 +36,7 @@ import { spawnSync } from 'node:child_process';
 
 import {
   runTask,
+  createConfiguredRepositoryBoundPool,
   resolveCandidateOutputPath,
   prepareTaskWorkspace,
   parseContainerRuntime,
@@ -45,7 +46,7 @@ import {
 import { hardenedGit, hardenedGitEnv } from '../src/hardened-git.ts';
 import { validateTaskRunEvidence, type TaskRunEvidence } from '../src/task-run-evidence.ts';
 import type { PreflightSuccess } from '../src/preflight.ts';
-import type { PiLauncher, PiProcess, PoolProofLaunchExpectations, ProofJob } from '../../../src/domains/agent-execution/index.ts';
+import { createRepositoryBoundPool, createRepositoryBoundTaskContent, type PiLauncher, type PiProcess, type PoolProofLaunchExpectations, type ProofJob } from '../../../src/domains/agent-execution/index.ts';
 import type { GreenEvidence } from '../../../src/domains/verification/pool-proof-verifier.ts';
 import { createTempRoot } from './helpers/temp-root.ts';
 
@@ -226,6 +227,44 @@ function makeHarness(behavior: WorkerBehavior, manifest: Record<string, unknown>
 }
 
 describe('runTask task runner', () => {
+  it('uses a no-hardlinks clone before checking out configured workspaces', () => {
+    const source = readFileSync(join(packageRoot, 'src', 'run-task.ts'), 'utf8');
+    assert.match(source, /\['clone', '--no-hardlinks', '--no-checkout', sourceRepoPath, workspacePath\]/);
+  });
+
+  it('runs frozen configured policy from a real local branch without accepting a manifest path', async (t) => {
+    const tmpRoot = createTempRoot(t, 'configured-run-task-');
+    const repo = makeTaskRepo(t, tmpRoot);
+    const poolHome = join(tmpRoot, 'pool-home');
+    const runtimeRoot = join(poolHome, 'runtime');
+    const persistentReviewCheckout = join(tmpRoot, 'review');
+    mkdirSync(runtimeRoot, { recursive: true, mode: 0o700 });
+    git(tmpRoot, ['clone', '-q', repo.repoPath, persistentReviewCheckout]);
+    chmodSync(poolHome, 0o700); chmodSync(runtimeRoot, 0o700); chmodSync(repo.repoPath, 0o700); chmodSync(persistentReviewCheckout, 0o700);
+    const branch = String(git(repo.repoPath, ['symbolic-ref', '--short', 'HEAD']).stdout).trim();
+    const pool = createRepositoryBoundPool({
+      poolHome, runtimeRoot, repositoryRoot: repo.repoPath, persistentReviewCheckout, baseRef: `refs/heads/${branch}`,
+      allowedChangedPaths: ['src/message.js'],
+      verificationCommands: [['node', '--test', 'test/message.test.js']],
+      model: 'moonshot/kimi-k2.7-code', bounds: { verificationTimeoutSeconds: 60, launchTimeoutSeconds: 60 },
+    }, (root) => String(git(root, ['rev-parse', '--show-toplevel']).stdout).trim());
+    const task = createRepositoryBoundTaskContent({
+      taskId: 'configured-task', intent: 'change the message', changeSpec: 'make the test pass',
+      acceptanceCriteria: [{ id: 'c1', text: 'only the allowed file changes' }],
+    });
+    const manifest = validManifest(repo);
+    const harness = makeHarness(greenWorker, manifest);
+    const configured = createConfiguredRepositoryBoundPool(pool, {
+      preflight: fakePreflight(), containerRuntime: 'docker', sandboxImage: 'sha256:fake',
+      adapterOverrides: harness.options('ignored').adapterOverrides,
+    });
+    const result = await configured.run(task);
+    assert.equal(result.ok, true, result.ok ? '' : `${result.failureCode}: ${result.reason}`);
+    assert.equal(existsSync(runtimeRoot), true);
+    assert.deepEqual(readdirSync(runtimeRoot), [], 'configured execution root must be cleaned');
+    assert.ok(harness.sandboxCalls.every((call) => call.timeoutSeconds === 60));
+  });
+
   it('runs a fake-adapter green path with multi-command verification and writes schema-valid evidence', async (t) => {
     const tmpRoot = createTempRoot(t, 'run-task-green-');
     const repo = makeTaskRepo(t, tmpRoot);
