@@ -79,7 +79,7 @@ describe('durability across restart', () => {
     await reopened.close();
 
     const migrated = new DatabaseSync(join(root, db));
-    assert.equal((migrated.prepare('SELECT MAX(version) AS v FROM schema_version;').get() as { v: number }).v, 7);
+    assert.equal((migrated.prepare('SELECT MAX(version) AS v FROM schema_version;').get() as { v: number }).v, 8);
     migrated.close();
   });
 

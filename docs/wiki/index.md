@@ -33,9 +33,11 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/sources/2026-08-13_test-governance|Test Governance]] — `docs/raw/context/test-governance.md`
 - [[wiki/sources/2026-04-13_initial-domain-map|Initial Domain Map]] — `docs/raw/context/initial-domain-map.md`
 - [[wiki/sources/2026-04-13_repository-builder-vs-pool-worker|Repository Builder and Pool Worker Role Boundary]] — `docs/raw/context/repository-builder-vs-pool-worker.md`
+- [[wiki/sources/2026-08-16_local-repository-builder-workflow|Local Repository Builder /goal Workflow]] — `docs/raw/context/local-repository-builder-workflow.md`
 - [[wiki/sources/2026-04-13_pool-worker-execution-context-schema|Pool Worker Execution Context Schema]] — `docs/raw/specs/schemas/pool-worker-execution-context.schema.json`
 - [[wiki/sources/2026-07-31_pool-worker-attempt-contract-schema|Pool Worker Attempt Contract Schema]] — `docs/raw/specs/schemas/pool-worker-attempt-contract.schema.json`
 - [[wiki/sources/2026-07-22_orchestrator-spec|Supervisor Orchestrator — Consolidated Specification]] — `docs/raw/specs/orchestrator-spec.md`
+- [[wiki/sources/2026-08-21_compose-direct-intake-to-execution|compose-direct-intake-to-execution]] — `docs/raw/plans/compose-direct-intake-to-execution.md`
 - [[wiki/sources/2026-08-13_functional-pool-deployment|Functional Pool Deployment]] — superseded 2026-08-16 by the four-node replacement milestone plan; retained as historical evidence
 - [[wiki/sources/2026-08-13_adr-037-github-planning-pr-gate1|ADR-037: GitHub Planning PRs as Editable Gate 1 Manifests]] — proposed/deferred
 - [[wiki/sources/2026-08-13_adr-038-node-level-mainline-integration|ADR-038: Node-Level Mainline Integration]] — proposed/deferred

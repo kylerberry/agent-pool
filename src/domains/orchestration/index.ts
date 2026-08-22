@@ -29,6 +29,9 @@ export type {
   ProofResultRecord,
   ProofCheckRecord,
   ProofResultInput,
+  DirectTaskIdempotencyRecord,
+  DirectTaskSubmissionRecord,
+  DirectTaskClaimable,
 } from './sqlite-store.ts';
 export { createSqliteStore } from './sqlite-store.ts';
 export type {

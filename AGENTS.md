@@ -68,3 +68,15 @@ Current anchors:
 - `docs/raw/specs/orchestrator-spec.md`
 - `docs/raw/specs/crafts-phase-artifact-contract.md`
 - `docs/raw/adr/orchestrator/`
+
+## Terminology discipline
+
+Use the repository’s canonical terms exactly. Do not rename, paraphrase, or invent nouns for components, roles, configuration, or boundaries.
+
+When documentation leaves a seam unspecified:
+1. describe the missing data or behavior in existing terms;
+2. do not propose a named abstraction unless implementation requires one;
+3. label every inferred concept explicitly as a proposal;
+4. prefer a concrete data-flow sentence over architectural shorthand.
+
+Never turn adjectives such as “reviewed,” “trusted,” or “configured” into new actors or components such as “operator,” “profile,” “registry,” or “selector” unless the repository defines them.

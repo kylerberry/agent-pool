@@ -3,7 +3,7 @@ title: Warm Agent Pool
 type: product
 tags: [agent-pool, github, execution]
 created: 2026-07-22
-updated: 2026-08-13
+updated: 2026-08-21
 sources:
   - docs/raw/specs/orchestrator-spec.md
 ---
@@ -12,7 +12,7 @@ sources:
 
 The warm agent pool is the DAG-unaware execution substrate: ready capacity slots accept atomic jobs and start a fresh Pool Worker Pi process/session and workspace for every attempt. Slots may persist; conversational state never does. These runtime workers are distinct from Repository Builder sessions developing this codebase.
 
-Pool Proof is complete. The active four-node replacement milestone plan generalizes the proven runner to one approved real-repository task, composes authenticated direct-task intake through a SQLite-backed claim loop to a fresh Worker, builds the general deterministic verifier, and surfaces verified output as a local review branch and PR-ready artifact. Its sole ready root (`generalize-proven-runner`) remains unreserved; the superseded 17-node governance-heavy phase, full free-form supervision, and probing implementation remain post-launch work.
+Pool Proof is complete. `generalize-proven-runner` and `compose-direct-intake-to-execution` of the four-node replacement milestone are complete. Remaining nodes: `general-deterministic-verifier` and `surface-reviewable-output`. The superseded 17-node governance-heavy phase, full free-form supervision, and probing implementation remain post-launch work.
 
 ## Key constraints
 

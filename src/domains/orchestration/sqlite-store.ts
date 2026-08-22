@@ -47,7 +47,7 @@ import {
 } from './contracts.ts';
 import { isValidTransition } from './lifecycle.ts';
 
-const CURRENT_SCHEMA_VERSION = 7;
+const CURRENT_SCHEMA_VERSION = 8;
 
 const MIGRATIONS: readonly string[] = [
   `
@@ -430,6 +430,30 @@ const MIGRATIONS: readonly string[] = [
   WHEN EXISTS (SELECT 1 FROM pool_proof_results WHERE attempt_id = NEW.attempt_id)
   BEGIN SELECT RAISE(ABORT, 'pool_proof_results is append-only'); END;
   `,
+  // v8: caller-scoped direct-task idempotency, ownership, and persisted TaskManifest.
+  `
+  CREATE TABLE IF NOT EXISTS direct_task_submissions (
+    submission_id TEXT PRIMARY KEY,
+    caller_id TEXT NOT NULL,
+    work_id TEXT NOT NULL UNIQUE,
+    payload_hash TEXT NOT NULL,
+    acceptance_json TEXT NOT NULL,
+    manifest_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (work_id) REFERENCES works(work_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS direct_task_idempotency (
+    scope_key TEXT PRIMARY KEY,
+    caller_id TEXT NOT NULL,
+    payload_hash TEXT NOT NULL,
+    submission_id TEXT NOT NULL,
+    FOREIGN KEY (submission_id) REFERENCES direct_task_submissions(submission_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_direct_task_submissions_caller
+    ON direct_task_submissions(caller_id, submission_id);
+  `,
 ];
 
 export type NodeRecord = {
@@ -552,6 +576,36 @@ export type ProofResultInput =
   | (ProofResultCommon & { readonly status: 'passed'; readonly commit_sha: string; readonly failure_code: null })
   | (ProofResultCommon & { readonly status: 'failed'; readonly commit_sha: null; readonly failure_code: string });
 
+export type DirectTaskIdempotencyRecord = {
+  readonly scope_key: string;
+  readonly caller_id: string;
+  readonly payload_hash: string;
+  readonly submission_id: string;
+  readonly work_id: string;
+  readonly acceptance_json: string;
+};
+
+export type DirectTaskSubmissionRecord = {
+  readonly submission_id: string;
+  readonly caller_id: string;
+  readonly work_id: string;
+  readonly payload_hash: string;
+  readonly acceptance_json: string;
+  readonly manifest_json: string;
+  readonly created_at: string;
+};
+
+export type DirectTaskClaimable = {
+  readonly submission_id: string;
+  readonly work_id: string;
+  readonly node_id: string;
+  readonly node_state: NodeState;
+  readonly node_version: number;
+  readonly manifest_json: string;
+  readonly attempt_id: string | null;
+  readonly attempt_state: AttemptRecord['state'] | null;
+};
+
 export type OrchestrationStore = {
   readonly importApprovedWork: (work: ApprovedWork) => Promise<ImportedWork | { readonly error: OrchestrationError }>;
   readonly getImportedWork: (workId: string) => Promise<ImportedWork | null>;
@@ -596,6 +650,22 @@ export type OrchestrationStore = {
   readonly countPhaseArtifactsForAttempt: (attemptId: string) => Promise<number>;
   readonly countPhaseArtifactsByWork: (workId: string) => Promise<number>;
   readonly getAttemptRoutingDecisionsByWork: (workId: string) => Promise<readonly AttemptBuilderRoutingRecord[]>;
+  readonly importDirectTask: (input: {
+    readonly callerId: string;
+    readonly scopeKey: string | null;
+    readonly payloadHash: string;
+    readonly submissionId: string;
+    readonly acceptanceJson: string;
+    readonly manifestJson: string;
+    readonly work: ApprovedWork;
+  }) => Promise<
+    | { readonly kind: 'imported'; readonly work_id: string; readonly submission_id: string }
+    | { readonly kind: 'replayed'; readonly work_id: string; readonly submission_id: string; readonly acceptance_json: string }
+    | { readonly error: OrchestrationError }
+  >;
+  readonly getDirectTaskIdempotency: (scopeKey: string) => Promise<DirectTaskIdempotencyRecord | null>;
+  readonly getDirectTaskSubmission: (callerId: string, submissionId: string) => Promise<DirectTaskSubmissionRecord | null>;
+  readonly listDirectTaskClaimables: () => Promise<readonly DirectTaskClaimable[]>;
   readonly close: () => Promise<void>;
 };
 
@@ -1953,6 +2023,162 @@ export async function createSqliteStore(config: {
          WHERE a.work_id = ?
          ORDER BY d.attempt_id`
       ).all(workId) as AttemptBuilderRoutingRecord[];
+    },
+
+    async importDirectTask(input) {
+      const workValidation = validateWork(input.work);
+      if (workValidation) return err(workValidation.code, workValidation.message);
+      if (!isNonEmptyString(input.callerId, ORCHESTRATION_LIMITS.maxOwnerLength)) {
+        return err('INVALID_WORK', 'invalid caller_id');
+      }
+      if (!isNonEmptyString(input.payloadHash, ORCHESTRATION_LIMITS.maxDigestLength)) {
+        return err('INVALID_WORK', 'invalid payload_hash');
+      }
+      if (!isNonEmptyString(input.submissionId, ORCHESTRATION_LIMITS.maxIdLength)) {
+        return err('INVALID_WORK', 'invalid submission_id');
+      }
+      if (!isNonEmptyString(input.acceptanceJson, 1_000_000) || !isNonEmptyString(input.manifestJson, 1_000_000)) {
+        return err('INVALID_WORK', 'invalid acceptance or manifest');
+      }
+      if (input.scopeKey !== null && !isNonEmptyString(input.scopeKey, 1024)) {
+        return err('INVALID_WORK', 'invalid scope_key');
+      }
+      if (input.work.origin !== 'direct_task' || input.work.nodes.length !== 1) {
+        return err('INVALID_WORK', 'direct task import requires one direct_task node');
+      }
+
+      try {
+        db.exec('BEGIN IMMEDIATE;');
+      } catch (e) {
+        return err('DATABASE_UNREACHABLE', `could not begin write transaction: ${(e as Error).message}`);
+      }
+      try {
+        if (input.scopeKey !== null) {
+          const existing = db.prepare(
+            `SELECT i.scope_key, i.caller_id, i.payload_hash, i.submission_id, s.work_id, s.acceptance_json
+             FROM direct_task_idempotency i
+             JOIN direct_task_submissions s ON s.submission_id = i.submission_id
+             WHERE i.scope_key = ?`,
+          ).get(input.scopeKey) as DirectTaskIdempotencyRecord | undefined;
+          if (existing) {
+            if (existing.caller_id !== input.callerId) {
+              db.exec('ROLLBACK;');
+              return err('INVALID_WORK', 'idempotency scope caller mismatch');
+            }
+            if (existing.payload_hash !== input.payloadHash) {
+              db.exec('ROLLBACK;');
+              return err('IDEMPOTENCY_KEY_PAYLOAD_MISMATCH', 'this idempotency key was already used with a different payload');
+            }
+            db.exec('COMMIT;');
+            return {
+              kind: 'replayed',
+              work_id: existing.work_id,
+              submission_id: existing.submission_id,
+              acceptance_json: existing.acceptance_json,
+            };
+          }
+        }
+
+        const existingWork = db.prepare('SELECT payload_hash FROM works WHERE work_id = ?').get(input.work.work_id) as { payload_hash: string } | undefined;
+        if (existingWork) {
+          db.exec('ROLLBACK;');
+          return err('CONFLICTING_WORK', 'work_id already imported');
+        }
+        const existingSubmission = db.prepare('SELECT submission_id FROM direct_task_submissions WHERE submission_id = ?').get(input.submissionId) as { submission_id: string } | undefined;
+        if (existingSubmission) {
+          db.exec('ROLLBACK;');
+          return err('DUPLICATE_WORK', 'submission_id already imported');
+        }
+
+        db.prepare(
+          'INSERT INTO works (work_id, origin, repo, branch, payload_hash, approval_id, approved_at, approved_head, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1);',
+        ).run(
+          input.work.work_id,
+          input.work.origin,
+          input.work.repo,
+          input.work.branch,
+          canonicalWorkHash(input.work),
+          input.work.approval_id ?? null,
+          input.work.approved_at ?? null,
+          input.work.approved_head ?? null,
+        );
+        for (const node of input.work.nodes) {
+          db.prepare(
+            'INSERT INTO nodes (work_id, node_id, state, version, intent, change_spec, acceptance_criteria_json, depends_on_json, criteria_origin_source, criteria_origin_source_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
+          ).run(
+            input.work.work_id,
+            node.id,
+            'pending',
+            1,
+            node.intent,
+            node.change_spec,
+            JSON.stringify([...node.acceptance_criteria]),
+            JSON.stringify([...node.depends_on]),
+            node.criteria_origin_source,
+            node.criteria_origin_source_id,
+          );
+        }
+        const createdAt = new Date().toISOString();
+        db.prepare(
+          'INSERT INTO direct_task_submissions (submission_id, caller_id, work_id, payload_hash, acceptance_json, manifest_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+        ).run(
+          input.submissionId,
+          input.callerId,
+          input.work.work_id,
+          input.payloadHash,
+          input.acceptanceJson,
+          input.manifestJson,
+          createdAt,
+        );
+        if (input.scopeKey !== null) {
+          db.prepare(
+            'INSERT INTO direct_task_idempotency (scope_key, caller_id, payload_hash, submission_id) VALUES (?, ?, ?, ?);',
+          ).run(input.scopeKey, input.callerId, input.payloadHash, input.submissionId);
+        }
+        db.exec('COMMIT;');
+        audit('direct_task_imported', { origin: 'direct_task' }, { workId: input.work.work_id });
+        return { kind: 'imported', work_id: input.work.work_id, submission_id: input.submissionId };
+      } catch (e) {
+        try {
+          db.exec('ROLLBACK;');
+        } catch {}
+        return err('INVALID_WORK', (e as Error).message);
+      }
+    },
+
+    async getDirectTaskIdempotency(scopeKey) {
+      if (!isNonEmptyString(scopeKey, 1024)) return null;
+      return (
+        (db.prepare(
+          `SELECT i.scope_key, i.caller_id, i.payload_hash, i.submission_id, s.work_id, s.acceptance_json
+           FROM direct_task_idempotency i
+           JOIN direct_task_submissions s ON s.submission_id = i.submission_id
+           WHERE i.scope_key = ?`,
+        ).get(scopeKey) as DirectTaskIdempotencyRecord | undefined) ?? null
+      );
+    },
+
+    async getDirectTaskSubmission(callerId, submissionId) {
+      if (!isNonEmptyString(callerId, ORCHESTRATION_LIMITS.maxOwnerLength) || !isNonEmptyString(submissionId, ORCHESTRATION_LIMITS.maxIdLength)) {
+        return null;
+      }
+      return (
+        (db.prepare(
+          'SELECT * FROM direct_task_submissions WHERE caller_id = ? AND submission_id = ?',
+        ).get(callerId, submissionId) as DirectTaskSubmissionRecord | undefined) ?? null
+      );
+    },
+
+    async listDirectTaskClaimables() {
+      return db.prepare(
+        `SELECT s.submission_id, s.work_id, n.node_id, n.state AS node_state, n.version AS node_version, s.manifest_json,
+                a.attempt_id, a.state AS attempt_state
+         FROM direct_task_submissions s
+         JOIN nodes n ON n.work_id = s.work_id
+         LEFT JOIN attempts a ON a.work_id = s.work_id AND a.node_id = n.node_id
+         WHERE n.state IN ('pending', 'ready', 'in_progress')
+         ORDER BY s.created_at ASC`,
+      ).all() as DirectTaskClaimable[];
     },
 
     async close() {
