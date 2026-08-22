@@ -3,7 +3,7 @@ title: Supervisor Orchestrator
 type: architecture
 tags: [orchestrator, dag, agents]
 created: 2026-07-22
-updated: 2026-08-16
+updated: 2026-08-21
 sources:
   - docs/raw/specs/orchestrator-spec.md
   - docs/raw/adr/orchestrator/
@@ -15,7 +15,7 @@ The supervisor orchestrator accepts a free-form feature spec, decomposes it into
 
 ## Current build phase
 
-Pool Proof is complete. The 17-node functional deployment plan approved on 2026-08-15 was superseded on 2026-08-16 before its root started; its bytes are archived at `docs/raw/plans/superseded-functional-deployment-build-dag.json`. The active plan is the four-node replacement milestone: generalize the proven runner to one approved real-repository task, compose authenticated direct-task intake through a SQLite-backed claim loop to a fresh Worker, build the general deterministic verifier, and surface verified output as a local review branch and PR-ready artifact. The sole ready root is `generalize-proven-runner`; it is not reserved or started. Tier-2 grading, budgets, discovery quarantine, restart recovery, component PR assembly, automated Gate 2, and the operations baseline remain deferred until the tracer path demonstrates need.
+Pool Proof is complete. The 17-node functional deployment plan approved on 2026-08-15 was superseded on 2026-08-16 before its root started; its bytes are archived at `docs/raw/plans/superseded-functional-deployment-build-dag.json`. The active plan is the four-node replacement milestone. `generalize-proven-runner` and `compose-direct-intake-to-execution` are complete: authenticated single-unit `POST /tasks` persists through SQLite and a claim loop launches one Minimal Pool Runtime Worker. Remaining nodes: `general-deterministic-verifier` and `surface-reviewable-output`. Tier-2 grading, budgets, discovery quarantine, Redis/BullMQ, component PR assembly, automated Gate 2, and the operations baseline remain deferred until the tracer path demonstrates need.
 
 ## Operating model
 

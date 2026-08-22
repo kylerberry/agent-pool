@@ -16,6 +16,7 @@ Proof-only harness that drives the public Minimal Pool Runtime through either a 
 ## Scope
 
 - Own deterministic fixture repositories and the generalized `run-task.ts` entry point.
+- Re-export the production `TaskManifest` validator from `src/composition/task-manifest.ts`. Production code must not import this package.
 - Define ADR-028-shaped atomic fixture jobs and allowed-path manifests.
 - Invoke `createMinimalPoolRuntime()` from `src/domains/agent-execution/minimal-pool-runtime.ts`.
 - Run an independent runner-owned verifier over the result.

@@ -52,6 +52,7 @@
 - `createAttempt(..., builderRouting)` requires `ResolvedBuilderRouting`. `dispatchReadyFrontier(..., resolveBuilderRouting)` requires a `BuilderRoutingResolver` supplied by the composition root that owns the validated availability snapshot. Resolver outages, invalid routing, and attempt-creation failures return bounded typed skipped outcomes.
 - `getBuilderRoutingByAttemptId` returns the persisted builder routing or `null`. Evaluator-execution provenance has no generic attempt-creation field; grading must record it when an evaluator actually runs.
 - `recordPhaseArtifact`, `getLatestPhaseArtifact`, and `getPhaseArtifactRevisions` manage C/R/A/F/T/S history with `passed|needs_fix|failed|blocked` outcomes. An artifact must reference a real attempt; deletion is restricted rather than cascaded.
+- `importDirectTask` commits caller-scoped idempotency, ownership, one direct-task work/node, and the persisted `TaskManifest` in one SQLite transaction (schema v8). `getDirectTaskSubmission` is owner-scoped. `listDirectTaskClaimables` feeds the composition claim loop. `recordProofResult` does not complete the node; the claim loop must call `acceptResult` then `completeAuthorizedResult`.
 
 ## Dependencies
 
@@ -111,6 +112,7 @@ mismatch or extra field, so a drifted payload fails at launch rather than mid-at
 ## Footguns
 
 - Allowing Agent Execution to write node status directly bypasses Orchestration's lifecycle invariants.
+- `recordProofResult` does not complete the node or prevent reclaim; the composition claim loop must call `acceptResult` then `completeAuthorizedResult`.
 - Reclaiming a lease without idempotency checks can duplicate attempts.
 - Mixing audit-query policy with runtime dispatch policy can create hidden coupling.
 - Passing a node record straight through as an attempt payload leaks dependency edges to a

@@ -9,7 +9,7 @@ The active plan is the four-node replacement milestone at `docs/raw/plans/propos
 3. build the general deterministic verifier for arbitrary approved task manifests (`general-deterministic-verifier`);
 4. surface verified output as a local review branch and PR-ready artifact (`surface-reviewable-output`).
 
-`generalize-proven-runner` is the sole ready root; it remains unreserved until explicitly started. Redis/BullMQ, Tier-2 grading, GitHub automation, connected-component assembly, and the operations baseline are deferred until the tracer path demonstrates the need.
+`generalize-proven-runner` and `compose-direct-intake-to-execution` are complete. Remaining ready work is `general-deterministic-verifier` (parallel with the completed composition node) and then `surface-reviewable-output`. Redis/BullMQ, Tier-2 grading, GitHub automation, connected-component assembly, and the operations baseline are deferred until the tracer path demonstrates the need.
 
 The 17-node functional deployment plan approved on 2026-08-15 was superseded on 2026-08-16 before its root started. Its exact bytes are archived at `docs/raw/plans/superseded-functional-deployment-build-dag.json`; the 17-node sequence below is retained as the reference path for post-milestone work.
 

@@ -31,13 +31,13 @@
 
 - `POST /specs`, status, approval, and amendment routes — planned async decomposition/Gate 1 boundary.
 - `acceptDirectTasks()` — implemented synchronous domain boundary for one direct unit or hand-authored flat DAG.
-- `handleDirectTaskRequest()` — implemented policy-free `POST /tasks` HTTP adapter.
+- `handleDirectTaskRequest()` — implemented policy-free `POST /tasks` HTTP adapter for the general ADR-028 boundary (one unit or `units`).
 - `runDecomposition()` — implemented deterministic, dependency-injected decomposition service.
 - Emits approved work definitions to Orchestration; dispatch remains outside this domain.
 
 ## Direct-task path
 
-`acceptDirectTasks()` is synchronous by design: it cannot await a decomposition model. Its result fixes `gate1_required=false`, `gate2_required=true`, and `decomposition_invoked=false` as literal types.
+`acceptDirectTasks()` is synchronous by design: it cannot await a decomposition model. Its result fixes `gate1_required=false`, `gate2_required=true`, and `decomposition_invoked=false` as literal types. The composition root in `src/composition/direct-task-service.ts` accepts one `unit` only, persists via Orchestration `importDirectTask`, and exposes owner-scoped `GET /tasks/{submission_id}`.
 
 Accepted units carry `acceptance_criteria_provenance` with `origin=direct_task`. Do not trim, case-fold, reorder, renumber, or otherwise rewrite criteria. `direct_task` uses an underscore to match the worker attempt-contract enum.
 
@@ -72,7 +72,7 @@ Do not build this projection or remove `depends_on` here. Orchestration needs to
 
 ## Verification guidance
 
-- Run `node --experimental-strip-types --test test/work-intake/*.test.ts`.
+- Run `node --experimental-strip-types --test test/work-intake/*.test.ts test/composition/*.test.ts`.
 - Cover malformed and oversized input, duplicate/missing/self dependencies, cycles, criteria preservation, caller-scoped idempotency replay/conflict/capacity, and no-decomposition behavior.
 - Cover exact five-field decomposition output, one-repair/deadline bounds, immutable provenance, exact selected-model binding, actor separation, and hostile input rejection.
 - Run `npm test`, `npm run typecheck`, `npm run test:worker`, and orchestrator-harness package tests after integration.
@@ -97,6 +97,7 @@ Do not build this projection or remove `depends_on` here. Orchestration needs to
 - Moving duplicate-ID, referential-integrity, or cycle checks into the decomposer confuses emission validation with downstream deterministic DAG validation.
 - Allowing an invoker to select or fallback independently makes routing provenance untrustworthy.
 - Making direct intake async weakens the structural no-model-call guarantee.
+- The composition root rejects `units`; `acceptDirectTasks()` still accepts a hand-authored DAG. Do not collapse those contracts.
 - Static architecture checks must use AST/module analysis rather than source substrings; pair them with executable boundary evidence.
 - `runDecomposition()` receives hostile runtime objects: accept only ordinary or null-prototype own-field records, return bounded `INVALID_JOB` for inherited/class/cyclic inputs, and do not call retrieval or model collaborators first.
 - A one-repair ceiling needs an asserted invocation count; a test with an unused third fake response proves nothing.
