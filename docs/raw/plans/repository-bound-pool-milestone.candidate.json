@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "kind": "repository-builder-repository-bound-pool-milestone",
+  "kind": "repository-builder-repository-bound-pool-milestone-candidate",
   "domain_boundaries_changed": false,
   "nodes": [
     {
@@ -58,10 +58,5 @@
         "general-deterministic-verifier"
       ]
     }
-  ],
-  "approval": {
-    "approved_by": "kyler",
-    "notes": "Approved in session: narrow the first usable pool to one configured repository per instance, add host-accessible local review output, and defer automated GitHub delivery.",
-    "approved_at": "2026-08-20T16:44:25.000Z"
-  }
+  ]
 }

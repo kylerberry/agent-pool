@@ -28,12 +28,15 @@ import {
   createMinimalPoolRuntime,
   createPoolProofPiLauncher,
   createAttemptResourceFactory,
+  createRepositoryBoundTaskContent,
   resolveShortSocketRoot,
   type AttemptResources,
   type PiLauncher,
   type PiProcess,
   type PoolProofLaunchExpectations,
   type ProofJob,
+  type RepositoryBoundPoolConfig,
+  type RepositoryBoundTaskContent,
 } from '../../../src/domains/agent-execution/index.ts';
 import type { AdapterProvenance } from '../../../src/domains/agent-execution/minimal-pool-runtime.ts';
 import { createPoolProofVerifier, type GreenEvidence } from '../../../src/domains/verification/pool-proof-verifier.ts';
@@ -85,6 +88,27 @@ export type RunTaskOptions = {
     readonly createPiLauncher?: (expectations: PoolProofLaunchExpectations, job: ProofJob) => PiLauncher;
     readonly runSandboxCommand?: TaskRunSandboxCommand;
   };
+};
+
+type InternalRunTaskOptions = RunTaskOptions & {
+  /** Allocated by the configured entry only; never exposed by the manifest API. */
+  readonly executionRoot?: string;
+  /** Frozen configured-pool launch bound; legacy manifests leave this undefined. */
+  readonly launchTimeoutSeconds?: number;
+};
+
+/** Host-owned construction inputs; task callers never receive this type. */
+export type ConfiguredPoolHostOptions = {
+  readonly preflight: PreflightSuccess;
+  readonly containerRuntime: 'docker' | 'podman';
+  readonly sandboxImage: string;
+  /** Test-only adapter overrides, subject to the same provenance rule as runTask. */
+  readonly adapterOverrides?: RunTaskOptions['adapterOverrides'];
+};
+
+/** Opaque one-slot pool. Its sole request method accepts validated content. */
+export type ConfiguredRepositoryBoundPool = {
+  readonly run: (task: RepositoryBoundTaskContent) => Promise<TaskRunResult>;
 };
 
 export type TaskRunResult =
@@ -139,7 +163,7 @@ export function prepareTaskWorkspace(
   baseCommit: string,
 ): void {
   mkdirSync(dirname(workspacePath), { recursive: true });
-  const clone = hardenedGit(gitPath, dirname(workspacePath), ['clone', '--no-checkout', sourceRepoPath, workspacePath]);
+  const clone = hardenedGit(gitPath, dirname(workspacePath), ['clone', '--no-hardlinks', '--no-checkout', sourceRepoPath, workspacePath]);
   if (!clone.ok) {
     throw new Error(`TASK_CLONE_FAILED: ${clone.error}`);
   }
@@ -304,7 +328,89 @@ export function writeValidatedEvidence(evidence: TaskRunEvidence, path: string):
   writeFileSync(path, JSON.stringify(evidence, null, 2));
 }
 
+/** Resolve the configured branch at execution time through harness-owned Git. */
+function resolveConfiguredBaseCommit(gitPath: string, pool: RepositoryBoundPoolConfig): string {
+  const topLevel = hardenedGit(gitPath, pool.repositoryRoot, ['rev-parse', '--show-toplevel']);
+  if (!topLevel.ok || topLevel.stdout !== pool.repositoryRoot) {
+    throw new Error('CONFIGURED_REPOSITORY_IDENTITY_INVALID: repository root no longer identifies the configured Git worktree');
+  }
+  const resolved = hardenedGit(gitPath, pool.repositoryRoot, ['rev-parse', '--verify', `${pool.baseRef}^{commit}`]);
+  if (!resolved.ok || !/^[0-9a-f]{40}$/.test(resolved.stdout)) {
+    throw new Error('CONFIGURED_BASE_REF_UNRESOLVABLE: configured branch did not resolve to a commit');
+  }
+  return resolved.stdout;
+}
+
+/**
+ * Execute frozen pool policy plus task content. The generated snapshot is
+ * private to this function: no caller can choose its path or override fields.
+ */
+async function runConfiguredPoolTask(pool: RepositoryBoundPoolConfig, task: RepositoryBoundTaskContent, host: ConfiguredPoolHostOptions): Promise<TaskRunResult> {
+  let executionRoot: string | undefined;
+  let handedOff = false;
+  try {
+    const runtimeStat = lstatSync(pool.runtimeRoot);
+    if (runtimeStat.isSymbolicLink() || !runtimeStat.isDirectory() || realpathSync(pool.runtimeRoot) !== pool.runtimeRoot) {
+      throw new Error('CONFIGURED_RUNTIME_ROOT_INVALID: runtime root changed after startup');
+    }
+    const baseCommit = resolveConfiguredBaseCommit(host.preflight.gitPath, pool);
+    executionRoot = realpathSync(mkdtempSync(join(pool.runtimeRoot, 'execution-')));
+    if (!executionRoot.startsWith(`${pool.runtimeRoot}${sep}`)) {
+      throw new Error('CONFIGURED_RUNTIME_ROOT_INVALID: allocated workspace escaped configured runtime root');
+    }
+    const snapshotPath = join(executionRoot, '.configured-execution-snapshot.json');
+    writeFileSync(snapshotPath, JSON.stringify({
+      schema_version: 1,
+      task_id: task.taskId,
+      target_repo_path: pool.repositoryRoot,
+      base_commit: baseCommit,
+      intent: task.intent,
+      change_spec: task.changeSpec,
+      acceptance_criteria: task.acceptanceCriteria,
+      allowed_changed_paths: pool.allowedChangedPaths,
+      verification_commands: pool.verificationCommands,
+      model: pool.model,
+      bounds: { verification_timeout_seconds: pool.bounds.verificationTimeoutSeconds },
+    }));
+    handedOff = true;
+    return await runTaskInternal({
+      manifestPath: snapshotPath,
+      preflight: host.preflight,
+      containerRuntime: host.containerRuntime,
+      sandboxImage: host.sandboxImage,
+      adapterProvenance: host.adapterOverrides ? { launcher: 'fake', sandbox: 'fake', verifier: 'real', persistence: 'real' } : { launcher: 'real', sandbox: 'real', verifier: 'real', persistence: 'real' },
+      ...(host.adapterOverrides ? { adapterOverrides: host.adapterOverrides } : {}),
+      executionRoot,
+      launchTimeoutSeconds: pool.bounds.launchTimeoutSeconds,
+    });
+  } finally {
+    // runTask owns the root after handoff; failed setup must not leave it behind.
+    if (executionRoot && !handedOff) rmSync(executionRoot, { recursive: true, force: true });
+  }
+}
+
+/** Binds frozen owner policy and host adapters once; queued calls preserve one-slot execution. */
+export function createConfiguredRepositoryBoundPool(
+  pool: RepositoryBoundPoolConfig,
+  host: ConfiguredPoolHostOptions,
+): ConfiguredRepositoryBoundPool {
+  let tail: Promise<void> = Promise.resolve();
+  return Object.freeze({
+    run(task: RepositoryBoundTaskContent): Promise<TaskRunResult> {
+      const content = createRepositoryBoundTaskContent(task);
+      const next = tail.then(() => runConfiguredPoolTask(pool, content, host));
+      tail = next.then(() => undefined, () => undefined);
+      return next;
+    },
+  });
+}
+
+/** Legacy reviewed-manifest adapter. */
 export async function runTask(options: RunTaskOptions): Promise<TaskRunResult> {
+  return runTaskInternal(options);
+}
+
+async function runTaskInternal(options: InternalRunTaskOptions): Promise<TaskRunResult> {
   // 1. Strict manifest validation: the only work before this point is reading
   // the file. No store, clone, candidate directory, or adapter effect exists.
   const loaded = loadTaskManifest(options.manifestPath);
@@ -406,8 +512,8 @@ export async function runTask(options: RunTaskOptions): Promise<TaskRunResult> {
   try {
     // 4. Fresh isolated workspace at the pinned base commit.
     options.sideEffectObserver?.('clone');
-    runtimeRoot = realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-task-runtime-')));
-    workspaceTemp = realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-task-workspace-')));
+    runtimeRoot = options.executionRoot ?? realpathSync(mkdtempSync(join(tmpdir(), 'pool-proof-task-runtime-')));
+    workspaceTemp = realpathSync(mkdtempSync(join(runtimeRoot, 'workspace-')));
     const workspacePath = join(workspaceTemp, 'task-workspace');
     try {
       prepareTaskWorkspace(gitPath, manifest.target_repo_path, workspacePath, manifest.base_commit);
@@ -533,6 +639,8 @@ export async function runTask(options: RunTaskOptions): Promise<TaskRunResult> {
             memoryLimit: SANDBOX_MEMORY,
             pidsLimit: SANDBOX_PIDS,
             sandboxIdentity,
+            // Configured pools never consult ambient POOL_PROOF_TIMEOUT_MS.
+            ...(options.launchTimeoutSeconds === undefined ? {} : { timeoutMs: options.launchTimeoutSeconds * 1000 }),
           },
           verifyPackageAndProfile,
         });

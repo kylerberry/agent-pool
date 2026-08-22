@@ -3,7 +3,7 @@ title: Wiki Index
 type: index
 tags: [index]
 created: 2026-07-22
-updated: 2026-08-21
+updated: 2026-08-13
 sources:
   - docs/raw/
 ---
@@ -21,6 +21,8 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/architecture/domain-driven-documentation|Domain-Driven Documentation]]
 - [[wiki/architecture/initial-domain-map|Initial Domain Map (approved)]]
 - [[wiki/architecture/repository-builder-vs-pool-worker|Repository Builder vs Pool Worker]]
+- [[wiki/sources/2026-08-16_local-repository-builder-workflow|Local Repository Builder /goal Workflow]] — canonical local plan-governance authority
+- [[wiki/sources/2026-08-20_repository-bound-pool-milestone|Repository-Bound Pool Milestone]] — approved active local plan
 - [[wiki/output/agents-building-agents-handoff|Agents Building Agents Handoff]]
 - [[wiki/log|Activity Log]]
 - [[wiki/operations/test-governance|Test Governance]]
@@ -31,6 +33,7 @@ First lookup page for repository knowledge. Use wiki pages first; open raw artif
 - [[wiki/sources/2026-08-13_test-governance|Test Governance]] — `docs/raw/context/test-governance.md`
 - [[wiki/sources/2026-04-13_initial-domain-map|Initial Domain Map]] — `docs/raw/context/initial-domain-map.md`
 - [[wiki/sources/2026-04-13_repository-builder-vs-pool-worker|Repository Builder and Pool Worker Role Boundary]] — `docs/raw/context/repository-builder-vs-pool-worker.md`
+- [[wiki/sources/2026-08-16_local-repository-builder-workflow|Local Repository Builder /goal Workflow]] — `docs/raw/context/local-repository-builder-workflow.md`
 - [[wiki/sources/2026-04-13_pool-worker-execution-context-schema|Pool Worker Execution Context Schema]] — `docs/raw/specs/schemas/pool-worker-execution-context.schema.json`
 - [[wiki/sources/2026-07-31_pool-worker-attempt-contract-schema|Pool Worker Attempt Contract Schema]] — `docs/raw/specs/schemas/pool-worker-attempt-contract.schema.json`
 - [[wiki/sources/2026-07-22_orchestrator-spec|Supervisor Orchestrator — Consolidated Specification]] — `docs/raw/specs/orchestrator-spec.md`

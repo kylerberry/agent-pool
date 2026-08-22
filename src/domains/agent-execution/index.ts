@@ -21,6 +21,17 @@ export type {
 export { isExecutionFailure } from './contracts.ts';
 
 export type {
+  RepositoryBoundExecution,
+  RepositoryBoundPoolConfig,
+  RepositoryBoundTaskContent,
+} from './repository-bound-pool.ts';
+export {
+  createRepositoryBoundExecution,
+  createRepositoryBoundPool,
+  createRepositoryBoundTaskContent,
+} from './repository-bound-pool.ts';
+
+export type {
   ActorIdentity,
 } from './actor-context.ts';
 export { buildActorIdentity, createActorIdentityAccessor, renderIdentityCapsule } from './actor-context.ts';
